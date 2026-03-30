@@ -170,7 +170,8 @@ tracksRouter.get("/:id/stream", async (c) => {
 });
 
 /**
- * POST /api/tracks - Create a new track
+ * POST /api/tracks - Create a new track with metadata
+ * Accepts multipart form data with audio file and optional metadata
  */
 tracksRouter.post("/", async (c) => {
   try {
@@ -182,24 +183,45 @@ tracksRouter.post("/", async (c) => {
       return c.json({ success: false, error: "Audio file is required" }, 400);
     }
 
-    const bunFile = Bun.file(file);
+    // Convert Web File to BunFile by reading the content
+    const arrayBuffer = await file.arrayBuffer();
+    
+    // Create a simple BunFile with just the data and a proper filename
+    const originalName = file.name || "upload.wav";
+    const cleanName = originalName.replace(/[^a-zA-Z0-9.-]/g, "_").substring(0, 50);
+    
+    // Write directly to a temp location and create BunFile from path
+    const tempPath = `/tmp/upload_${trackId || Date.now()}_${cleanName}`;
+    await Bun.write(tempPath, new Uint8Array(arrayBuffer));
+    const bunFile = Bun.file(tempPath);
+
+    let artworkBunFile: typeof bunFile | undefined;
+    if (artworkFile) {
+      const artworkBuffer = await artworkFile.arrayBuffer();
+      const artworkName = artworkFile.name || "artwork.jpg";
+      const cleanArtworkName = artworkName.replace(/[^a-zA-Z0-9.-]/g, "_").substring(0, 50);
+      const artworkTempPath = `/tmp/artwork_${Date.now()}_${cleanArtworkName}`;
+      await Bun.write(artworkTempPath, new Uint8Array(artworkBuffer));
+      artworkBunFile = Bun.file(artworkTempPath);
+    }
 
     const track = await trackService.create({
-      title: (body.title as string) || "",
-      artist: (body.artist as string) || "",
+      title: (body.title as string) || file.name || "Untitled",
+      artist: (body.artist as string) || "Unknown Artist",
       album: body.album as string,
       genre: body.genre as string,
       year: body.year ? parseInt(body.year as string) : undefined,
       file: bunFile,
-      artworkFile: artworkFile ? Bun.file(artworkFile) : undefined,
+      artworkFile: artworkBunFile,
     });
 
     return c.json({
       success: true,
       data: track,
-      message: "Track uploaded successfully",
+      message: "Track uploaded successfully with metadata",
     }, 201);
   } catch (error: any) {
+    console.error("Upload error:", error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });

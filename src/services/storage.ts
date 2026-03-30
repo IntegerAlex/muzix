@@ -46,12 +46,22 @@ export async function storeAudioFile(
   file: BunFile,
   trackId: string
 ): Promise<{ path: string; size: number }> {
-  const ext = extname(file.name || "audio").toLowerCase();
+  // Use a simple extension based on content type or default to .wav
+  let ext = ".wav";
+  if (file.type) {
+    if (file.type.includes("mp3")) ext = ".mp3";
+    else if (file.type.includes("ogg")) ext = ".ogg";
+    else if (file.type.includes("flac")) ext = ".flac";
+    else if (file.type.includes("m4a") || file.type.includes("mp4")) ext = ".m4a";
+    else if (file.type.includes("wav")) ext = ".wav";
+  }
+  
   const filename = `${trackId}${ext}`;
   const filePath = join(MUSIC_DIR, filename);
 
-  // Write file to disk
-  await Bun.write(filePath, file);
+  // Write file to disk using arrayBuffer for better compatibility
+  const arrayBuffer = await file.arrayBuffer();
+  await Bun.write(filePath, new Uint8Array(arrayBuffer));
 
   const stats = await Bun.file(filePath).stat();
   return { path: filePath, size: stats.size };
@@ -345,7 +355,7 @@ export async function streamAudio(
 
   // Parse range header
   const ranges = (rangeHeader || "").replace(/bytes=/, "").split("-");
-  const start = parseInt(ranges[0], 10);
+  const start = parseInt(ranges[0] || "0", 10);
   const end = ranges[1] ? parseInt(ranges[1], 10) : fileSize - 1;
 
   // Validate range

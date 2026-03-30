@@ -1,6 +1,7 @@
 // Database schema and initialization for music streaming backend
+// Using bun:sqlite for Bun runtime compatibility
 
-import Database from "better-sqlite3";
+import { Database } from "bun:sqlite";
 import { v4 as uuidv4 } from "uuid";
 import { join } from "path";
 
@@ -73,21 +74,21 @@ export interface SearchIndex {
   searchableText: string;
 }
 
-let db: Database.Database | null = null;
+let db: Database | null = null;
 
-export function getDb(): Database.Database {
+export function getDb(): Database {
   if (!db) {
     db = new Database(DB_PATH);
-    db.pragma("journal_mode = WAL");
-    db.pragma("synchronous = NORMAL");
-    db.pragma("cache_size = -64000"); // 64MB cache
-    db.pragma("temp_store = memory");
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec("PRAGMA synchronous = NORMAL");
+    db.exec("PRAGMA cache_size = -64000"); // 64MB cache
+    db.exec("PRAGMA temp_store = memory");
     initializeSchema(db);
   }
   return db;
 }
 
-function initializeSchema(database: Database.Database) {
+function initializeSchema(database: Database) {
   // Users table
   database.exec(`
     CREATE TABLE IF NOT EXISTS users (
