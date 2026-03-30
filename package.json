@@ -1,0 +1,29 @@
+{
+  "name": "music-streaming-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "lint:fix": "biome check --apply .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.12",
+    "better-sqlite3": "^12.8.0",
+    "flac-metadata": "^0.1.1",
+    "hono": "^4.12.9",
+    "mrmime": "^2.0.1",
+    "uuid": "^13.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.9",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/bun": "latest",
+    "@types/uuid": "^11.0.0",
+    "typescript": "^5"
+  }
+}
