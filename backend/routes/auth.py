@@ -49,9 +49,13 @@ async def login(body: AuthLogin, request: Request):
     return success_resp(data=data, message="Login successful")
 
 
+class AuthRefresh(BaseModel):
+    refreshToken: str
+
+
 @router.post("/refresh")
-async def refresh_token(body: dict):
-    data = await auth_svc.refresh(body.get("refreshToken", ""))
+async def refresh_token(body: AuthRefresh):
+    data = await auth_svc.refresh(body.refreshToken)
     return success_resp(data=data, message="Token refreshed")
 
 

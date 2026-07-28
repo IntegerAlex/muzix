@@ -1,9 +1,7 @@
 """
 Muzix database migration.
 
-Creates the `songs`, `albums`, `artists`, and `playlists` tables if they do not
-already exist, and adds any missing columns to an existing `songs` table
-(idempotent — safe to run repeatedly).
+Creates all tables (idempotent — safe to run repeatedly).
 
 Usage:
     uv run python migrate.py
@@ -26,6 +24,20 @@ async def migrate() -> None:
     url = _async_url(os.getenv("DATABASE_URL", ""))
     engine = create_async_engine(url, echo=False)
     async with engine.begin() as conn:
+        # ----- users (must be first — referenced by FKs) -----
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    display_name TEXT NOT NULL DEFAULT ''
+                );
+                """
+            )
+        )
+
         # ----- songs -----
         await conn.execute(
             text(
@@ -34,9 +46,9 @@ async def migrate() -> None:
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL DEFAULT '',
                     artist TEXT NOT NULL DEFAULT '',
-                    artist_id TEXT NOT NULL DEFAULT '',
+                    artist_id TEXT,
                     album TEXT NOT NULL DEFAULT '',
-                    album_id TEXT NOT NULL DEFAULT '',
+                    album_id TEXT,
                     duration TEXT NOT NULL DEFAULT '',
                     duration_ms INTEGER NOT NULL DEFAULT 0,
                     track INTEGER,
@@ -54,10 +66,9 @@ async def migrate() -> None:
                 """
             )
         )
-        # Add columns that may be missing on a pre-existing songs table.
         for col, ddl in [
-            ("artist_id", "TEXT NOT NULL DEFAULT ''"),
-            ("album_id", "TEXT NOT NULL DEFAULT ''"),
+            ("artist_id", "TEXT"),
+            ("album_id", "TEXT"),
             ("track", "INTEGER"),
             ("lyrics", "TEXT"),
             ("colors", "TEXT[] NOT NULL DEFAULT '{}'"),
@@ -130,12 +141,26 @@ async def migrate() -> None:
                 """
             )
         )
-        # Add owner_id column if missing on pre-existing table
         await conn.execute(
             text("ALTER TABLE playlists ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES users(id) ON DELETE CASCADE;")
         )
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS idx_playlists_owner ON playlists(owner_id);")
+        )
+
+        # ----- playlist_songs (association table) -----
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS playlist_songs (
+                    playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+                    song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL DEFAULT 0,
+                    added_at TIMESTAMPTZ DEFAULT NOW(),
+                    PRIMARY KEY (playlist_id, song_id)
+                );
+                """
+            )
         )
 
         # ----- listening_events -----
@@ -144,8 +169,8 @@ async def migrate() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS listening_events (
                     id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
-                    song_id TEXT,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    song_id TEXT REFERENCES songs(id) ON DELETE SET NULL,
                     session_id TEXT NOT NULL,
                     event_type TEXT NOT NULL DEFAULT 'play',
                     started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -157,9 +182,7 @@ async def migrate() -> None:
                     source_id TEXT,
                     position_in_queue INTEGER,
                     device_type TEXT,
-                    app_version TEXT,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE SET NULL
+                    app_version TEXT
                 );
                 """
             )
@@ -180,7 +203,7 @@ async def migrate() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS user_sessions (
                     id TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                     started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
                     ended_at TIMESTAMP WITH TIME ZONE,
                     total_listening_ms BIGINT NOT NULL DEFAULT 0,
@@ -193,8 +216,7 @@ async def migrate() -> None:
                     app_version TEXT,
                     platform TEXT,
                     entry_source TEXT,
-                    exit_reason TEXT,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    exit_reason TEXT
                 );
                 """
             )
@@ -225,7 +247,7 @@ async def migrate() -> None:
         )
 
     await engine.dispose()
-    print("Migration complete: songs, albums, artists, playlists, listening_events, user_sessions, user_likes are ready.")
+    print("Migration complete: all tables ready.")
 
 
 if __name__ == "__main__":

@@ -81,7 +81,7 @@ def check_rate_limit(key: str, max_requests: int = 10, window: int = 60):
     _rate_limit[key].append(now)
     if now - _rate_limit_last_cleanup > 60:
         _rate_limit_last_cleanup = now
-        stale = [k for k, v in _rate_limit.items() if not v]
+        stale = [k for k, v in _rate_limit.items() if not v or (v and now - v[-1] > window)]
         for k in stale:
             del _rate_limit[k]
 
@@ -96,7 +96,7 @@ def rate_limit(request: Request, max_requests: int = 30, window: int = 60):
 # ---------------------------------------------------------------------------
 
 def compute_etag(data: dict | list) -> str:
-    serialized = json.dumps(data, sort_keys=True, separators=(",", ":"))
+    serialized = json.dumps(data, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(serialized.encode()).hexdigest()[:32]
 
 
@@ -174,7 +174,7 @@ async def get_current_user(authorization: str | None = Header(None)) -> User:
         user = await session.get(User, payload.get("sub"))
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
-        await session.merge(user)
+        session.expunge(user)
         return user
 
 

@@ -43,12 +43,12 @@ class UserLike(Base):
 class Song(Base):
     __tablename__ = "songs"
 
-    id = Column(String(64), primary_key=True)
+    id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
     title = Column(String(512), nullable=False, default="")
     artist = Column(String(512), nullable=False, default="")
-    artist_id = Column(String(64), ForeignKey("artists.id", ondelete="SET NULL"), nullable=True, default="", index=True)
+    artist_id = Column(String(64), ForeignKey("artists.id", ondelete="SET NULL"), nullable=True, index=True)
     album = Column(String(512), nullable=False, default="")
-    album_id = Column(String(64), ForeignKey("albums.id", ondelete="SET NULL"), nullable=True, default="", index=True)
+    album_id = Column(String(64), ForeignKey("albums.id", ondelete="SET NULL"), nullable=True, index=True)
     duration = Column(String(16), nullable=False, default="")
     duration_ms = Column(Integer, nullable=False, default=0)
     track = Column(Integer, nullable=True)
@@ -67,7 +67,7 @@ class Song(Base):
 class Album(Base):
     __tablename__ = "albums"
 
-    id = Column(String(64), primary_key=True)
+    id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
     title = Column(String(512), nullable=False, default="")
     artist = Column(String(512), nullable=False, default="")
     artist_id = Column(String(64), nullable=False, default="")
@@ -87,7 +87,7 @@ class Album(Base):
 class Artist(Base):
     __tablename__ = "artists"
 
-    id = Column(String(64), primary_key=True)
+    id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(512), nullable=False, default="")
     colors = Column(ARRAY(Text), nullable=False, server_default="{}")
     album_ids = Column(ARRAY(Text), nullable=False, server_default="{}")
@@ -116,7 +116,7 @@ playlist_songs_table = Table(
 class Playlist(Base):
     __tablename__ = "playlists"
 
-    id = Column(String(64), primary_key=True)
+    id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
     owner_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     title = Column(String(512), nullable=False, default="")
     colors = Column(ARRAY(Text), nullable=False, server_default="{}")

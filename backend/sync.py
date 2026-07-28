@@ -93,6 +93,7 @@ async def main() -> None:
     print("[3/4] Inserting metadata into PostgreSQL ...")
     async with SessionLocal() as session:
         song = Song(
+            id=vid_id,
             title=tags["title"],
             artist=tags["artist"],
             album=tags["album"],

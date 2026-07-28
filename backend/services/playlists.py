@@ -46,7 +46,7 @@ async def update_playlist(playlist_id: str, title: str, song_ids: list[str], use
         raise HTTPException(status_code=404, detail="Playlist not found")
     _check_owner(playlist, user)
     playlist.title = title
-    playlist.song_ids = song_ids
+    playlist.song_ids = song_ids[:MAX_SONGS_PER_PLAYLIST]
     await playlist_repo.update_playlist(playlist)
     return serialize_playlist(playlist)
 

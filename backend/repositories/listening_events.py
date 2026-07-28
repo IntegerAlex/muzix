@@ -8,8 +8,8 @@ from models import ListeningEvent, Song
 
 async def record_events(user_id: str, events: list[dict]) -> int:
     async with SessionLocal() as session:
-        for e in events:
-            event = ListeningEvent(
+        objs = [
+            ListeningEvent(
                 id=str(uuid.uuid4()),
                 user_id=user_id,
                 song_id=e["song_id"],
@@ -26,7 +26,9 @@ async def record_events(user_id: str, events: list[dict]) -> int:
                 device_type=e.get("device_type", "web"),
                 app_version=e.get("app_version"),
             )
-            session.add(event)
+            for e in events
+        ]
+        session.add_all(objs)
         await session.commit()
     return len(events)
 

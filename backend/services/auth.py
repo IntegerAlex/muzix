@@ -35,7 +35,7 @@ async def register(email: str, password: str, display_name: str) -> dict:
 async def login(email: str, password: str) -> dict:
     if not email or not password:
         raise HTTPException(status_code=400, detail="Email and password required")
-    email = email.strip().lower()
+    email = validate_email(email)
     user = await user_repo.get_user_by_email(email)
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
