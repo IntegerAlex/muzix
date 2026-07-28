@@ -16,7 +16,7 @@ from pathlib import Path
 import boto3
 from botocore.client import Config
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
@@ -175,6 +175,16 @@ async def list_songs(request: Request, response: Response, limit: int = 100, off
         return make_cached_response(songs, request, response)
 
 
+@app.get("/songs/{song_id}")
+async def get_song(song_id: str, request: Request, response: Response) -> dict:
+    async with SessionLocal() as session:
+        song = await session.get(Song, song_id)
+        if song is None:
+            raise HTTPException(status_code=404, detail="Song not found")
+        data = serialize_song(song)
+        return make_cached_response(data, request, response)
+
+
 @app.get("/albums")
 async def list_albums(request: Request, response: Response, limit: int = 100, offset: int = 0) -> list[dict]:
     async with SessionLocal() as session:
@@ -183,6 +193,16 @@ async def list_albums(request: Request, response: Response, limit: int = 100, of
         )
         albums = [serialize_album(a) for a in result.scalars().all()]
         return make_cached_response(albums, request, response)
+
+
+@app.get("/albums/{album_id}")
+async def get_album(album_id: str, request: Request, response: Response) -> dict:
+    async with SessionLocal() as session:
+        album = await session.get(Album, album_id)
+        if album is None:
+            raise HTTPException(status_code=404, detail="Album not found")
+        data = serialize_album(album)
+        return make_cached_response(data, request, response)
 
 
 @app.get("/artists")
@@ -195,6 +215,16 @@ async def list_artists(request: Request, response: Response, limit: int = 100, o
         return make_cached_response(artists, request, response)
 
 
+@app.get("/artists/{artist_id}")
+async def get_artist(artist_id: str, request: Request, response: Response) -> dict:
+    async with SessionLocal() as session:
+        artist = await session.get(Artist, artist_id)
+        if artist is None:
+            raise HTTPException(status_code=404, detail="Artist not found")
+        data = serialize_artist(artist)
+        return make_cached_response(data, request, response)
+
+
 @app.get("/playlists")
 async def list_playlists(request: Request, response: Response, limit: int = 100, offset: int = 0) -> list[dict]:
     async with SessionLocal() as session:
@@ -203,3 +233,13 @@ async def list_playlists(request: Request, response: Response, limit: int = 100,
         )
         playlists = [serialize_playlist(p) for p in result.scalars().all()]
         return make_cached_response(playlists, request, response)
+
+
+@app.get("/playlists/{playlist_id}")
+async def get_playlist(playlist_id: str, request: Request, response: Response) -> dict:
+    async with SessionLocal() as session:
+        playlist = await session.get(Playlist, playlist_id)
+        if playlist is None:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        data = serialize_playlist(playlist)
+        return make_cached_response(data, request, response)
