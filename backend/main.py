@@ -11,6 +11,8 @@ import json
 import os
 import uuid
 import hashlib
+import time
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -23,11 +25,11 @@ from fastapi import Depends, FastAPI, HTTPException, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import SessionLocal
-from models import Song, Album, Artist, Playlist, User, UserLike
+from models import Song, Album, Artist, Playlist, User, ListeningEvent, UserSession, UserLike
 
 load_dotenv()
 
@@ -482,3 +484,294 @@ async def serve_thumbnail(filename: str):
         )
     except Exception:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+
+# ---------------------------------------------------------------------------
+# Telemetry / Analytics
+# ---------------------------------------------------------------------------
+
+class TelemetryEventIn(BaseModel):
+    song_id: str
+    session_id: str
+    event_type: str = "play"
+    started_at: str  # ISO timestamp
+    ended_at: str | None = None
+    duration_played_ms: int = 0
+    song_duration_ms: int | None = None
+    completion_percentage: int = 0
+    source: str | None = None  # playlist, album, artist, search, radio, queue
+    source_id: str | None = None
+    position_in_queue: int | None = None
+    device_type: str = "web"
+    app_version: str | None = None
+
+
+class SessionStartIn(BaseModel):
+    session_id: str
+    device_type: str = "web"
+    app_version: str | None = None
+    platform: str | None = None
+    entry_source: str | None = None
+
+
+class SessionEndIn(BaseModel):
+    session_id: str
+    exit_reason: str | None = None  # user_close, crash, background, timeout
+
+
+async def _get_optional_user(authorization: str | None = Header(None)) -> User | None:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    token = authorization.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+    async with SessionLocal() as session:
+        return await session.get(User, payload.get("sub"))
+
+
+@app.post("/telemetry/events")
+async def record_telemetry_event(
+    events: list[TelemetryEventIn],
+    user: User | None = Depends(_get_optional_user),
+):
+    """Batch insert listening events. Auth optional."""
+    if not user:
+        return {"status": "ok", "skipped": True}
+    async with SessionLocal() as session:
+        for e in events:
+            event = ListeningEvent(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                song_id=e.song_id,
+                session_id=e.session_id,
+                event_type=e.event_type,
+                started_at=datetime.fromisoformat(e.started_at.replace("Z", "+00:00")),
+                ended_at=datetime.fromisoformat(e.ended_at.replace("Z", "+00:00")) if e.ended_at else None,
+                duration_played_ms=e.duration_played_ms,
+                song_duration_ms=e.song_duration_ms,
+                completion_percentage=e.completion_percentage,
+                source=e.source,
+                source_id=e.source_id,
+                position_in_queue=e.position_in_queue,
+                device_type=e.device_type,
+                app_version=e.app_version,
+            )
+            session.add(event)
+        await session.commit()
+    return {"status": "ok", "recorded": len(events)}
+
+
+@app.post("/telemetry/session/start")
+async def start_session(
+    data: SessionStartIn,
+    user: User | None = Depends(_get_optional_user),
+):
+    if not user:
+        return {"status": "ok", "skipped": True}
+    async with SessionLocal() as session:
+        sess = UserSession(
+            id=data.session_id,
+            user_id=user.id,
+            device_type=data.device_type,
+            app_version=data.app_version,
+            platform=data.platform,
+            entry_source=data.entry_source,
+        )
+        session.add(sess)
+        await session.commit()
+    return {"status": "ok"}
+
+
+@app.post("/telemetry/session/end")
+async def end_session(
+    data: SessionEndIn,
+    user: User | None = Depends(_get_optional_user),
+):
+    if not user:
+        return {"status": "ok", "skipped": True}
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(UserSession).where(UserSession.id == data.session_id, UserSession.user_id == user.id)
+        )
+        sess = result.scalar_one_or_none()
+        if not sess:
+            raise HTTPException(status_code=404, detail="Session not found")
+        sess.ended_at = datetime.utcnow()
+        sess.exit_reason = data.exit_reason
+        await session.commit()
+    return {"status": "ok"}
+
+
+# Analytics queries
+@app.get("/analytics/user/top-songs")
+async def get_user_top_songs(
+    period: str = "month",  # day, week, month, year, all
+    limit: int = 50,
+    user: User = Depends(_get_current_user),
+):
+    async with SessionLocal() as session:
+        # Calculate time window
+        now = datetime.utcnow()
+        if period == "day":
+            since = now - timedelta(days=1)
+        elif period == "week":
+            since = now - timedelta(weeks=1)
+        elif period == "month":
+            since = now - timedelta(days=30)
+        elif period == "year":
+            since = now - timedelta(days=365)
+        else:
+            since = datetime(1970, 1, 1)
+        
+        # Get play counts per song
+        stmt = select(
+            ListeningEvent.song_id,
+            func.count(ListeningEvent.id).label("play_count"),
+            func.sum(ListeningEvent.duration_played_ms).label("total_ms"),
+            func.count(func.distinct(ListeningEvent.session_id)).label("sessions"),
+        ).where(
+            ListeningEvent.user_id == user.id,
+            ListeningEvent.event_type == "play",
+            ListeningEvent.started_at >= since,
+        ).group_by(ListeningEvent.song_id).order_by(func.count(ListeningEvent.id).desc()).limit(limit)
+        
+        result = await session.execute(stmt)
+        rows = result.all()
+        
+        # Get song details
+        song_ids = [r.song_id for r in rows if r.song_id]
+        songs_map = {}
+        if song_ids:
+            song_result = await session.execute(select(Song).where(Song.id.in_(song_ids)))
+            for s in song_result.scalars().all():
+                songs_map[s.id] = {
+                    "id": s.id,
+                    "title": s.title,
+                    "artist": s.artist,
+                    "album": s.album,
+                    "duration_ms": s.duration_ms,
+                    "colors": s.colors,
+                }
+        
+        return {
+            "period": period,
+            "items": [
+                {
+                    "song": songs_map.get(r.song_id, {"id": r.song_id, "title": "Unknown"}),
+                    "play_count": r.play_count,
+                    "total_listening_ms": r.total_ms,
+                    "sessions": r.sessions,
+                }
+                for r in rows if r.song_id
+            ],
+        }
+
+
+@app.get("/analytics/user/stats")
+async def get_user_stats(
+    period: str = "month",
+    user: User = Depends(_get_current_user),
+):
+    async with SessionLocal() as session:
+        now = datetime.utcnow()
+        if period == "day":
+            since = now - timedelta(days=1)
+        elif period == "week":
+            since = now - timedelta(weeks=1)
+        elif period == "month":
+            since = now - timedelta(days=30)
+        elif period == "year":
+            since = now - timedelta(days=365)
+        else:
+            since = datetime(1970, 1, 1)
+
+        # Single combined query for all play aggregates
+        base_filter = (
+            ListeningEvent.user_id == user.id,
+            ListeningEvent.event_type == "play",
+            ListeningEvent.started_at >= since,
+        )
+        stats_result = await session.execute(
+            select(
+                func.coalesce(func.sum(ListeningEvent.duration_played_ms), 0).label("total_ms"),
+                func.count(func.distinct(ListeningEvent.song_id)).label("unique_songs"),
+                func.count(ListeningEvent.id).label("total_plays"),
+            ).where(*base_filter)
+        )
+        stats = stats_result.one()
+
+        # Unique artists (requires join)
+        artists_result = await session.execute(
+            select(func.count(func.distinct(Song.artist_id)))
+            .select_from(ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id))
+            .where(*base_filter)
+        )
+        unique_artists = artists_result.scalar() or 0
+
+        # Sessions (broader filter — no event_type constraint)
+        sessions_result = await session.execute(
+            select(func.count(func.distinct(ListeningEvent.session_id))).where(
+                ListeningEvent.user_id == user.id,
+                ListeningEvent.started_at >= since,
+            )
+        )
+        sessions = sessions_result.scalar() or 0
+
+        total_ms = int(stats.total_ms)
+
+        return {
+            "period": period,
+            "total_listening_ms": total_ms,
+            "total_listening_hours": round(total_ms / 3600000, 1),
+            "total_plays": stats.total_plays,
+            "unique_songs": stats.unique_songs,
+            "unique_artists": unique_artists,
+            "sessions": sessions,
+            "avg_session_ms": round(total_ms / sessions, 1) if sessions > 0 else 0,
+        }
+
+
+@app.get("/analytics/user/recent-activity")
+async def get_recent_activity(
+    limit: int = 20,
+    user: User = Depends(_get_current_user),
+):
+    async with SessionLocal() as session:
+        stmt = select(ListeningEvent).where(
+            ListeningEvent.user_id == user.id,
+        ).order_by(ListeningEvent.started_at.desc()).limit(limit)
+        
+        result = await session.execute(stmt)
+        events = result.scalars().all()
+        
+        # Get song details
+        song_ids = list(set(e.song_id for e in events if e.song_id))
+        songs_map = {}
+        if song_ids:
+            song_result = await session.execute(select(Song).where(Song.id.in_(song_ids)))
+            for s in song_result.scalars().all():
+                songs_map[s.id] = {
+                    "id": s.id,
+                    "title": s.title,
+                    "artist": s.artist,
+                    "album": s.album,
+                    "colors": s.colors,
+                }
+        
+        return {
+            "items": [
+                {
+                    "id": e.id,
+                    "song_id": e.song_id,
+                    "song": songs_map.get(e.song_id),
+                    "event_type": e.event_type,
+                    "started_at": e.started_at.isoformat(),
+                    "duration_played_ms": e.duration_played_ms,
+                    "completion_percentage": e.completion_percentage,
+                    "source": e.source,
+                }
+                for e in events
+            ],
+        }
