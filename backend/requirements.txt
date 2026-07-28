@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+asyncpg
+boto3
+python-dotenv
+mutagen
+bcrypt
+PyJWT
+aiohttp
