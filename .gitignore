@@ -1,0 +1,75 @@
+# Environment files
+.env
+.env.local
+.env*.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Node
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# Debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+pnpm-debug.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Audio/media assets (large, not for git)
+*.mp3
+*.webm
+*.wav
+*.flac
+backend/assets/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+android/app/build/
+ios/build/
+
+# Gradle
+.gradle/
+android/.gradle/
+
+# Kotlin
+.kotlin/
+
+# Tamagui
+.tamagui/
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc
+*.pem
+*.log
