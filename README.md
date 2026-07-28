@@ -1,18 +1,39 @@
-# Muzix — MVP
+# Muzix
 
-End-to-end pipeline: local MP3 → R2 (private) + PostgreSQL metadata → FastAPI search/presign → Expo Liquid-Glass player with local caching.
+Music streaming app with FastAPI backend, PostgreSQL, Cloudflare R2 storage, and Expo (React Native) frontend.
 
 ## Architecture
 
-- **Backend**: FastAPI (Python) with async SQLAlchemy + asyncpg
-- **Database**: PostgreSQL (Neon) — songs, albums, artists, playlists, users, telemetry
-- **Storage**: Cloudflare R2 (private bucket) for audio files
-- **Auth**: JWT-based (bcrypt password hashing)
-- **Frontend**: Expo (React Native) with local caching
+```
+backend/
+├── config.py          # Environment variables, constants, R2 client
+├── middleware.py       # CORS + security headers (raw ASGI)
+├── helpers.py         # Response format, rate limiting, caching, validation, serialization, auth
+├── crypto.py          # Password hashing: argon2id (new) + bcrypt (legacy)
+├── main.py            # App bootstrap, exception handlers, router includes
+├── db.py              # Async SQLAlchemy engine + session factory
+├── models.py          # SQLAlchemy ORM models
+├── repositories/      # Database operations per entity
+├── services/          # Business logic per entity
+└── routes/            # API endpoints per entity
+```
+
+**Layer flow:** `routes/` → `services/` → `repositories/` → `db.py` + `models.py`
+
+## Security
+
+- **Password hashing:** argon2id (new registrations) with bcrypt fallback (existing users)
+- **JWT signing:** HS384 (SHA-384 HMAC) with 24-hour expiry + 30-day refresh tokens
+- **CORS:** Configurable allowed origins via `CORS_ORIGINS` env var
+- **Rate limiting:** Per-IP + per-path sliding window
+- **Security headers:** X-Content-Type-Options, X-Frame-Options, HSTS, CSP, Referrer-Policy, Permissions-Policy
+- **Input validation:** Pydantic models with email/password complexity rules
+- **IDOR protection:** Playlist ownership checks on all mutation endpoints
+- **Docs disabled:** `/docs` and `/redoc` return 404
 
 ## Quick Start
 
-### 1. Backend
+### Backend
 
 ```bash
 cd backend
@@ -22,7 +43,7 @@ uv run python migrate.py          # create tables
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 2. Frontend
+### Frontend
 
 ```bash
 cd web/muzix
@@ -38,7 +59,7 @@ pnpm dev
 | Var | Purpose |
 |-----|---------|
 | `DATABASE_URL` | PostgreSQL connection string (asyncpg) |
-| `JWT_SECRET` | Secret key for JWT token signing |
+| `JWT_SECRET` | Secret key for JWT token signing (min 48 bytes for HS384) |
 | `R2_ACCOUNT_ID` | Cloudflare account ID |
 | `R2_ACCESS_KEY_ID` | R2 API token access key |
 | `R2_SECRET_ACCESS_KEY` | R2 API token secret |
@@ -50,44 +71,83 @@ pnpm dev
 
 | Var | Purpose |
 |-----|---------|
-| `EXPO_PUBLIC_API_URL` | Base URL of the FastAPI backend. On Android emulator use `http://10.0.2.2:8000`; on a physical device use your LAN IP. |
+| `EXPO_PUBLIC_API_URL` | Base URL of the FastAPI backend |
 
-## Database Tables
+## Database
 
 The migration (`uv run python migrate.py`) creates:
 
-- **songs** — track metadata with full-text search (tsvector)
-- **albums** — album metadata with FTS
-- **artists** — artist metadata
-- **playlists** — user playlists (with M2M `playlist_songs`)
-- **users** — auth accounts (email + bcrypt hash)
-- **listening_events** — per-play telemetry
-- **user_sessions** — session engagement metrics
+| Table | Description |
+|-------|-------------|
+| `songs` | Track metadata with full-text search (tsvector) |
+| `albums` | Album metadata with FTS |
+| `artists` | Artist metadata with FTS |
+| `playlists` | User playlists (with M2M `playlist_songs`) |
+| `users` | Auth accounts (email + argon2id hash) |
+| `listening_events` | Per-play telemetry |
+| `user_sessions` | Session engagement metrics |
+| `user_likes` | User song likes (unique constraint) |
 
-## API Endpoints
+## API
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Health check |
-| GET | `/songs` | List songs (paginated) |
-| GET | `/songs/{id}` | Get song by ID |
-| GET | `/albums` | List albums |
-| GET | `/albums/{id}` | Get album by ID |
-| GET | `/artists` | List artists |
-| GET | `/artists/{id}` | Get artist by ID |
-| GET | `/playlists` | List playlists |
-| GET | `/search?q=` | Full-text search across songs, albums, artists |
-| GET | `/stream/{id}` | Get 1-hour presigned R2 URL |
-| POST | `/auth/register` | Create account |
-| POST | `/auth/login` | Get JWT token |
-| GET | `/auth/me` | Current user (requires Bearer token) |
-| POST | `/telemetry/events` | Batch insert listening events |
-| POST | `/telemetry/session/start` | Start session |
-| POST | `/telemetry/session/end` | End session |
-| GET | `/analytics/user/top-songs` | User's top songs |
-| GET | `/analytics/user/stats` | User listening stats |
+All endpoints return standardized JSON:
 
-## Notes
+```json
+{
+  "status": "success" | "failed" | "exception",
+  "data": {},
+  "message": "...",
+  "meta": { "pagination": { "total": 65, "limit": 100, ... } }
+}
+```
 
-- `app.json` already grants Android `INTERNET`/`WAKE_LOCK`/foreground-service permissions and registers `expo-av`.
-- For background audio on Android you still need `Audio.setAudioModeAsync({ staysActiveInBackground: true })` — add later when wiring a global player.
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/health` | No | Health check |
+| GET | `/songs` | No | List songs (paginated, brief) |
+| GET | `/songs/{id}` | No | Get song by ID (full) |
+| GET | `/albums` | No | List albums |
+| GET | `/albums/{id}` | No | Get album by ID |
+| GET | `/artists` | No | List artists |
+| GET | `/artists/{id}` | No | Get artist by ID |
+| GET | `/playlists` | Yes | List user playlists |
+| POST | `/playlists` | Yes | Create playlist |
+| PUT | `/playlists/{id}` | Yes | Update playlist |
+| DELETE | `/playlists/{id}` | Yes | Delete playlist |
+| POST | `/playlists/{id}/songs/{songId}` | Yes | Add song to playlist |
+| DELETE | `/playlists/{id}/songs/{songId}` | Yes | Remove song from playlist |
+| GET | `/likes` | Yes | Get user's liked songs |
+| POST | `/likes/{songId}` | Yes | Like a song |
+| DELETE | `/likes/{songId}` | Yes | Unlike a song |
+| GET | `/search?q=` | No | Full-text search (songs, albums, artists) |
+| GET | `/stream/{id}` | No | Get 1-hour presigned R2 URL |
+| GET | `/thumbnails/{id}.jpg` | No | Get song/album thumbnail |
+| POST | `/auth/register` | No | Create account |
+| POST | `/auth/login` | No | Get JWT + refresh token |
+| POST | `/auth/refresh` | No | Refresh JWT token |
+| GET | `/auth/me` | Yes | Current user profile |
+| POST | `/telemetry/events` | Yes | Batch insert listening events |
+| POST | `/telemetry/session/start` | Yes | Start session |
+| POST | `/telemetry/session/end` | Yes | End session |
+| GET | `/analytics/user/top-songs` | Yes | User's top songs |
+| GET | `/analytics/user/stats` | Yes | User listening stats |
+
+## Performance
+
+- **Async everything:** All database and R2 operations are async (boto3 calls wrapped in `asyncio.to_thread`)
+- **ETag caching:** List endpoints return `ETag` + `Cache-Control` headers; 304 on `If-None-Match`
+- **Rate limiting:** Sliding window per IP + path with automatic stale key cleanup
+- **Brief serialization:** List responses omit `lyrics` and `r2_object_key` (~3KB/song savings)
+- **Local file caching:** 60s TTL cache for local asset reads
+- **FTS indexes:** GIN-indexed tsvector columns on songs, albums, artists
+
+## Deployment
+
+Backend is deployed to [FastAPI Cloud](https://fastapicloud.dev):
+
+```bash
+cd backend
+uv run fastapi cloud deploy
+```
+
+App URL: `https://fast-api-cloud-demo.fastapicloud.dev`
