@@ -64,7 +64,7 @@ class SecurityMiddleware:
                             if k == b"vary":
                                 vary = v
                                 break
-                        if b"Origin" not in vary:
+                        if b"Origin" not in vary.split(b", "):
                             new_vary = (vary + b", Origin").strip(b", ") if vary else b"Origin"
                             raw_headers = [(k, v) for k, v in raw_headers if k != b"vary"]
                             raw_headers.append((b"vary", new_vary))

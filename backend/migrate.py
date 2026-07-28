@@ -31,7 +31,7 @@ async def migrate() -> None:
             text(
                 """
                 CREATE TABLE IF NOT EXISTS songs (
-                    id SERIAL PRIMARY KEY,
+                    id TEXT PRIMARY KEY,
                     title TEXT NOT NULL DEFAULT '',
                     artist TEXT NOT NULL DEFAULT '',
                     artist_id TEXT NOT NULL DEFAULT '',
@@ -42,7 +42,6 @@ async def migrate() -> None:
                     track INTEGER,
                     lyrics TEXT,
                     r2_object_key TEXT,
-                    r2_object_url TEXT,
                     colors TEXT[] NOT NULL DEFAULT '{}',
                     fts TSVECTOR
                         GENERATED ALWAYS AS (

@@ -2,9 +2,10 @@
 import uuid
 from datetime import timedelta
 
+import jwt
 from fastapi import HTTPException
 
-from config import ACCESS_TOKEN_EXPIRY_HOURS
+from config import ACCESS_TOKEN_EXPIRY_HOURS, JWT_SECRET, JWT_ALGORITHM
 from crypto import hash_password, verify_password
 from helpers import (
     create_token, create_refresh_token, validate_email, validate_password,
@@ -18,7 +19,7 @@ async def register(email: str, password: str, display_name: str) -> dict:
     validate_password(password)
     existing = await user_repo.get_user_by_email(email)
     if existing:
-        return {}
+        raise HTTPException(status_code=409, detail="Email already registered")
     user = User(
         id=str(uuid.uuid4()),
         email=email,
@@ -44,8 +45,6 @@ async def login(email: str, password: str) -> dict:
 
 
 async def refresh(refresh_token_str: str) -> dict:
-    import jwt
-    from config import JWT_SECRET, JWT_ALGORITHM
     if not refresh_token_str:
         raise HTTPException(status_code=400, detail="Refresh token required")
     try:

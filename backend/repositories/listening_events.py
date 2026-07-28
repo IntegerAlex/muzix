@@ -124,7 +124,7 @@ async def get_stats(user_id: str, period: str) -> dict:
         }
 
 
-async def get_recent_activity(user_id: str, limit: int) -> tuple[list[dict], dict[str, dict]]:
+async def get_recent_activity(user_id: str, limit: int) -> list[dict]:
     async with SessionLocal() as session:
         stmt = select(ListeningEvent).where(
             ListeningEvent.user_id == user_id,

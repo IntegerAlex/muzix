@@ -39,8 +39,6 @@ class AuthLogin(BaseModel):
 async def register(body: AuthRegister, request: Request):
     check_rate_limit(f"register:{_client_ip(request)}", max_requests=5, window=300)
     data = await auth_svc.register(body.email, body.password, body.displayName)
-    if not data:
-        return success_resp(data={}, message="Registration successful")
     return success_resp(data=data, message="Registration successful")
 
 

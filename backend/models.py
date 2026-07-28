@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Text, ARRAY, Computed, UniqueConstraint
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Table, Text, ARRAY, Computed, UniqueConstraint
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import relationship
 
@@ -23,7 +23,7 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
-    email = Column(String(512), unique=True, nullable=False)
+    email = Column(String(320), unique=True, nullable=False)
     password_hash = Column(String(256), nullable=False)
     display_name = Column(String(256), nullable=False, default="")
 
@@ -103,6 +103,16 @@ class Artist(Base):
     songs = relationship("Song", backref="artist_rel", foreign_keys="Song.artist_id")
 
 
+# Association table for playlist songs (defined before Playlist for clarity)
+playlist_songs_table = Table(
+    "playlist_songs", Base.metadata,
+    Column("playlist_id", String(64), ForeignKey("playlists.id", ondelete="CASCADE"), primary_key=True),
+    Column("song_id", String(64), ForeignKey("songs.id", ondelete="CASCADE"), primary_key=True),
+    Column("position", Integer, nullable=False, default=0),
+    Column("added_at", DateTime(timezone=True), default=datetime.utcnow),
+)
+
+
 class Playlist(Base):
     __tablename__ = "playlists"
 
@@ -113,7 +123,7 @@ class Playlist(Base):
     song_ids = Column(ARRAY(Text), nullable=False, server_default="{}")
 
     # Relationships
-    songs = relationship("Song", secondary=lambda: playlist_songs_table, backref="playlists")
+    songs = relationship("Song", secondary=playlist_songs_table, backref="playlists")
 
 
 class ListeningEvent(Base):
@@ -124,24 +134,24 @@ class ListeningEvent(Base):
     user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     song_id = Column(String(64), ForeignKey("songs.id", ondelete="SET NULL"), nullable=True, index=True)
     session_id = Column(String(64), nullable=False, index=True)
-    
+
     # Playback details
     started_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
     ended_at = Column(DateTime(timezone=True), nullable=True)
-    duration_played_ms = Column(Integer, default=0)  # Actual milliseconds played
-    song_duration_ms = Column(Integer, nullable=True)  # Total song duration at time of play
-    completion_percentage = Column(Integer, default=0)  # 0-100
-    
+    duration_played_ms = Column(Integer, default=0)
+    song_duration_ms = Column(Integer, nullable=True)
+    completion_percentage = Column(Integer, default=0)
+
     # Event type
-    event_type = Column(String(32), nullable=False, default="play")  # play, pause, complete, skip, seek
-    
+    event_type = Column(String(32), nullable=False, default="play")
+
     # Context
-    source = Column(String(32), nullable=True)  # playlist, album, artist, search, radio, queue
-    source_id = Column(String(64), nullable=True)  # playlist_id, album_id, etc.
+    source = Column(String(32), nullable=True)
+    source_id = Column(String(64), nullable=True)
     position_in_queue = Column(Integer, nullable=True)
-    
+
     # Device/session context
-    device_type = Column(String(32), nullable=True)  # web, ios, android
+    device_type = Column(String(32), nullable=True)
     app_version = Column(String(32), nullable=True)
 
     # Relationships
@@ -162,10 +172,10 @@ class UserSession(Base):
 
     id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    
+
     started_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     ended_at = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Session metrics
     total_listening_ms = Column(BigInteger, default=0)
     songs_played = Column(Integer, default=0)
@@ -173,15 +183,15 @@ class UserSession(Base):
     songs_skipped = Column(Integer, default=0)
     unique_songs = Column(Integer, default=0)
     unique_artists = Column(Integer, default=0)
-    
+
     # Context
     device_type = Column(String(32), nullable=True)
     app_version = Column(String(32), nullable=True)
     platform = Column(String(32), nullable=True)
-    
+
     # Entry/exit points
-    entry_source = Column(String(32), nullable=True)  # notification, deeplink, app_open
-    exit_reason = Column(String(32), nullable=True)  # user_close, crash, background, timeout
+    entry_source = Column(String(32), nullable=True)
+    exit_reason = Column(String(32), nullable=True)
 
     # Relationships
     user = relationship("User", backref="sessions")
@@ -189,14 +199,3 @@ class UserSession(Base):
     __table_args__ = (
         Index("ix_user_sessions_user_started", "user_id", "started_at"),
     )
-
-
-# Association table for playlist songs
-from sqlalchemy import Table
-playlist_songs_table = Table(
-    "playlist_songs", Base.metadata,
-    Column("playlist_id", String(64), ForeignKey("playlists.id", ondelete="CASCADE"), primary_key=True),
-    Column("song_id", String(64), ForeignKey("songs.id", ondelete="CASCADE"), primary_key=True),
-    Column("position", Integer, nullable=False, default=0),
-    Column("added_at", DateTime(timezone=True), default=datetime.utcnow),
-)

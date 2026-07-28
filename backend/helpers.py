@@ -174,6 +174,7 @@ async def get_current_user(authorization: str | None = Header(None)) -> User:
         user = await session.get(User, payload.get("sub"))
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        await session.merge(user)
         return user
 
 
