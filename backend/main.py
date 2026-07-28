@@ -243,3 +243,33 @@ async def get_playlist(playlist_id: str, request: Request, response: Response) -
             raise HTTPException(status_code=404, detail="Playlist not found")
         data = serialize_playlist(playlist)
         return make_cached_response(data, request, response)
+
+
+@app.get("/stream/{song_id}")
+async def stream(song_id: str) -> dict:
+    """Return a 1-hour presigned URL for the song's private R2 object."""
+    async with SessionLocal() as session:
+        song = await session.get(Song, song_id)
+        if song is None:
+            raise HTTPException(status_code=404, detail="Song not found")
+
+        key = song.r2_object_key
+        if not key:
+            raise HTTPException(status_code=404, detail="Song has no R2 object key")
+
+        try:
+            url = r2.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": R2_BUCKET, "Key": key},
+                ExpiresIn=3600,
+            )
+        except Exception:
+            raise HTTPException(status_code=502, detail="Failed to generate stream URL")
+
+        return {
+            "id": str(song.id),
+            "title": song.title,
+            "artist": song.artist,
+            "url": url,
+            "expires_in": 3600,
+        }
