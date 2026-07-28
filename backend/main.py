@@ -200,6 +200,78 @@ async def get_likes(user: User = Depends(_get_current_user)):
 
 
 # ---------------------------------------------------------------------------
+# Playlists CRUD
+# ---------------------------------------------------------------------------
+
+class PlaylistCreate(BaseModel):
+    title: str
+    songIds: list[str] = []
+
+
+@app.post("/playlists")
+async def create_playlist(body: PlaylistCreate, user: User = Depends(_get_current_user)):
+    async with SessionLocal() as session:
+        playlist = Playlist(
+            id=str(uuid.uuid4()),
+            title=body.title,
+            colors=["#6d28d9", "#db2777"],
+            song_ids=body.songIds,
+        )
+        session.add(playlist)
+        await session.commit()
+    return serialize_playlist(playlist)
+
+
+@app.put("/playlists/{playlist_id}")
+async def update_playlist(playlist_id: str, body: PlaylistCreate, user: User = Depends(_get_current_user)):
+    async with SessionLocal() as session:
+        playlist = await session.get(Playlist, playlist_id)
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        playlist.title = body.title
+        playlist.song_ids = body.songIds
+        await session.commit()
+    return serialize_playlist(playlist)
+
+
+@app.delete("/playlists/{playlist_id}")
+async def delete_playlist(playlist_id: str, user: User = Depends(_get_current_user)):
+    async with SessionLocal() as session:
+        playlist = await session.get(Playlist, playlist_id)
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        await session.delete(playlist)
+        await session.commit()
+    return {"status": "deleted"}
+
+
+@app.post("/playlists/{playlist_id}/songs/{song_id}")
+async def add_song_to_playlist(playlist_id: str, song_id: str, user: User = Depends(_get_current_user)):
+    async with SessionLocal() as session:
+        playlist = await session.get(Playlist, playlist_id)
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        if playlist.song_ids is None:
+            playlist.song_ids = []
+        if song_id not in playlist.song_ids:
+            playlist.song_ids = playlist.song_ids + [song_id]
+        await session.commit()
+    return serialize_playlist(playlist)
+
+
+@app.delete("/playlists/{playlist_id}/songs/{song_id}")
+async def remove_song_from_playlist(playlist_id: str, song_id: str, user: User = Depends(_get_current_user)):
+    async with SessionLocal() as session:
+        playlist = await session.get(Playlist, playlist_id)
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        if playlist.song_ids and song_id in playlist.song_ids:
+            playlist.song_ids = [s for s in playlist.song_ids if s != song_id]
+        await session.commit()
+    return serialize_playlist(playlist)
+
+
+# ---------------------------------------------------------------------------
 # Caching helpers
 # ---------------------------------------------------------------------------
 
