@@ -81,7 +81,7 @@ def check_rate_limit(key: str, max_requests: int = 10, window: int = 60):
     _rate_limit[key].append(now)
     if now - _rate_limit_last_cleanup > 60:
         _rate_limit_last_cleanup = now
-        stale = [k for k, v in _rate_limit.items() if not v or now - v[-1] > window * 2]
+        stale = [k for k, v in _rate_limit.items() if not v]
         for k in stale:
             del _rate_limit[k]
 
@@ -101,11 +101,14 @@ def compute_etag(data: dict | list) -> str:
 
 
 def make_cached_response(body: dict, request: Request) -> JSONResponse:
+    if_none_match = request.headers.get("If-None-Match")
+    if not if_none_match:
+        etag = compute_etag(body.get("data"))
+        return JSONResponse(content=body, headers={"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"})
     raw_data = body.get("data")
     etag = compute_etag(raw_data)
     cache_headers = {"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"}
-    if_none_match = request.headers.get("If-None-Match")
-    if if_none_match and if_none_match.strip('"') == etag:
+    if if_none_match.strip('"') == etag:
         raise HTTPException(status_code=304, headers=cache_headers)
     return JSONResponse(content=body, headers=cache_headers)
 
@@ -178,8 +181,8 @@ async def get_current_user(authorization: str | None = Header(None)) -> User:
 # Serialization
 # ---------------------------------------------------------------------------
 
-def serialize_song(song: Song, base_url: str = "") -> dict:
-    return {
+def serialize_song(song: Song, base_url: str = "", brief: bool = False) -> dict:
+    result = {
         "id": str(song.id),
         "title": song.title,
         "artist": song.artist,
@@ -189,12 +192,14 @@ def serialize_song(song: Song, base_url: str = "") -> dict:
         "duration": song.duration,
         "durationMs": song.duration_ms,
         "track": song.track,
-        "lyrics": song.lyrics,
         "colors": song.colors or [],
         "imageUrl": f"{base_url}/thumbnails/{song.id}.jpg",
-        "r2_object_key": song.r2_object_key,
         "audioUrl": None,
     }
+    if not brief:
+        result["lyrics"] = song.lyrics
+        result["r2_object_key"] = song.r2_object_key
+    return result
 
 
 def serialize_album(album: Album, base_url: str = "") -> dict:

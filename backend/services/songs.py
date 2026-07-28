@@ -14,4 +14,4 @@ async def get_song(song_id: str, base_url: str) -> dict:
 async def list_songs(limit: int, offset: int, base_url: str) -> tuple[list[dict], int]:
     total = await song_repo.count_songs()
     songs = await song_repo.list_songs(limit, offset)
-    return [serialize_song(s, base_url) for s in songs], total
+    return [serialize_song(s, base_url, brief=True) for s in songs], total

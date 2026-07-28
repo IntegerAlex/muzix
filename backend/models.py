@@ -91,6 +91,13 @@ class Artist(Base):
     name = Column(String(512), nullable=False, default="")
     colors = Column(ARRAY(Text), nullable=False, server_default="{}")
     album_ids = Column(ARRAY(Text), nullable=False, server_default="{}")
+    fts = Column(
+        TSVECTOR,
+        Computed(
+            "to_tsvector('english', coalesce(name,''))",
+            persisted=True,
+        ),
+    )
 
     # Relationships
     songs = relationship("Song", backref="artist_rel", foreign_keys="Song.artist_id")

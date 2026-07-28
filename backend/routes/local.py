@@ -1,13 +1,20 @@
 """Local asset routes: serve locally downloaded songs/albums/artists."""
 import json
+import time
 from fastapi import APIRouter, Request
 from helpers import success_resp, rate_limit, colors_from_title
 from config import INFO_DIR
 
 router = APIRouter(prefix="/local")
 
+_local_cache: dict = {"data": None, "ts": 0.0}
+_CACHE_TTL = 60.0
+
 
 def _load_local_songs() -> list[dict]:
+    now = time.time()
+    if _local_cache["data"] is not None and now - _local_cache["ts"] < _CACHE_TTL:
+        return _local_cache["data"]
     if not INFO_DIR.exists():
         return []
     songs = []
@@ -37,6 +44,8 @@ def _load_local_songs() -> list[dict]:
             "audioUrl": f"http://localhost:8000/assets/audio/{vid_id}.mp3",
             "thumbnailUrl": f"http://localhost:8000/assets/thumbnails/{vid_id}.jpg",
         })
+    _local_cache["data"] = songs
+    _local_cache["ts"] = now
     return songs
 
 

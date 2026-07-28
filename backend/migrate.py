@@ -104,10 +104,17 @@ async def migrate() -> None:
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL DEFAULT '',
                     colors TEXT[] NOT NULL DEFAULT '{}',
-                    album_ids TEXT[] NOT NULL DEFAULT '{}'
+                    album_ids TEXT[] NOT NULL DEFAULT '{}',
+                    fts TSVECTOR
+                        GENERATED ALWAYS AS (
+                            to_tsvector('english', coalesce(name,''))
+                        ) STORED
                 );
                 """
             )
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS artists_fts_idx ON artists USING GIN (fts);")
         )
 
         # ----- playlists -----

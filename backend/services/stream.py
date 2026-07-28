@@ -1,4 +1,5 @@
 """Stream service: generate presigned R2 URLs for audio streaming."""
+import asyncio
 from fastapi import HTTPException
 from config import r2, R2_BUCKET
 from repositories import songs as song_repo
@@ -12,7 +13,8 @@ async def get_stream_url(song_id: str) -> dict:
     if not key:
         raise HTTPException(status_code=404, detail="Song has no R2 object key")
     try:
-        url = r2.generate_presigned_url(
+        url = await asyncio.to_thread(
+            r2.generate_presigned_url,
             "get_object",
             Params={"Bucket": R2_BUCKET, "Key": key},
             ExpiresIn=3600,
