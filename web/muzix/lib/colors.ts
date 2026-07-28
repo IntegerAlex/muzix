@@ -1,0 +1,11 @@
+export const BG = '#0b1020';
+export const CARD_BG = 'rgba(28,28,32,0.72)';
+export const TEXT_PRIMARY = 'white';
+export const TEXT_SECONDARY = 'rgba(255,255,255,0.55)';
+export const TEXT_MUTED = 'rgba(255,255,255,0.3)';
+export const ACCENT = '#1DB954';
+export const BORDER = 'rgba(255,255,255,0.08)';
+export const DANGER = '#f43f5e';
+export const INPUT_BG = 'rgba(255,255,255,0.06)';
+export const INPUT_BORDER = 'rgba(255,255,255,0.10)';
+export const INPUT_BORDER_FOCUS = 'rgba(29,185,84,0.5)';
