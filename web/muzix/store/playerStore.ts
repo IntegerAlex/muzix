@@ -1,0 +1,374 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import type { Song } from '@/services/types';
+import * as playerService from '@/services/playerService';
+import { api } from '@/services/api';
+import { useAuthStore } from '@/store/authStore';
+
+export type RepeatMode = 'off' | 'all' | 'one';
+
+const REAL = true;
+
+const QUEUE_STORAGE_KEY = 'muzix-queue';
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+function saveQueue(state: { queue: Song[]; currentIndex: number; shuffle: boolean; repeat: RepeatMode }) {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try {
+      const data = {
+        queue: state.queue.map(s => s.id),
+        currentIndex: state.currentIndex,
+        shuffle: state.shuffle,
+        repeat: state.repeat,
+      };
+      localStorage?.setItem?.(QUEUE_STORAGE_KEY, JSON.stringify(data));
+    } catch {}
+  }, 500);
+}
+
+function restoreQueue(): { queueIds: string[]; currentIndex: number } | null {
+  try {
+    const raw = localStorage?.getItem?.(QUEUE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+interface PlayerState {
+  current: Song | null;
+  queue: Song[];
+  originalQueue: Song[];
+  currentIndex: number;
+  isPlaying: boolean;
+  loadingId: string | null;
+  showNowPlaying: boolean;
+  shuffle: boolean;
+  repeat: RepeatMode;
+  history: number[];
+  likedSongs: Record<string, boolean>;
+  error: string | null;
+  volume: number;
+  seekPosition: number | null;
+  connectionStatus: 'online' | 'offline';
+
+  playSong: (song: Song, queue?: Song[], index?: number) => void;
+  setPlaying: (v: boolean) => void;
+  setLoading: (id: string | null) => void;
+  setShowNowPlaying: (v: boolean) => void;
+  next: () => void;
+  previous: () => void;
+  toggleShuffle: () => void;
+  toggleRepeat: () => void;
+  toggleLike: (songId: string) => void;
+  syncLikes: () => Promise<void>;
+  addToQueue: (song: Song) => void;
+  playNext: (song: Song) => void;
+  removeFromQueue: (index: number) => void;
+  reorderQueue: (from: number, to: number) => void;
+  shuffleQueue: () => void;
+  removeHistoryTop: () => void;
+  setVolume: (v: number) => void;
+  setSeekPosition: (v: number | null) => void;
+  setConnectionStatus: (status: 'online' | 'offline') => void;
+  retry: () => void;
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+async function driveQueue(queue: Song[], index: number) {
+  if (!REAL) return;
+  try {
+    await playerService.addQueue(queue, Math.max(0, index));
+    await playerService.play();
+  } catch (e) {
+    console.error('playerService queue failed', e);
+  }
+}
+
+async function driveSkipToIndex(index: number) {
+  if (!REAL) return;
+  try {
+    await playerService.skipToIndex(index);
+    await playerService.play();
+  } catch (e) {
+    console.error('playerService skip failed', e);
+  }
+}
+
+export const usePlayerStore = create<PlayerState>()(
+  persist(
+    (set, get) => ({
+      current: null,
+      queue: [],
+      originalQueue: [],
+      currentIndex: -1,
+      isPlaying: false,
+      loadingId: null,
+      showNowPlaying: false,
+      shuffle: false,
+      repeat: 'off',
+      history: [],
+      likedSongs: {},
+      volume: 0.7,
+      seekPosition: null,
+      error: null,
+      connectionStatus: 'online',
+
+      playSong: (song, queue, index) => {
+        const nextQueue = queue ?? get().queue;
+        const nextIndex =
+          index != null
+            ? index
+            : nextQueue.findIndex((s) => s.id === song.id);
+        const resolvedIndex = nextIndex >= 0 ? nextIndex : 0;
+        const resolvedQueue = nextQueue.length ? nextQueue : [song];
+        set({
+          current: song,
+          queue: resolvedQueue,
+          originalQueue: queue ? resolvedQueue : get().originalQueue,
+          currentIndex: resolvedIndex,
+          isPlaying: true,
+          history: [],
+          error: null,
+        });
+        driveQueue(resolvedQueue, resolvedIndex);
+        saveQueue({ queue: resolvedQueue, currentIndex: resolvedIndex, shuffle: get().shuffle, repeat: get().repeat });
+      },
+
+      setPlaying: (v) => {
+        set({ isPlaying: v, error: null });
+        if (REAL) {
+          try {
+            if (v) playerService.play();
+            else playerService.pause();
+          } catch (e) {
+            console.error('playerService play/pause failed', e);
+          }
+        }
+      },
+
+      setLoading: (id) => set({ loadingId: id }),
+
+      setShowNowPlaying: (v) => set({ showNowPlaying: v }),
+
+      next: () => {
+        const { currentIndex, queue, repeat } = get();
+        const ni = currentIndex + 1;
+
+        if (ni >= queue.length) {
+          if (repeat === 'all') {
+            const song = queue[0];
+            if (!song) return;
+            set({ current: song, currentIndex: 0, history: [...get().history, currentIndex], error: null });
+            driveSkipToIndex(0);
+          }
+          return;
+        }
+
+        const song = queue[ni];
+        set({ current: song, currentIndex: ni, history: [...get().history, currentIndex], error: null });
+        if (REAL) {
+          try { playerService.next(); } catch (e) {
+            console.error('playerService next failed', e);
+          }
+        }
+      },
+
+      previous: () => {
+        const { history, queue, currentIndex } = get();
+        if (queue.length === 0) return;
+        if (history.length > 0) {
+          const newHistory = [...history];
+          const prevIndex = newHistory.pop()!;
+          const song = queue[prevIndex];
+          if (song) {
+            set({ current: song, currentIndex: prevIndex, history: newHistory, error: null });
+            try { driveSkipToIndex(prevIndex); } catch (e) {
+              console.error('playerService previous failed', e);
+            }
+            return;
+          }
+        }
+        const pi = Math.max(0, currentIndex - 1);
+        const song = queue[pi];
+        if (!song) return;
+        set({ current: song, currentIndex: pi, error: null });
+        if (REAL) {
+          try { playerService.previous(); } catch (e) {
+            console.error('playerService previous failed', e);
+          }
+        }
+      },
+
+      toggleShuffle: () => {
+        const { shuffle, queue, originalQueue, currentIndex, current } = get();
+        if (!shuffle) {
+          const remaining = queue.filter((_, i) => i !== currentIndex);
+          const shuffled = shuffleArray(remaining);
+          const newQueue = current ? [current, ...shuffled] : shuffled;
+          set({
+            shuffle: true,
+            queue: newQueue,
+            currentIndex: 0,
+            history: [],
+          });
+          driveQueue(newQueue, 0);
+          saveQueue({ queue: newQueue, currentIndex: 0, shuffle: true, repeat: get().repeat });
+        } else {
+          const newIndex = current ? originalQueue.findIndex((s) => s.id === current.id) : 0;
+          const resolvedIndex = newIndex >= 0 ? newIndex : 0;
+          set({
+            shuffle: false,
+            queue: originalQueue,
+            currentIndex: resolvedIndex,
+          });
+          driveQueue(originalQueue, resolvedIndex);
+          saveQueue({ queue: originalQueue, currentIndex: resolvedIndex, shuffle: false, repeat: get().repeat });
+        }
+      },
+
+      toggleRepeat: () => {
+        const { repeat } = get();
+        const next: RepeatMode = repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off';
+        set({ repeat: next });
+      },
+
+      toggleLike: (songId) => {
+        const { likedSongs } = get();
+        const wasLiked = !!likedSongs[songId];
+        set({ likedSongs: { ...likedSongs, [songId]: !wasLiked } });
+        const token = useAuthStore.getState().token;
+        if (token) {
+          const apiCall = wasLiked ? api.unlike : api.like;
+          apiCall(songId, token).catch(() => {
+            set((s) => ({ likedSongs: { ...s.likedSongs, [songId]: wasLiked } }));
+          });
+        }
+      },
+
+      syncLikes: async () => {
+        const token = useAuthStore.getState().token;
+        if (!token) return;
+        try {
+          const { songIds } = await api.getLikes(token);
+          set({ likedSongs: Object.fromEntries(songIds.map((id) => [id, true])) });
+        } catch {}
+      },
+
+      addToQueue: (song) => {
+        const { queue } = get();
+        const newQueue = [...queue, song];
+        set({ queue: newQueue });
+        saveQueue({ queue: newQueue, currentIndex: get().currentIndex, shuffle: get().shuffle, repeat: get().repeat });
+      },
+
+      playNext: (song) => {
+        const { queue, currentIndex } = get();
+        const newQueue = [...queue];
+        newQueue.splice(currentIndex + 1, 0, song);
+        set({ queue: newQueue });
+        saveQueue({ queue: newQueue, currentIndex: get().currentIndex, shuffle: get().shuffle, repeat: get().repeat });
+      },
+
+      removeFromQueue: (index) => {
+        const { queue, currentIndex } = get();
+        if (index < 0 || index >= queue.length) return;
+        const newQueue = queue.filter((_, i) => i !== index);
+        if (newQueue.length === 0) {
+          set({ queue: [], currentIndex: -1, current: null, isPlaying: false });
+          return;
+        }
+        let newIndex = currentIndex;
+        if (index < currentIndex) {
+          newIndex = currentIndex - 1;
+        } else if (index === currentIndex) {
+          newIndex = Math.min(currentIndex, newQueue.length - 1);
+        }
+        const newCurrent = newQueue[newIndex] ?? null;
+        set({ queue: newQueue, currentIndex: newIndex, current: newCurrent });
+        if (index === currentIndex && newCurrent) {
+          driveQueue(newQueue, newIndex);
+        }
+        saveQueue({ queue: newQueue, currentIndex: newIndex, shuffle: get().shuffle, repeat: get().repeat });
+      },
+
+      reorderQueue: (from, to) => {
+        const { queue, currentIndex } = get();
+        if (from < 0 || from >= queue.length || to < 0 || to >= queue.length) return;
+        const newQueue = [...queue];
+        const [moved] = newQueue.splice(from, 1);
+        newQueue.splice(to, 0, moved);
+        let newIndex = currentIndex;
+        if (from === currentIndex) {
+          newIndex = to;
+        } else if (from < currentIndex && to >= currentIndex) {
+          newIndex = currentIndex - 1;
+        } else if (from > currentIndex && to <= currentIndex) {
+          newIndex = currentIndex + 1;
+        }
+        set({ queue: newQueue, currentIndex: newIndex });
+        saveQueue({ queue: newQueue, currentIndex: newIndex, shuffle: get().shuffle, repeat: get().repeat });
+      },
+
+      shuffleQueue: () => {
+        const { queue, currentIndex, current } = get();
+        if (queue.length <= 1) return;
+        const before = current ? [current] : [];
+        const rest = queue.filter((_, i) => i !== currentIndex);
+        const shuffled = shuffleArray(rest);
+        const newQueue = [...before, ...shuffled];
+        const newIndex = current ? 0 : 0;
+        set({ queue: newQueue, currentIndex: newIndex, shuffle: true, history: [] });
+        driveQueue(newQueue, newIndex);
+        saveQueue({ queue: newQueue, currentIndex: newIndex, shuffle: true, repeat: get().repeat });
+      },
+
+      removeHistoryTop: () => {
+        const { history } = get();
+        if (history.length === 0) return;
+        set({ history: history.slice(0, -1) });
+      },
+
+      setVolume: (v) => {
+        set({ volume: v });
+        if (REAL) {
+          try { playerService.setVolume(v); } catch (e) {
+            console.error('playerService setVolume failed', e);
+          }
+        }
+      },
+
+      setSeekPosition: (v) => {
+        set({ seekPosition: v });
+        if (REAL && v != null) {
+          const cur = get().current;
+          if (cur) {
+            try { playerService.seek((v * cur.durationMs) / 1000); } catch (e) {
+              console.error('playerService seek failed', e);
+            }
+          }
+        }
+      },
+
+      setConnectionStatus: (status) => set({ connectionStatus: status }),
+
+      retry: () => {
+        const { current, queue, currentIndex } = get();
+        if (!current) return;
+        set({ error: null, loadingId: current.id });
+        driveQueue(queue, currentIndex);
+      },
+    }),
+    {
+      name: 'player-liked-songs',
+      partialize: (state) => ({ likedSongs: state.likedSongs }),
+    }
+  )
+);
