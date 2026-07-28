@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "muzix",
+    "slug": "muzix",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "muzix",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.muzix.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.muzix.app",
+      "permissions": [
+        "INTERNET",
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "linking": {
+      "prefixes": ["muzix://"],
+      "config": {
+        "screens": {
+          "(tabs)": {
+            "screens": {
+              "index": "",
+              "search": "search",
+              "library": "library",
+              "profile": "profile"
+            }
+          },
+          "browse": "browse",
+          "album": "album/:id",
+          "artist": "artist/:id",
+          "playlist": "playlist/:id",
+          "login": "login",
+          "register": "register"
+        }
+      }
+    }
+  }
+}
