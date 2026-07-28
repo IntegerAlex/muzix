@@ -196,6 +196,18 @@ async def migrate() -> None:
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS ix_listening_events_session ON listening_events (session_id, started_at);")
         )
+        await conn.execute(
+            text("ALTER TABLE listening_events ADD COLUMN IF NOT EXISTS hour_of_day INTEGER;")
+        )
+        await conn.execute(
+            text("ALTER TABLE listening_events ADD COLUMN IF NOT EXISTS day_of_week INTEGER;")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_listening_events_hour ON listening_events (hour_of_day);")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_listening_events_dow ON listening_events (day_of_week);")
+        )
 
         # ----- user_sessions -----
         await conn.execute(

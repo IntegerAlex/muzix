@@ -196,6 +196,90 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface SkipRateItem {
+  song: ApiSong;
+  playCount: number;
+  skipCount: number;
+  skipRate: number;
+}
+
+export interface CompletionRateItem {
+  song: ApiSong;
+  playCount: number;
+  avgCompletionPercentage: number;
+  completionRate: number;
+}
+
+export interface DiscoveryMetrics {
+  period: string;
+  totalPlays: number;
+  uniqueSongs: number;
+  firstTimePlays: number;
+  repeatPlays: number;
+  discoveryRatio: number;
+  repeatPlayRatio: number;
+}
+
+export interface ArtistAffinityItem {
+  artist: string;
+  artistId: string;
+  plays: number;
+  completions: number;
+  skips: number;
+  uniqueSongs: number;
+  affinityScore: number;
+}
+
+export interface ListeningPatterns {
+  period: string;
+  hourly: Record<number, number>;
+  daily: Record<number, number>;
+  peakHours: number[];
+  peakDays: number[];
+}
+
+export interface TrendAnalysis {
+  period: string;
+  current: Record<string, number>;
+  previous: Record<string, number>;
+  pctChange: Record<string, number>;
+}
+
+export interface CatalogExploration {
+  period: string;
+  totalPlays: number;
+  uniqueSongs: number;
+  totalCatalogSongs: number;
+  explorationRatio: number;
+  repeatPlayRatio: number;
+}
+
+export interface QueueDropoff {
+  period: string;
+  avgSkipPosition: number;
+  totalSkips: number;
+  dropoffByPosition: Record<number, number>;
+}
+
+export interface SourceEffectiveness {
+  period: string;
+  sources: Record<string, {
+    plays: number;
+    completionRate: number;
+    avgDurationMs: number;
+    engagementScore: number;
+  }>;
+}
+
+export interface BingeIndex {
+  period: string;
+  totalPlays: number;
+  totalSessions: number;
+  songsPerSession: number;
+  avgSessionGapHours: number;
+  bingeIndex: number;
+}
+
 export const api = {
   songs: (limit = 50, offset = 0) => cachedFetch<ApiSong[]>(`/songs?limit=${limit}&offset=${offset}`),
   song: (id: string) => cachedFetch<ApiSong>(`/songs/${id}`),
@@ -230,6 +314,33 @@ export const api = {
     requestAuthed<{ status: string }>(`/playlists/${id}`, token, { method: 'DELETE' }),
   addSongToPlaylist: (playlistId: string, songId: string, token: string) =>
     requestAuthed<ApiPlaylist>(`/playlists/${playlistId}/songs/${songId}`, token, { method: 'POST' }),
-  removeSongFromPlaylist: (playlistId: string, songId: string, token: string) =>
+   removeSongFromPlaylist: (playlistId: string, songId: string, token: string) =>
     requestAuthed<ApiPlaylist>(`/playlists/${playlistId}/songs/${songId}`, token, { method: 'DELETE' }),
+
+   topSongs: (period: string, limit: number, token: string) =>
+     requestAuthed<{ period: string; items: SkipRateItem[] }>(`/analytics/user/top-songs?period=${period}&limit=${limit}`, token),
+   userStats: (period: string, token: string) =>
+     requestAuthed<{ period: string; totalListeningMs: number; totalListeningHours: number; totalPlays: number; uniqueSongs: number; uniqueArtists: number; sessions: number; avgSessionMs: number }>(`/analytics/user/stats?period=${period}`, token),
+   recentActivity: (limit: number, token: string) =>
+     requestAuthed<{ items: any[] }>(`/analytics/user/recent-activity?limit=${limit}`, token),
+   skipRate: (period: string, limit: number, token: string) =>
+     requestAuthed<{ period: string; items: SkipRateItem[] }>(`/analytics/user/skip-rate?period=${period}&limit=${limit}`, token),
+   completionRate: (period: string, limit: number, token: string) =>
+     requestAuthed<{ period: string; items: CompletionRateItem[] }>(`/analytics/user/completion-rate?period=${period}&limit=${limit}`, token),
+   discovery: (period: string, token: string) =>
+     requestAuthed<DiscoveryMetrics>(`/analytics/user/discovery?period=${period}`, token),
+   artistAffinity: (period: string, limit: number, token: string) =>
+     requestAuthed<{ period: string; items: ArtistAffinityItem[] }>(`/analytics/user/artist-affinity?period=${period}&limit=${limit}`, token),
+   listeningPatterns: (period: string, token: string) =>
+     requestAuthed<ListeningPatterns>(`/analytics/user/listening-patterns?period=${period}`, token),
+   trends: (period: string, token: string) =>
+     requestAuthed<TrendAnalysis>(`/analytics/user/trends?period=${period}`, token),
+   catalogExploration: (period: string, token: string) =>
+     requestAuthed<CatalogExploration>(`/analytics/user/catalog-exploration?period=${period}`, token),
+   queueDropoff: (period: string, token: string) =>
+     requestAuthed<QueueDropoff>(`/analytics/user/queue-dropoff?period=${period}`, token),
+   sourceEffectiveness: (period: string, token: string) =>
+     requestAuthed<SourceEffectiveness>(`/analytics/user/source-effectiveness?period=${period}`, token),
+   bingeIndex: (period: string, token: string) =>
+     requestAuthed<BingeIndex>(`/analytics/user/binge-index?period=${period}`, token),
 };

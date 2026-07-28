@@ -154,6 +154,10 @@ class ListeningEvent(Base):
     device_type = Column(String(32), nullable=True)
     app_version = Column(String(32), nullable=True)
 
+    # Time-based analytics (derived from started_at for indexing)
+    hour_of_day = Column(Integer, nullable=True, index=True)
+    day_of_week = Column(Integer, nullable=True, index=True)
+
     # Relationships
     user = relationship("User", backref="listening_events")
     song = relationship("Song", backref="listening_events")

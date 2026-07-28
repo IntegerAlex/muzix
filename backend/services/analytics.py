@@ -26,3 +26,46 @@ async def get_stats(user_id: str, period: str) -> dict:
 async def get_recent_activity(user_id: str, limit: int) -> dict:
     items = await event_repo.get_recent_activity(user_id, limit)
     return {"items": items}
+
+
+async def get_skip_rate(user_id: str, period: str, limit: int) -> dict:
+    items = await event_repo.get_skip_rate(user_id, period, limit)
+    return {"period": period, "items": items}
+
+
+async def get_completion_rate(user_id: str, period: str, limit: int) -> dict:
+    items = await event_repo.get_completion_rate(user_id, period, limit)
+    return {"period": period, "items": items}
+
+
+async def get_discovery_metrics(user_id: str, period: str) -> dict:
+    return await event_repo.get_discovery_metrics(user_id, period)
+
+
+async def get_artist_affinity(user_id: str, period: str, limit: int) -> dict:
+    items = await event_repo.get_artist_affinity(user_id, period, limit)
+    return {"period": period, "items": items}
+
+
+async def get_listening_patterns(user_id: str, period: str) -> dict:
+    return await event_repo.get_listening_patterns(user_id, period)
+
+
+async def get_trend_analysis(user_id: str, period: str) -> dict:
+    return await event_repo.get_trend_analysis(user_id, period)
+
+
+async def get_catalog_exploration(user_id: str, period: str) -> dict:
+    return await event_repo.get_catalog_exploration(user_id, period)
+
+
+async def get_queue_dropoff(user_id: str, period: str) -> dict:
+    return await event_repo.get_queue_dropoff(user_id, period)
+
+
+async def get_source_effectiveness(user_id: str, period: str) -> dict:
+    return await event_repo.get_source_effectiveness(user_id, period)
+
+
+async def get_binge_index(user_id: str, period: str) -> dict:
+    return await event_repo.get_binge_index(user_id, period)
