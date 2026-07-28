@@ -9,21 +9,25 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+import bcrypt
 import boto3
+import jwt
 from botocore.client import Config
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Header, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import SessionLocal
-from models import Song, Album, Artist, Playlist
+from models import Song, Album, Artist, Playlist, User
 
 load_dotenv()
 
@@ -83,6 +87,75 @@ async def _get_session() -> AsyncSession:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+class AuthRegister(BaseModel):
+    email: str
+    password: str
+    displayName: str = ""
+
+
+class AuthLogin(BaseModel):
+    email: str
+    password: str
+
+@app.post("/auth/register")
+async def register(body: AuthRegister, request: Request) -> dict:
+    if not body.email or not body.password:
+        raise HTTPException(status_code=400, detail="Email and password required")
+    async with SessionLocal() as session:
+        existing = await session.execute(select(User).where(User.email == body.email))
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Email already registered")
+        user = User(
+            id=str(uuid.uuid4()),
+            email=body.email,
+            password_hash=bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode(),
+            display_name=body.displayName,
+        )
+        session.add(user)
+        await session.commit()
+        token = jwt.encode({"sub": user.id, "exp": datetime.now(timezone.utc) + timedelta(days=7)}, JWT_SECRET)
+        return {"token": token, "user": user.to_dict()}
+
+
+@app.post("/auth/login")
+async def login(body: AuthLogin, request: Request) -> dict:
+    if not body.email or not body.password:
+        raise HTTPException(status_code=400, detail="Email and password required")
+    async with SessionLocal() as session:
+        result = await session.execute(select(User).where(User.email == body.email))
+        user = result.scalar_one_or_none()
+        if not user or not bcrypt.checkpw(body.password.encode(), user.password_hash.encode()):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        token = jwt.encode({"sub": user.id, "exp": datetime.now(timezone.utc) + timedelta(days=7)}, JWT_SECRET)
+        return {"token": token, "user": user.to_dict()}
+
+
+async def _get_current_user(authorization: str | None = Header(None)) -> User:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    token = authorization.split(" ", 1)[1]
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    async with SessionLocal() as session:
+        user = await session.get(User, payload.get("sub"))
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        return user
+
+
+@app.get("/auth/me")
+async def get_me(user: User = Depends(_get_current_user)) -> dict:
+    return user.to_dict()
 
 
 # ---------------------------------------------------------------------------
