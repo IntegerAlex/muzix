@@ -342,7 +342,7 @@ def make_cached_response(data: dict | list, request: Request, response: Response
 # Serialization
 # ---------------------------------------------------------------------------
 
-def serialize_song(song: Song) -> dict:
+def serialize_song(song: Song, base_url: str = "") -> dict:
     return {
         "id": str(song.id),
         "title": song.title,
@@ -355,13 +355,13 @@ def serialize_song(song: Song) -> dict:
         "track": song.track,
         "lyrics": song.lyrics,
         "colors": song.colors or [],
-        "imageUrl": f"http://localhost:8000/thumbnails/{song.id}.jpg",
+        "imageUrl": f"{base_url}/thumbnails/{song.id}.jpg",
         "r2_object_key": song.r2_object_key,
         "audioUrl": None,
     }
 
 
-def serialize_album(album: Album) -> dict:
+def serialize_album(album: Album, base_url: str = "") -> dict:
     return {
         "id": album.id,
         "title": album.title,
@@ -370,7 +370,7 @@ def serialize_album(album: Album) -> dict:
         "year": album.year,
         "genre": album.genre,
         "colors": album.colors or [],
-        "imageUrl": f"http://localhost:8000/thumbnails/{album.id}.jpg",
+        "imageUrl": f"{base_url}/thumbnails/{album.id}.jpg",
         "songIds": album.song_ids or [],
     }
 
@@ -403,7 +403,8 @@ async def list_songs(request: Request, response: Response, limit: int = 100, off
         result = await session.execute(
             select(Song).limit(max(1, min(limit, 500))).offset(max(0, offset))
         )
-        songs = [serialize_song(s) for s in result.scalars().all()]
+        base = str(request.base_url).rstrip("/")
+        songs = [serialize_song(s, base) for s in result.scalars().all()]
         return make_cached_response(songs, request, response)
 
 
@@ -413,7 +414,7 @@ async def get_song(song_id: str, request: Request, response: Response) -> dict:
         song = await session.get(Song, song_id)
         if song is None:
             raise HTTPException(status_code=404, detail="Song not found")
-        data = serialize_song(song)
+        data = serialize_song(song, str(request.base_url).rstrip("/"))
         return make_cached_response(data, request, response)
 
 
@@ -423,7 +424,8 @@ async def list_albums(request: Request, response: Response, limit: int = 100, of
         result = await session.execute(
             select(Album).limit(max(1, min(limit, 500))).offset(max(0, offset))
         )
-        albums = [serialize_album(a) for a in result.scalars().all()]
+        base = str(request.base_url).rstrip("/")
+        albums = [serialize_album(a, base) for a in result.scalars().all()]
         return make_cached_response(albums, request, response)
 
 
@@ -433,7 +435,7 @@ async def get_album(album_id: str, request: Request, response: Response) -> dict
         album = await session.get(Album, album_id)
         if album is None:
             raise HTTPException(status_code=404, detail="Album not found")
-        data = serialize_album(album)
+        data = serialize_album(album, str(request.base_url).rstrip("/"))
         return make_cached_response(data, request, response)
 
 
@@ -528,8 +530,9 @@ async def serve_thumbnail(filename: str):
 
 
 @app.get("/search")
-async def search(q: str = Query(default="", max_length=200)) -> dict:
+async def search(request: Request, q: str = Query(default="", max_length=200)) -> dict:
     """Full-text search across songs, albums, and artists."""
+    base = str(request.base_url).rstrip("/")
     async with SessionLocal() as session:
         if q.strip():
             tsquery = func.plainto_tsquery("english", q)
@@ -547,8 +550,8 @@ async def search(q: str = Query(default="", max_length=200)) -> dict:
             albums = (await session.execute(select(Album).limit(50))).scalars().all()
             artists = (await session.execute(select(Artist).limit(50))).scalars().all()
         return {
-            "songs": [serialize_song(s) for s in songs],
-            "albums": [serialize_album(a) for a in albums],
+            "songs": [serialize_song(s, base) for s in songs],
+            "albums": [serialize_album(a, base) for a in albums],
             "artists": [serialize_artist(a) for a in artists],
         }
 
