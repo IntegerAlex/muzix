@@ -27,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import SessionLocal
-from models import Song, Album, Artist, Playlist, User
+from models import Song, Album, Artist, Playlist, User, UserLike
 
 load_dotenv()
 
@@ -156,6 +156,47 @@ async def _get_current_user(authorization: str | None = Header(None)) -> User:
 @app.get("/auth/me")
 async def get_me(user: User = Depends(_get_current_user)) -> dict:
     return user.to_dict()
+
+
+# ---------------------------------------------------------------------------
+# Likes
+# ---------------------------------------------------------------------------
+
+@app.post("/likes/{song_id}")
+async def like_song(song_id: str, user: User = Depends(_get_current_user)):
+    async with SessionLocal() as session:
+        existing = await session.execute(
+            select(UserLike).where(UserLike.user_id == user.id, UserLike.song_id == song_id)
+        )
+        if existing.scalar_one_or_none():
+            return {"status": "already_liked"}
+        like = UserLike(id=str(uuid.uuid4()), user_id=user.id, song_id=song_id)
+        session.add(like)
+        await session.commit()
+    return {"status": "liked"}
+
+
+@app.delete("/likes/{song_id}")
+async def unlike_song(song_id: str, user: User = Depends(_get_current_user)):
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(UserLike).where(UserLike.user_id == user.id, UserLike.song_id == song_id)
+        )
+        like = result.scalar_one_or_none()
+        if like:
+            await session.delete(like)
+            await session.commit()
+    return {"status": "unliked"}
+
+
+@app.get("/likes")
+async def get_likes(user: User = Depends(_get_current_user)):
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(UserLike).where(UserLike.user_id == user.id)
+        )
+        likes = result.scalars().all()
+    return {"songIds": [like.song_id for like in likes]}
 
 
 # ---------------------------------------------------------------------------
@@ -322,7 +363,7 @@ async def get_playlist(playlist_id: str, request: Request, response: Response) -
 
 
 @app.get("/stream/{song_id}")
-async def stream(song_id: str) -> dict:
+async def stream(song_id: str, user: User = Depends(_get_current_user)) -> dict:
     """Return a 1-hour presigned URL for the song's private R2 object."""
     async with SessionLocal() as session:
         song = await session.get(Song, song_id)
