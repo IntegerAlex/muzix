@@ -9,7 +9,6 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from typing import Literal
 
-import bcrypt
 import jwt
 from fastapi import Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -17,6 +16,7 @@ from pydantic import BaseModel, field_validator
 
 from config import (
     ACCESS_TOKEN_EXPIRY_HOURS,
+    JWT_ALGORITHM,
     REFRESH_TOKEN_EXPIRY_DAYS,
     JWT_SECRET,
     MAX_EMAIL_LEN,
@@ -24,6 +24,7 @@ from config import (
     MAX_TITLE_LEN,
     MAX_SONGS_PER_PLAYLIST,
 )
+from crypto import hash_password, verify_password
 from db import SessionLocal
 from models import Song, Album, Artist, Playlist, User
 
@@ -144,7 +145,7 @@ def create_token(user_id: str, expiry_delta: timedelta) -> str:
     return jwt.encode(
         {"sub": user_id, "exp": datetime.now(timezone.utc) + expiry_delta, "iat": datetime.now(timezone.utc)},
         JWT_SECRET,
-        algorithm="HS256",
+        algorithm=JWT_ALGORITHM,
     )
 
 
@@ -152,7 +153,7 @@ def create_refresh_token(user_id: str) -> str:
     return jwt.encode(
         {"sub": user_id, "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRY_DAYS), "type": "refresh"},
         JWT_SECRET,
-        algorithm="HS256",
+        algorithm=JWT_ALGORITHM,
     )
 
 
@@ -161,7 +162,7 @@ async def get_current_user(authorization: str | None = Header(None)) -> User:
         raise HTTPException(status_code=401, detail="Missing or invalid token")
     token = authorization.split(" ", 1)[1]
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
