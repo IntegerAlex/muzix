@@ -1,0 +1,40 @@
+"""Like repository: database operations for user likes."""
+import uuid
+from sqlalchemy import select
+from db import SessionLocal
+from models import UserLike
+
+
+async def get_user_likes(user_id: str) -> list[str]:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(UserLike).where(UserLike.user_id == user_id)
+        )
+        return [like.song_id for like in result.scalars().all()]
+
+
+async def add_like(user_id: str, song_id: str) -> bool:
+    """Returns True if liked, False if already exists."""
+    async with SessionLocal() as session:
+        try:
+            like = UserLike(id=str(uuid.uuid4()), user_id=user_id, song_id=song_id)
+            session.add(like)
+            await session.commit()
+            return True
+        except Exception:
+            await session.rollback()
+            return False
+
+
+async def remove_like(user_id: str, song_id: str) -> bool:
+    """Returns True if removed, False if not found."""
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(UserLike).where(UserLike.user_id == user_id, UserLike.song_id == song_id)
+        )
+        like = result.scalar_one_or_none()
+        if like:
+            await session.delete(like)
+            await session.commit()
+            return True
+        return False

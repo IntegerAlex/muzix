@@ -1,0 +1,62 @@
+"""Auth routes: register, login, refresh, me."""
+from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, field_validator
+
+from config import MAX_EMAIL_LEN
+from helpers import success_resp, check_rate_limit, _client_ip, get_current_user
+from services import auth as auth_svc
+
+router = APIRouter(prefix="/auth")
+
+
+class AuthRegister(BaseModel):
+    email: str
+    password: str
+    displayName: str = ""
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+    @field_validator("displayName")
+    @classmethod
+    def validate_display_name(cls, v: str) -> str:
+        return v[:128] if v else ""
+
+
+class AuthLogin(BaseModel):
+    email: str
+    password: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+
+@router.post("/register")
+async def register(body: AuthRegister, request: Request):
+    check_rate_limit(f"register:{_client_ip(request)}", max_requests=5, window=300)
+    data = await auth_svc.register(body.email, body.password, body.displayName)
+    if not data:
+        return success_resp(data={}, message="Registration successful")
+    return success_resp(data=data, message="Registration successful")
+
+
+@router.post("/login")
+async def login(body: AuthLogin, request: Request):
+    check_rate_limit(f"login:{_client_ip(request)}", max_requests=10, window=60)
+    data = await auth_svc.login(body.email, body.password)
+    return success_resp(data=data, message="Login successful")
+
+
+@router.post("/refresh")
+async def refresh_token(body: dict):
+    data = await auth_svc.refresh(body.get("refreshToken", ""))
+    return success_resp(data=data, message="Token refreshed")
+
+
+@router.get("/me")
+async def get_me(user=Depends(get_current_user)):
+    return success_resp(data=user.to_dict(), message="User retrieved")
