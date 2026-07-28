@@ -101,7 +101,10 @@ def make_cached_response(data: dict | list, request: Request, response: Response
 
     if_none_match = request.headers.get("If-None-Match")
     if if_none_match and if_none_match.strip('"') == etag:
-        raise Exception("304")
+        raise HTTPException(
+            status_code=304,
+            headers={"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"},
+        )
 
     return data
 
@@ -273,3 +276,23 @@ async def stream(song_id: str) -> dict:
             "url": url,
             "expires_in": 3600,
         }
+
+
+@app.get("/thumbnails/{filename}")
+async def serve_thumbnail(filename: str):
+    key = f"thumbnails/{filename}"
+    try:
+        obj = r2.get_object(Bucket=R2_BUCKET, Key=key)
+        content = obj["Body"].read()
+        ct = obj.get("ContentType", "image/jpeg")
+        content_length = len(content)
+        return Response(
+            content=content,
+            media_type=ct,
+            headers={
+                "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
+                "Content-Length": str(content_length),
+            },
+        )
+    except Exception:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
