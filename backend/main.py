@@ -21,7 +21,8 @@ import boto3
 import jwt
 from botocore.client import Config
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Header, Request, Response
+from typing import Literal
+from fastapi import Depends, FastAPI, HTTPException, Header, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -34,9 +35,33 @@ from models import Song, Album, Artist, Playlist, User, ListeningEvent, UserSess
 load_dotenv()
 
 # ---------------------------------------------------------------------------
+# Rate limiting
+# ---------------------------------------------------------------------------
+_rate_limit: dict[str, list[float]] = defaultdict(list)
+_rate_limit_last_cleanup: float = 0.0
+
+
+def check_rate_limit(key: str, max_requests: int = 10, window: int = 60):
+    global _rate_limit_last_cleanup
+    now = time.time()
+    _rate_limit[key] = [t for t in _rate_limit[key] if now - t < window]
+    if len(_rate_limit[key]) >= max_requests:
+        raise HTTPException(status_code=429, detail="Too many requests")
+    _rate_limit[key].append(now)
+    # Evict stale keys every 60 seconds to prevent unbounded memory growth
+    if now - _rate_limit_last_cleanup > 60:
+        _rate_limit_last_cleanup = now
+        stale_keys = [k for k, v in _rate_limit.items() if not v or now - v[-1] > window * 2]
+        for k in stale_keys:
+            del _rate_limit[k]
+
+
+# ---------------------------------------------------------------------------
 # Environment
 # ---------------------------------------------------------------------------
 JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable is required")
 R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID")
 R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY")
@@ -51,6 +76,20 @@ ASSETS_DIR = Path(__file__).parent / "assets"
 AUDIO_DIR = ASSETS_DIR / "audio"
 THUMB_DIR = ASSETS_DIR / "thumbnails"
 INFO_DIR = ASSETS_DIR / "info"
+
+
+def _colors_from_title(title: str) -> list[str]:
+    """Generate two deterministic colors from a title string."""
+    import colorsys
+    h = hashlib.md5(title.encode()).hexdigest()
+    hue1 = int(h[:3], 16) % 360
+    hue2 = (hue1 + 40 + int(h[3:6], 16) % 60) % 360
+    r1, g1, b1 = colorsys.hls_to_rgb(hue1 / 360, 0.5, 0.65)
+    r2, g2, b2 = colorsys.hls_to_rgb(hue2 / 360, 0.5, 0.65)
+    return [
+        f'#{int(r1*255):02x}{int(g1*255):02x}{int(b1*255):02x}',
+        f'#{int(r2*255):02x}{int(g2*255):02x}{int(b2*255):02x}',
+    ]
 
 # ---------------------------------------------------------------------------
 # Clients
@@ -72,8 +111,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 if AUDIO_DIR.exists():
@@ -107,6 +146,7 @@ class AuthLogin(BaseModel):
 
 @app.post("/auth/register")
 async def register(body: AuthRegister, request: Request) -> dict:
+    check_rate_limit(f"register:{request.client.host if request.client else 'unknown'}")
     if not body.email or not body.password:
         raise HTTPException(status_code=400, detail="Email and password required")
     async with SessionLocal() as session:
@@ -127,6 +167,7 @@ async def register(body: AuthRegister, request: Request) -> dict:
 
 @app.post("/auth/login")
 async def login(body: AuthLogin, request: Request) -> dict:
+    check_rate_limit(f"login:{request.client.host if request.client else 'unknown'}")
     if not body.email or not body.password:
         raise HTTPException(status_code=400, detail="Email and password required")
     async with SessionLocal() as session:
@@ -486,6 +527,141 @@ async def serve_thumbnail(filename: str):
         raise HTTPException(status_code=404, detail="Thumbnail not found")
 
 
+@app.get("/search")
+async def search(q: str = Query(default="", max_length=200)) -> dict:
+    """Full-text search across songs, albums, and artists."""
+    async with SessionLocal() as session:
+        if q.strip():
+            tsquery = func.plainto_tsquery("english", q)
+            songs = (
+                await session.execute(select(Song).where(Song.fts.op("@@")(tsquery)).limit(50))
+            ).scalars().all()
+            albums = (
+                await session.execute(select(Album).where(Album.fts.op("@@")(tsquery)).limit(50))
+            ).scalars().all()
+            artists = (
+                await session.execute(select(Artist).where(Artist.name.ilike(f"%{q}%")).limit(50))
+            ).scalars().all()
+        else:
+            songs = (await session.execute(select(Song).limit(50))).scalars().all()
+            albums = (await session.execute(select(Album).limit(50))).scalars().all()
+            artists = (await session.execute(select(Artist).limit(50))).scalars().all()
+        return {
+            "songs": [serialize_song(s) for s in songs],
+            "albums": [serialize_album(a) for a in albums],
+            "artists": [serialize_artist(a) for a in artists],
+        }
+
+
+# ---------------------------------------------------------------------------
+# Local assets (downloaded via yt-dlp)
+# ---------------------------------------------------------------------------
+
+def _load_local_songs() -> list[dict]:
+    """Read info.json files and return serialized song list with local URLs."""
+    if not INFO_DIR.exists():
+        return []
+    songs = []
+    for info_file in sorted(INFO_DIR.glob("*.info.json")):
+        try:
+            data = json.loads(info_file.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        vid_id = data.get("id", info_file.stem.replace(".info", ""))
+        title = data.get("title", "Unknown")
+        artist = data.get("uploader", data.get("artist", "Unknown"))
+        duration = int(data.get("duration", 0))
+        thumbnail = data.get("thumbnail", "")
+
+        # Parse chapters for album info or use uploader as album
+        album = data.get("album", data.get("uploader", artist))
+        description = data.get("description", "")
+
+        songs.append({
+            "id": vid_id,
+            "title": title,
+            "artist": artist,
+            "artistId": artist.lower().replace(" ", "-"),
+            "album": album,
+            "albumId": album.lower().replace(" ", "-"),
+            "duration": f"{duration // 60}:{duration % 60:02d}",
+            "durationMs": duration * 1000,
+            "track": None,
+            "lyrics": None,
+            "colors": _colors_from_title(title),
+            "r2_object_key": None,
+            "audioUrl": f"http://localhost:8000/assets/audio/{vid_id}.mp3",
+            "thumbnailUrl": f"http://localhost:8000/assets/thumbnails/{vid_id}.jpg",
+        })
+    return songs
+
+
+def _build_local_albums(songs: list[dict]) -> list[dict]:
+    """Group songs into albums by artist."""
+    album_map: dict[str, dict] = {}
+    for s in songs:
+        aid = s["albumId"]
+        if aid not in album_map:
+            album_map[aid] = {
+                "id": aid,
+                "title": s["album"],
+                "artist": s["artist"],
+                "artistId": s["artistId"],
+                "year": 2024,
+                "genre": "Electronic",
+                "colors": _colors_from_title(s["album"]),
+                "songIds": [],
+            }
+        album_map[aid]["songIds"].append(s["id"])
+    return list(album_map.values())
+
+
+def _build_local_artists(songs: list[dict]) -> list[dict]:
+    """Group songs into artists."""
+    artist_map: dict[str, dict] = {}
+    for s in songs:
+        aid = s["artistId"]
+        if aid not in artist_map:
+            artist_map[aid] = {
+                "id": aid,
+                "name": s["artist"],
+                "colors": _colors_from_title(s["artist"]),
+                "albumIds": [],
+            }
+        album_id = s["albumId"]
+        if album_id not in artist_map[aid]["albumIds"]:
+            artist_map[aid]["albumIds"].append(album_id)
+    return list(artist_map.values())
+
+
+@app.get("/local/songs")
+async def local_songs() -> list[dict]:
+    return _load_local_songs()
+
+
+@app.get("/local/albums")
+async def local_albums() -> list[dict]:
+    songs = _load_local_songs()
+    return _build_local_albums(songs)
+
+
+@app.get("/local/artists")
+async def local_artists() -> list[dict]:
+    songs = _load_local_songs()
+    return _build_local_artists(songs)
+
+
+@app.get("/local/search")
+async def local_search(q: str = "") -> dict:
+    songs = _load_local_songs()
+    if q.strip():
+        ql = q.lower()
+        songs = [s for s in songs if ql in s["title"].lower() or ql in s["artist"].lower()]
+    albums = _build_local_albums(songs)
+    artists = _build_local_artists(songs)
+    return {"songs": songs, "albums": albums, "artists": artists}
+
+
 # ---------------------------------------------------------------------------
 # Telemetry / Analytics
 # ---------------------------------------------------------------------------
@@ -493,7 +669,7 @@ async def serve_thumbnail(filename: str):
 class TelemetryEventIn(BaseModel):
     song_id: str
     session_id: str
-    event_type: str = "play"
+    event_type: Literal["play", "pause", "complete", "skip", "seek"] = "play"
     started_at: str  # ISO timestamp
     ended_at: str | None = None
     duration_played_ms: int = 0
@@ -537,6 +713,8 @@ async def record_telemetry_event(
     user: User | None = Depends(_get_optional_user),
 ):
     """Batch insert listening events. Auth optional."""
+    if len(events) > 100:
+        raise HTTPException(status_code=400, detail="Batch size limited to 100 events")
     if not user:
         return {"status": "ok", "skipped": True}
     async with SessionLocal() as session:
