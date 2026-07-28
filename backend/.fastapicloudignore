@@ -1,0 +1,30 @@
+# Exclude local assets (large files, not needed in cloud)
+assets/
+*.mp3
+*.webm
+*.wav
+
+# Exclude Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Exclude venv
+.venv/
+
+# Exclude local env files
+.env
+
+# Exclude lock files (uv will resolve from pyproject.toml)
+uv.lock
+
+# Exclude git files
+.git/
+.gitignore
+
+# Exclude download scripts (not needed in cloud)
+download_songs.sh
+download_thumbnails.py
+seed-music.py
+genius_lyrics.py
+urls.txt
