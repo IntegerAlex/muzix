@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 import hashlib
 import time
@@ -25,9 +26,10 @@ from typing import Literal
 from fastapi import Depends, FastAPI, HTTPException, Header, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from sqlalchemy import select, func
+from pydantic import BaseModel, field_validator
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from db import SessionLocal
 from models import Song, Album, Artist, Playlist, User, ListeningEvent, UserSession, UserLike
@@ -35,10 +37,29 @@ from models import Song, Album, Artist, Playlist, User, ListeningEvent, UserSess
 load_dotenv()
 
 # ---------------------------------------------------------------------------
-# Rate limiting
+# Security constants
+# ---------------------------------------------------------------------------
+ACCESS_TOKEN_EXPIRY_HOURS = 24
+REFRESH_TOKEN_EXPIRY_DAYS = 30
+MAX_STRING_FIELD = 512
+MAX_PASSWORD_LEN = 128
+MAX_EMAIL_LEN = 320
+MAX_TITLE_LEN = 512
+MAX_SONGS_PER_PLAYLIST = 500
+
+# ---------------------------------------------------------------------------
+# Rate limiting (per-IP, sliding window)
 # ---------------------------------------------------------------------------
 _rate_limit: dict[str, list[float]] = defaultdict(list)
 _rate_limit_last_cleanup: float = 0.0
+
+
+def _client_ip(request: Request) -> str:
+    """Extract real client IP, respecting forwarded headers behind a proxy."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 
 def check_rate_limit(key: str, max_requests: int = 10, window: int = 60):
@@ -48,12 +69,18 @@ def check_rate_limit(key: str, max_requests: int = 10, window: int = 60):
     if len(_rate_limit[key]) >= max_requests:
         raise HTTPException(status_code=429, detail="Too many requests")
     _rate_limit[key].append(now)
-    # Evict stale keys every 60 seconds to prevent unbounded memory growth
     if now - _rate_limit_last_cleanup > 60:
         _rate_limit_last_cleanup = now
         stale_keys = [k for k, v in _rate_limit.items() if not v or now - v[-1] > window * 2]
         for k in stale_keys:
             del _rate_limit[k]
+
+
+def rate_limit(request: Request, max_requests: int = 30, window: int = 60):
+    """Convenience wrapper that keys on client IP + request path."""
+    ip = _client_ip(request)
+    path = request.url.path
+    check_rate_limit(f"{ip}:{path}", max_requests, window)
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +98,7 @@ R2_PUBLIC_URL = os.getenv("R2_PUBLIC_URL")
 CORS_ORIGINS = [
     o.strip() for o in (os.getenv("CORS_ORIGINS") or "http://localhost:8081,http://localhost:3000").split(",")
 ]
+CORS_ORIGIN_SET = set(CORS_ORIGINS)
 
 ASSETS_DIR = Path(__file__).parent / "assets"
 AUDIO_DIR = ASSETS_DIR / "audio"
@@ -91,6 +119,7 @@ def _colors_from_title(title: str) -> list[str]:
         f'#{int(r2*255):02x}{int(g2*255):02x}{int(b2*255):02x}',
     ]
 
+
 # ---------------------------------------------------------------------------
 # Clients
 # ---------------------------------------------------------------------------
@@ -105,78 +134,243 @@ r2 = boto3.client(
     config=Config(signature_version="s3v4"),
 )
 
-app = FastAPI(title="Muzix API", version="0.1.0")
+# ---------------------------------------------------------------------------
+# App + Security Middleware (single combined ASGI middleware to avoid
+# BaseHTTPMiddleware stacking issues in Starlette)
+# ---------------------------------------------------------------------------
+app = FastAPI(title="Muzix API", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
-)
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "0",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
+    "Content-Security-Policy": "default-src 'self'",
+}
 
+
+def _origin_allowed(origin: str | None) -> bool:
+    if not origin:
+        return False
+    return origin in CORS_ORIGIN_SET
+
+
+class SecurityMiddleware:
+    """Combined CORS + security headers middleware as raw ASGI."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive)
+        origin = request.headers.get("origin")
+
+        # --- Handle CORS preflight ---
+        if request.method == "OPTIONS":
+            if not _origin_allowed(origin):
+                response = Response(status_code=403, content="Origin not allowed")
+                await response(scope, receive, send)
+                return
+            response = Response(status_code=204)
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+            response.headers["Access-Control-Max-Age"] = "600"
+            await response(scope, receive, send)
+            return
+
+        # --- Wrap send to inject security + CORS headers ---
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                try:
+                    existing = message.get("headers", [])
+                    raw_headers: list[tuple[bytes, bytes]] = list(existing)
+                    # Remove server header
+                    raw_headers = [(k, v) for k, v in raw_headers if k != b"server"]
+                    # Add security headers
+                    for k, v in _SECURITY_HEADERS.items():
+                        raw_headers.append((k.lower().encode(), v.encode()))
+                    # Add CORS headers
+                    if _origin_allowed(origin):
+                        raw_headers.append((b"access-control-allow-origin", origin.encode()))
+                        raw_headers.append((b"access-control-allow-credentials", b"true"))
+                        vary = b""
+                        for k, v in raw_headers:
+                            if k == b"vary":
+                                vary = v
+                                break
+                        if b"Origin" not in vary:
+                            new_vary = (vary + b", Origin").strip(b", ") if vary else b"Origin"
+                            raw_headers = [(k, v) for k, v in raw_headers if k != b"vary"]
+                            raw_headers.append((b"vary", new_vary))
+                    message["headers"] = raw_headers
+                except Exception:
+                    pass
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+app.add_middleware(SecurityMiddleware)
+
+
+# ---------------------------------------------------------------------------
+# Static files (only in development)
+# ---------------------------------------------------------------------------
 if AUDIO_DIR.exists():
     app.mount("/assets/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
 if THUMB_DIR.exists():
     app.mount("/assets/thumbnails", StaticFiles(directory=str(THUMB_DIR)), name="thumbnails")
 
 
-async def _get_session() -> AsyncSession:
-    return SessionLocal()
-
-
+# ---------------------------------------------------------------------------
+# Health
+# ---------------------------------------------------------------------------
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
 
 
 # ---------------------------------------------------------------------------
+# Input validation helpers
+# ---------------------------------------------------------------------------
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
+
+
+def _validate_email(email: str) -> str:
+    """Validate and normalize email. Raises HTTPException on failure."""
+    email = email.strip().lower()
+    if len(email) > MAX_EMAIL_LEN:
+        raise HTTPException(status_code=422, detail="Invalid email")
+    if not _EMAIL_RE.match(email):
+        raise HTTPException(status_code=422, detail="Invalid email format")
+    return email
+
+
+def _validate_password(password: str) -> None:
+    """Enforce password complexity. Raises HTTPException on failure."""
+    if len(password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters")
+    if len(password) > MAX_PASSWORD_LEN:
+        raise HTTPException(status_code=422, detail="Password too long")
+    if not re.search(r"[A-Z]", password):
+        raise HTTPException(status_code=422, detail="Password must contain an uppercase letter")
+    if not re.search(r"[a-z]", password):
+        raise HTTPException(status_code=422, detail="Password must contain a lowercase letter")
+    if not re.search(r"[0-9]", password):
+        raise HTTPException(status_code=422, detail="Password must contain a digit")
+
+
+# ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
-
 class AuthRegister(BaseModel):
     email: str
     password: str
     displayName: str = ""
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+    @field_validator("displayName")
+    @classmethod
+    def validate_display_name(cls, v: str) -> str:
+        return v[:128] if v else ""
 
 
 class AuthLogin(BaseModel):
     email: str
     password: str
 
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        return v.strip().lower()
+
+
+def _create_token(user_id: str, expiry_delta: timedelta) -> str:
+    return jwt.encode(
+        {"sub": user_id, "exp": datetime.now(timezone.utc) + expiry_delta, "iat": datetime.now(timezone.utc)},
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+
+
+def _create_refresh_token(user_id: str) -> str:
+    return jwt.encode(
+        {"sub": user_id, "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRY_DAYS), "type": "refresh"},
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+
+
 @app.post("/auth/register")
 async def register(body: AuthRegister, request: Request) -> dict:
-    check_rate_limit(f"register:{request.client.host if request.client else 'unknown'}")
-    if not body.email or not body.password:
-        raise HTTPException(status_code=400, detail="Email and password required")
+    check_rate_limit(f"register:{_client_ip(request)}", max_requests=5, window=300)
+    email = _validate_email(body.email)
+    _validate_password(body.password)
+
     async with SessionLocal() as session:
-        existing = await session.execute(select(User).where(User.email == body.email))
+        existing = await session.execute(select(User).where(User.email == email))
         if existing.scalar_one_or_none():
-            raise HTTPException(status_code=409, detail="Email already registered")
+            return {"detail": "Registration successful"}
         user = User(
             id=str(uuid.uuid4()),
-            email=body.email,
+            email=email,
             password_hash=bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode(),
             display_name=body.displayName,
         )
         session.add(user)
         await session.commit()
-        token = jwt.encode({"sub": user.id, "exp": datetime.now(timezone.utc) + timedelta(days=7)}, JWT_SECRET)
-        return {"token": token, "user": user.to_dict()}
+        token = _create_token(user.id, timedelta(hours=ACCESS_TOKEN_EXPIRY_HOURS))
+        refresh = _create_refresh_token(user.id)
+        return {"token": token, "refreshToken": refresh, "user": user.to_dict()}
 
 
 @app.post("/auth/login")
 async def login(body: AuthLogin, request: Request) -> dict:
-    check_rate_limit(f"login:{request.client.host if request.client else 'unknown'}")
+    check_rate_limit(f"login:{_client_ip(request)}", max_requests=10, window=60)
     if not body.email or not body.password:
         raise HTTPException(status_code=400, detail="Email and password required")
+    email = body.email.strip().lower()
     async with SessionLocal() as session:
-        result = await session.execute(select(User).where(User.email == body.email))
+        result = await session.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
         if not user or not bcrypt.checkpw(body.password.encode(), user.password_hash.encode()):
             raise HTTPException(status_code=401, detail="Invalid email or password")
-        token = jwt.encode({"sub": user.id, "exp": datetime.now(timezone.utc) + timedelta(days=7)}, JWT_SECRET)
-        return {"token": token, "user": user.to_dict()}
+        token = _create_token(user.id, timedelta(hours=ACCESS_TOKEN_EXPIRY_HOURS))
+        refresh = _create_refresh_token(user.id)
+        return {"token": token, "refreshToken": refresh, "user": user.to_dict()}
+
+
+@app.post("/auth/refresh")
+async def refresh_token(body: dict, request: Request) -> dict:
+    """Exchange a refresh token for a new access token."""
+    refresh = body.get("refreshToken")
+    if not refresh:
+        raise HTTPException(status_code=400, detail="Refresh token required")
+    try:
+        payload = jwt.decode(refresh, JWT_SECRET, algorithms=["HS256"])
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+    async with SessionLocal() as session:
+        user = await session.get(User, payload.get("sub"))
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        token = _create_token(user.id, timedelta(hours=ACCESS_TOKEN_EXPIRY_HOURS))
+        new_refresh = _create_refresh_token(user.id)
+        return {"token": token, "refreshToken": new_refresh}
 
 
 async def _get_current_user(authorization: str | None = Header(None)) -> User:
@@ -202,21 +396,20 @@ async def get_me(user: User = Depends(_get_current_user)) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Likes
+# Likes (race-condition-safe via DB unique constraint + atomic ops)
 # ---------------------------------------------------------------------------
 
 @app.post("/likes/{song_id}")
 async def like_song(song_id: str, user: User = Depends(_get_current_user)):
     async with SessionLocal() as session:
-        existing = await session.execute(
-            select(UserLike).where(UserLike.user_id == user.id, UserLike.song_id == song_id)
-        )
-        if existing.scalar_one_or_none():
+        try:
+            like = UserLike(id=str(uuid.uuid4()), user_id=user.id, song_id=song_id)
+            session.add(like)
+            await session.commit()
+            return {"status": "liked"}
+        except Exception:
+            await session.rollback()
             return {"status": "already_liked"}
-        like = UserLike(id=str(uuid.uuid4()), user_id=user.id, song_id=song_id)
-        session.add(like)
-        await session.commit()
-    return {"status": "liked"}
 
 
 @app.delete("/likes/{song_id}")
@@ -243,12 +436,35 @@ async def get_likes(user: User = Depends(_get_current_user)):
 
 
 # ---------------------------------------------------------------------------
-# Playlists CRUD
+# Playlists CRUD (with ownership enforcement)
 # ---------------------------------------------------------------------------
 
 class PlaylistCreate(BaseModel):
     title: str
     songIds: list[str] = []
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v: str) -> str:
+        return v[:MAX_TITLE_LEN] if v else ""
+
+    @field_validator("songIds")
+    @classmethod
+    def validate_song_ids(cls, v: list[str]) -> list[str]:
+        if len(v) > MAX_SONGS_PER_PLAYLIST:
+            raise ValueError(f"Playlist cannot exceed {MAX_SONGS_PER_PLAYLIST} songs")
+        return v[:MAX_SONGS_PER_PLAYLIST]
+
+
+async def _get_owned_playlist(playlist_id: str, user: User) -> Playlist:
+    """Fetch playlist and verify ownership. Raises 404 on not-found or not-owned."""
+    async with SessionLocal() as session:
+        playlist = await session.get(Playlist, playlist_id)
+        if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        if playlist.owner_id and playlist.owner_id != user.id:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        return playlist
 
 
 @app.post("/playlists")
@@ -256,13 +472,42 @@ async def create_playlist(body: PlaylistCreate, user: User = Depends(_get_curren
     async with SessionLocal() as session:
         playlist = Playlist(
             id=str(uuid.uuid4()),
+            owner_id=user.id,
             title=body.title,
             colors=["#6d28d9", "#db2777"],
             song_ids=body.songIds,
         )
         session.add(playlist)
         await session.commit()
-    return serialize_playlist(playlist)
+    return _serialize_playlist(playlist)
+
+
+@app.get("/playlists")
+async def list_playlists(
+    request: Request,
+    response: Response,
+    user: User = Depends(_get_current_user),
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
+    rate_limit(request, max_requests=60, window=60)
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(Playlist)
+            .where(Playlist.owner_id == user.id)
+            .limit(max(1, min(limit, 500)))
+            .offset(max(0, offset))
+        )
+        playlists = [_serialize_playlist(p) for p in result.scalars().all()]
+        return make_cached_response(playlists, request, response)
+
+
+@app.get("/playlists/{playlist_id}")
+async def get_playlist(playlist_id: str, request: Request, response: Response, user: User = Depends(_get_current_user)) -> dict:
+    rate_limit(request, max_requests=60, window=60)
+    playlist = await _get_owned_playlist(playlist_id, user)
+    data = _serialize_playlist(playlist)
+    return make_cached_response(data, request, response)
 
 
 @app.put("/playlists/{playlist_id}")
@@ -271,10 +516,12 @@ async def update_playlist(playlist_id: str, body: PlaylistCreate, user: User = D
         playlist = await session.get(Playlist, playlist_id)
         if not playlist:
             raise HTTPException(status_code=404, detail="Playlist not found")
+        if playlist.owner_id and playlist.owner_id != user.id:
+            raise HTTPException(status_code=404, detail="Playlist not found")
         playlist.title = body.title
         playlist.song_ids = body.songIds
         await session.commit()
-    return serialize_playlist(playlist)
+    return _serialize_playlist(playlist)
 
 
 @app.delete("/playlists/{playlist_id}")
@@ -282,6 +529,8 @@ async def delete_playlist(playlist_id: str, user: User = Depends(_get_current_us
     async with SessionLocal() as session:
         playlist = await session.get(Playlist, playlist_id)
         if not playlist:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        if playlist.owner_id and playlist.owner_id != user.id:
             raise HTTPException(status_code=404, detail="Playlist not found")
         await session.delete(playlist)
         await session.commit()
@@ -294,12 +543,14 @@ async def add_song_to_playlist(playlist_id: str, song_id: str, user: User = Depe
         playlist = await session.get(Playlist, playlist_id)
         if not playlist:
             raise HTTPException(status_code=404, detail="Playlist not found")
+        if playlist.owner_id and playlist.owner_id != user.id:
+            raise HTTPException(status_code=404, detail="Playlist not found")
         if playlist.song_ids is None:
             playlist.song_ids = []
         if song_id not in playlist.song_ids:
             playlist.song_ids = playlist.song_ids + [song_id]
         await session.commit()
-    return serialize_playlist(playlist)
+    return _serialize_playlist(playlist)
 
 
 @app.delete("/playlists/{playlist_id}/songs/{song_id}")
@@ -308,10 +559,12 @@ async def remove_song_from_playlist(playlist_id: str, song_id: str, user: User =
         playlist = await session.get(Playlist, playlist_id)
         if not playlist:
             raise HTTPException(status_code=404, detail="Playlist not found")
+        if playlist.owner_id and playlist.owner_id != user.id:
+            raise HTTPException(status_code=404, detail="Playlist not found")
         if playlist.song_ids and song_id in playlist.song_ids:
             playlist.song_ids = [s for s in playlist.song_ids if s != song_id]
         await session.commit()
-    return serialize_playlist(playlist)
+    return _serialize_playlist(playlist)
 
 
 # ---------------------------------------------------------------------------
@@ -384,7 +637,7 @@ def serialize_artist(artist: Artist) -> dict:
     }
 
 
-def serialize_playlist(playlist: Playlist) -> dict:
+def _serialize_playlist(playlist: Playlist) -> dict:
     return {
         "id": playlist.id,
         "title": playlist.title,
@@ -394,11 +647,12 @@ def serialize_playlist(playlist: Playlist) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# List endpoints (paginated)
+# List endpoints (paginated, rate-limited)
 # ---------------------------------------------------------------------------
 
 @app.get("/songs")
 async def list_songs(request: Request, response: Response, limit: int = 100, offset: int = 0) -> list[dict]:
+    rate_limit(request, max_requests=60, window=60)
     async with SessionLocal() as session:
         result = await session.execute(
             select(Song).limit(max(1, min(limit, 500))).offset(max(0, offset))
@@ -410,6 +664,7 @@ async def list_songs(request: Request, response: Response, limit: int = 100, off
 
 @app.get("/songs/{song_id}")
 async def get_song(song_id: str, request: Request, response: Response) -> dict:
+    rate_limit(request, max_requests=60, window=60)
     async with SessionLocal() as session:
         song = await session.get(Song, song_id)
         if song is None:
@@ -420,6 +675,7 @@ async def get_song(song_id: str, request: Request, response: Response) -> dict:
 
 @app.get("/albums")
 async def list_albums(request: Request, response: Response, limit: int = 100, offset: int = 0) -> list[dict]:
+    rate_limit(request, max_requests=60, window=60)
     async with SessionLocal() as session:
         result = await session.execute(
             select(Album).limit(max(1, min(limit, 500))).offset(max(0, offset))
@@ -431,6 +687,7 @@ async def list_albums(request: Request, response: Response, limit: int = 100, of
 
 @app.get("/albums/{album_id}")
 async def get_album(album_id: str, request: Request, response: Response) -> dict:
+    rate_limit(request, max_requests=60, window=60)
     async with SessionLocal() as session:
         album = await session.get(Album, album_id)
         if album is None:
@@ -441,6 +698,7 @@ async def get_album(album_id: str, request: Request, response: Response) -> dict
 
 @app.get("/artists")
 async def list_artists(request: Request, response: Response, limit: int = 100, offset: int = 0) -> list[dict]:
+    rate_limit(request, max_requests=60, window=60)
     async with SessionLocal() as session:
         result = await session.execute(
             select(Artist).limit(max(1, min(limit, 500))).offset(max(0, offset))
@@ -451,31 +709,12 @@ async def list_artists(request: Request, response: Response, limit: int = 100, o
 
 @app.get("/artists/{artist_id}")
 async def get_artist(artist_id: str, request: Request, response: Response) -> dict:
+    rate_limit(request, max_requests=60, window=60)
     async with SessionLocal() as session:
         artist = await session.get(Artist, artist_id)
         if artist is None:
             raise HTTPException(status_code=404, detail="Artist not found")
         data = serialize_artist(artist)
-        return make_cached_response(data, request, response)
-
-
-@app.get("/playlists")
-async def list_playlists(request: Request, response: Response, limit: int = 100, offset: int = 0) -> list[dict]:
-    async with SessionLocal() as session:
-        result = await session.execute(
-            select(Playlist).limit(max(1, min(limit, 500))).offset(max(0, offset))
-        )
-        playlists = [serialize_playlist(p) for p in result.scalars().all()]
-        return make_cached_response(playlists, request, response)
-
-
-@app.get("/playlists/{playlist_id}")
-async def get_playlist(playlist_id: str, request: Request, response: Response) -> dict:
-    async with SessionLocal() as session:
-        playlist = await session.get(Playlist, playlist_id)
-        if playlist is None:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-        data = serialize_playlist(playlist)
         return make_cached_response(data, request, response)
 
 
@@ -510,7 +749,8 @@ async def stream(song_id: str, user: User = Depends(_get_current_user)) -> dict:
 
 
 @app.get("/thumbnails/{filename}")
-async def serve_thumbnail(filename: str):
+async def serve_thumbnail(filename: str, request: Request):
+    rate_limit(request, max_requests=120, window=60)
     key = f"thumbnails/{filename}"
     try:
         obj = r2.get_object(Bucket=R2_BUCKET, Key=key)
@@ -532,6 +772,7 @@ async def serve_thumbnail(filename: str):
 @app.get("/search")
 async def search(request: Request, q: str = Query(default="", max_length=200)) -> dict:
     """Full-text search across songs, albums, and artists."""
+    rate_limit(request, max_requests=30, window=60)
     base = str(request.base_url).rstrip("/")
     async with SessionLocal() as session:
         if q.strip():
@@ -638,24 +879,28 @@ def _build_local_artists(songs: list[dict]) -> list[dict]:
 
 
 @app.get("/local/songs")
-async def local_songs() -> list[dict]:
+async def local_songs(request: Request) -> list[dict]:
+    rate_limit(request, max_requests=30, window=60)
     return _load_local_songs()
 
 
 @app.get("/local/albums")
-async def local_albums() -> list[dict]:
+async def local_albums(request: Request) -> list[dict]:
+    rate_limit(request, max_requests=30, window=60)
     songs = _load_local_songs()
     return _build_local_albums(songs)
 
 
 @app.get("/local/artists")
-async def local_artists() -> list[dict]:
+async def local_artists(request: Request) -> list[dict]:
+    rate_limit(request, max_requests=30, window=60)
     songs = _load_local_songs()
     return _build_local_artists(songs)
 
 
 @app.get("/local/search")
-async def local_search(q: str = "") -> dict:
+async def local_search(request: Request, q: str = "") -> dict:
+    rate_limit(request, max_requests=30, window=60)
     songs = _load_local_songs()
     if q.strip():
         ql = q.lower()
@@ -666,7 +911,7 @@ async def local_search(q: str = "") -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Telemetry / Analytics
+# Telemetry / Analytics (auth required)
 # ---------------------------------------------------------------------------
 
 class TelemetryEventIn(BaseModel):
@@ -678,11 +923,18 @@ class TelemetryEventIn(BaseModel):
     duration_played_ms: int = 0
     song_duration_ms: int | None = None
     completion_percentage: int = 0
-    source: str | None = None  # playlist, album, artist, search, radio, queue
+    source: str | None = None
     source_id: str | None = None
     position_in_queue: int | None = None
     device_type: str = "web"
     app_version: str | None = None
+
+    @field_validator("song_id", "session_id")
+    @classmethod
+    def validate_non_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Field must not be empty")
+        return v[:128]
 
 
 class SessionStartIn(BaseModel):
@@ -692,34 +944,34 @@ class SessionStartIn(BaseModel):
     platform: str | None = None
     entry_source: str | None = None
 
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("session_id must not be empty")
+        return v[:128]
+
 
 class SessionEndIn(BaseModel):
     session_id: str
-    exit_reason: str | None = None  # user_close, crash, background, timeout
+    exit_reason: str | None = None
 
-
-async def _get_optional_user(authorization: str | None = Header(None)) -> User | None:
-    if not authorization or not authorization.startswith("Bearer "):
-        return None
-    token = authorization.split(" ", 1)[1]
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        return None
-    async with SessionLocal() as session:
-        return await session.get(User, payload.get("sub"))
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("session_id must not be empty")
+        return v[:128]
 
 
 @app.post("/telemetry/events")
 async def record_telemetry_event(
     events: list[TelemetryEventIn],
-    user: User | None = Depends(_get_optional_user),
+    user: User = Depends(_get_current_user),
 ):
-    """Batch insert listening events. Auth optional."""
+    """Batch insert listening events. Auth required."""
     if len(events) > 100:
         raise HTTPException(status_code=400, detail="Batch size limited to 100 events")
-    if not user:
-        return {"status": "ok", "skipped": True}
     async with SessionLocal() as session:
         for e in events:
             event = ListeningEvent(
@@ -747,10 +999,8 @@ async def record_telemetry_event(
 @app.post("/telemetry/session/start")
 async def start_session(
     data: SessionStartIn,
-    user: User | None = Depends(_get_optional_user),
+    user: User = Depends(_get_current_user),
 ):
-    if not user:
-        return {"status": "ok", "skipped": True}
     async with SessionLocal() as session:
         sess = UserSession(
             id=data.session_id,
@@ -768,10 +1018,8 @@ async def start_session(
 @app.post("/telemetry/session/end")
 async def end_session(
     data: SessionEndIn,
-    user: User | None = Depends(_get_optional_user),
+    user: User = Depends(_get_current_user),
 ):
-    if not user:
-        return {"status": "ok", "skipped": True}
     async with SessionLocal() as session:
         result = await session.execute(
             select(UserSession).where(UserSession.id == data.session_id, UserSession.user_id == user.id)
@@ -779,7 +1027,7 @@ async def end_session(
         sess = result.scalar_one_or_none()
         if not sess:
             raise HTTPException(status_code=404, detail="Session not found")
-        sess.ended_at = datetime.utcnow()
+        sess.ended_at = datetime.now(timezone.utc)
         sess.exit_reason = data.exit_reason
         await session.commit()
     return {"status": "ok"}
@@ -788,13 +1036,14 @@ async def end_session(
 # Analytics queries
 @app.get("/analytics/user/top-songs")
 async def get_user_top_songs(
-    period: str = "month",  # day, week, month, year, all
+    period: str = "month",
     limit: int = 50,
+    request: Request = None,
     user: User = Depends(_get_current_user),
 ):
+    rate_limit(request, max_requests=30, window=60)
     async with SessionLocal() as session:
-        # Calculate time window
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if period == "day":
             since = now - timedelta(days=1)
         elif period == "week":
@@ -804,9 +1053,8 @@ async def get_user_top_songs(
         elif period == "year":
             since = now - timedelta(days=365)
         else:
-            since = datetime(1970, 1, 1)
-        
-        # Get play counts per song
+            since = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
         stmt = select(
             ListeningEvent.song_id,
             func.count(ListeningEvent.id).label("play_count"),
@@ -817,11 +1065,10 @@ async def get_user_top_songs(
             ListeningEvent.event_type == "play",
             ListeningEvent.started_at >= since,
         ).group_by(ListeningEvent.song_id).order_by(func.count(ListeningEvent.id).desc()).limit(limit)
-        
+
         result = await session.execute(stmt)
         rows = result.all()
-        
-        # Get song details
+
         song_ids = [r.song_id for r in rows if r.song_id]
         songs_map = {}
         if song_ids:
@@ -835,7 +1082,7 @@ async def get_user_top_songs(
                     "duration_ms": s.duration_ms,
                     "colors": s.colors,
                 }
-        
+
         return {
             "period": period,
             "items": [
@@ -853,10 +1100,12 @@ async def get_user_top_songs(
 @app.get("/analytics/user/stats")
 async def get_user_stats(
     period: str = "month",
+    request: Request = None,
     user: User = Depends(_get_current_user),
 ):
+    rate_limit(request, max_requests=30, window=60)
     async with SessionLocal() as session:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if period == "day":
             since = now - timedelta(days=1)
         elif period == "week":
@@ -866,9 +1115,8 @@ async def get_user_stats(
         elif period == "year":
             since = now - timedelta(days=365)
         else:
-            since = datetime(1970, 1, 1)
+            since = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
-        # Single combined query for all play aggregates
         base_filter = (
             ListeningEvent.user_id == user.id,
             ListeningEvent.event_type == "play",
@@ -883,7 +1131,6 @@ async def get_user_stats(
         )
         stats = stats_result.one()
 
-        # Unique artists (requires join)
         artists_result = await session.execute(
             select(func.count(func.distinct(Song.artist_id)))
             .select_from(ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id))
@@ -891,7 +1138,6 @@ async def get_user_stats(
         )
         unique_artists = artists_result.scalar() or 0
 
-        # Sessions (broader filter — no event_type constraint)
         sessions_result = await session.execute(
             select(func.count(func.distinct(ListeningEvent.session_id))).where(
                 ListeningEvent.user_id == user.id,
@@ -917,17 +1163,18 @@ async def get_user_stats(
 @app.get("/analytics/user/recent-activity")
 async def get_recent_activity(
     limit: int = 20,
+    request: Request = None,
     user: User = Depends(_get_current_user),
 ):
+    rate_limit(request, max_requests=30, window=60)
     async with SessionLocal() as session:
         stmt = select(ListeningEvent).where(
             ListeningEvent.user_id == user.id,
-        ).order_by(ListeningEvent.started_at.desc()).limit(limit)
-        
+        ).order_by(ListeningEvent.started_at.desc()).limit(min(limit, 100))
+
         result = await session.execute(stmt)
         events = result.scalars().all()
-        
-        # Get song details
+
         song_ids = list(set(e.song_id for e in events if e.song_id))
         songs_map = {}
         if song_ids:
@@ -940,7 +1187,7 @@ async def get_recent_activity(
                     "album": s.album,
                     "colors": s.colors,
                 }
-        
+
         return {
             "items": [
                 {

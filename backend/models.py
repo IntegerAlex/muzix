@@ -100,6 +100,7 @@ class Playlist(Base):
     __tablename__ = "playlists"
 
     id = Column(String(64), primary_key=True)
+    owner_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     title = Column(String(512), nullable=False, default="")
     colors = Column(ARRAY(Text), nullable=False, server_default="{}")
     song_ids = Column(ARRAY(Text), nullable=False, server_default="{}")

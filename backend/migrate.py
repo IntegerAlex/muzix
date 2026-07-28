@@ -116,12 +116,20 @@ async def migrate() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS playlists (
                     id TEXT PRIMARY KEY,
+                    owner_id TEXT REFERENCES users(id) ON DELETE CASCADE,
                     title TEXT NOT NULL DEFAULT '',
                     colors TEXT[] NOT NULL DEFAULT '{}',
                     song_ids TEXT[] NOT NULL DEFAULT '{}'
                 );
                 """
             )
+        )
+        # Add owner_id column if missing on pre-existing table
+        await conn.execute(
+            text("ALTER TABLE playlists ADD COLUMN IF NOT EXISTS owner_id TEXT REFERENCES users(id) ON DELETE CASCADE;")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_playlists_owner ON playlists(owner_id);")
         )
 
         # ----- listening_events -----
