@@ -7,19 +7,23 @@ Run locally:
 """
 from __future__ import annotations
 
+import json
 import os
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
 import boto3
 from botocore.client import Config
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db import SessionLocal
+from models import Song, Album, Artist, Playlist
 
 load_dotenv()
 
@@ -66,7 +70,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static assets
 if AUDIO_DIR.exists():
     app.mount("/assets/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
 if THUMB_DIR.exists():
@@ -80,3 +83,123 @@ async def _get_session() -> AsyncSession:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "time": datetime.now(timezone.utc).isoformat()}
+
+
+# ---------------------------------------------------------------------------
+# Caching helpers
+# ---------------------------------------------------------------------------
+
+def compute_etag(data: dict | list) -> str:
+    serialized = json.dumps(data, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode()).hexdigest()[:32]
+
+
+def make_cached_response(data: dict | list, request: Request, response: Response) -> dict | list:
+    etag = compute_etag(data)
+    response.headers["ETag"] = f'"{etag}"'
+    response.headers["Cache-Control"] = "public, max-age=60, stale-while-revalidate=300"
+
+    if_none_match = request.headers.get("If-None-Match")
+    if if_none_match and if_none_match.strip('"') == etag:
+        raise Exception("304")
+
+    return data
+
+
+# ---------------------------------------------------------------------------
+# Serialization
+# ---------------------------------------------------------------------------
+
+def serialize_song(song: Song) -> dict:
+    return {
+        "id": str(song.id),
+        "title": song.title,
+        "artist": song.artist,
+        "artistId": song.artist_id,
+        "album": song.album,
+        "albumId": song.album_id,
+        "duration": song.duration,
+        "durationMs": song.duration_ms,
+        "track": song.track,
+        "lyrics": song.lyrics,
+        "colors": song.colors or [],
+        "imageUrl": f"http://localhost:8000/thumbnails/{song.id}.jpg",
+        "r2_object_key": song.r2_object_key,
+        "audioUrl": None,
+    }
+
+
+def serialize_album(album: Album) -> dict:
+    return {
+        "id": album.id,
+        "title": album.title,
+        "artist": album.artist,
+        "artistId": album.artist_id,
+        "year": album.year,
+        "genre": album.genre,
+        "colors": album.colors or [],
+        "imageUrl": f"http://localhost:8000/thumbnails/{album.id}.jpg",
+        "songIds": album.song_ids or [],
+    }
+
+
+def serialize_artist(artist: Artist) -> dict:
+    return {
+        "id": artist.id,
+        "name": artist.name,
+        "colors": artist.colors or [],
+        "albumIds": artist.album_ids or [],
+    }
+
+
+def serialize_playlist(playlist: Playlist) -> dict:
+    return {
+        "id": playlist.id,
+        "title": playlist.title,
+        "colors": playlist.colors or [],
+        "songIds": playlist.song_ids or [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# List endpoints (paginated)
+# ---------------------------------------------------------------------------
+
+@app.get("/songs")
+async def list_songs(request: Request, response: Response, limit: int = 100, offset: int = 0) -> list[dict]:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(Song).limit(max(1, min(limit, 500))).offset(max(0, offset))
+        )
+        songs = [serialize_song(s) for s in result.scalars().all()]
+        return make_cached_response(songs, request, response)
+
+
+@app.get("/albums")
+async def list_albums(request: Request, response: Response, limit: int = 100, offset: int = 0) -> list[dict]:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(Album).limit(max(1, min(limit, 500))).offset(max(0, offset))
+        )
+        albums = [serialize_album(a) for a in result.scalars().all()]
+        return make_cached_response(albums, request, response)
+
+
+@app.get("/artists")
+async def list_artists(request: Request, response: Response, limit: int = 100, offset: int = 0) -> list[dict]:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(Artist).limit(max(1, min(limit, 500))).offset(max(0, offset))
+        )
+        artists = [serialize_artist(a) for a in result.scalars().all()]
+        return make_cached_response(artists, request, response)
+
+
+@app.get("/playlists")
+async def list_playlists(request: Request, response: Response, limit: int = 100, offset: int = 0) -> list[dict]:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(Playlist).limit(max(1, min(limit, 500))).offset(max(0, offset))
+        )
+        playlists = [serialize_playlist(p) for p in result.scalars().all()]
+        return make_cached_response(playlists, request, response)
