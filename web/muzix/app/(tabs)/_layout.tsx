@@ -51,6 +51,9 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <User size={size} color={color} strokeWidth={1.8} />,
         }}
       />
+      <Tabs.Screen name="album/[id]" options={{ href: null }} />
+      <Tabs.Screen name="artist/[id]" options={{ href: null }} />
+      <Tabs.Screen name="playlist/[id]" options={{ href: null }} />
     </Tabs>
   );
 }
