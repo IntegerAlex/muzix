@@ -39,6 +39,7 @@ export function mapSong(s: ApiSong): Song {
     artistId: s.artistId,
     album: s.album,
     albumId: s.albumId,
+    genre: s.genre ?? '',
     duration: s.duration,
     durationMs: s.durationMs,
     track: s.track ?? undefined,

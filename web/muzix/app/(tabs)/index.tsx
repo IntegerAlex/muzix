@@ -63,21 +63,19 @@ function FlameHelper({ size, color }: { size: number; color: string }) {
   return <Text style={{ fontSize: size, color }}>🔥</Text>;
 }
 
-function deriveMood(recentIds: string[], songs: Song[], albums: Album[]): { label: string; icon: React.ComponentType<{ size: number; color: string }>; color: string } {
-  const albumMap = new Map(albums.map(a => [a.id, a]));
+function deriveMood(recentIds: string[], songs: Song[]): { label: string; icon: React.ComponentType<{ size: number; color: string }>; color: string } {
   const genreCounts = new Map<string, number>();
   for (const id of recentIds) {
     const song = songs.find(s => s.id === id);
-    if (!song) continue;
-    const album = albumMap.get(song.albumId);
-    if (!album?.genre) continue;
-    const genres = album.genre.toLowerCase().split(/[,/&]/).map(g => g.trim());
+    if (!song?.genre) continue;
+    const genres = song.genre.toLowerCase().split(/[,/&]/).map(g => g.trim());
     for (const g of genres) {
       genreCounts.set(g, (genreCounts.get(g) || 0) + 1);
     }
   }
   if (genreCounts.size === 0) return { label: 'Neutral', icon: Music2, color: '#6b7280' };
   const topGenre = [...genreCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  if (topGenre === 'unknown' || topGenre === '') return { label: 'Chill', icon: Cloud, color: '#6b7280' };
   for (const [key, mood] of Object.entries(GENRE_MOODS)) {
     if (topGenre.includes(key)) return mood;
   }
@@ -372,7 +370,7 @@ export default function HomeScreen() {
           <>
             {(() => {
               const recentIds = usePlayerStore.getState().recentlyPlayed;
-              const mood = deriveMood(recentIds, songs, albums);
+              const mood = deriveMood(recentIds, songs);
               const w = weatherData || { icon: (() => { const h = new Date().getHours(); return h >= 6 && h < 18 ? Sun : Moon; })(), label: '...', color: '#6b7280' };
               const WeatherIcon = w.icon;
               const MoodIcon = mood.icon;

@@ -157,6 +157,7 @@ export interface ApiSong {
   artistId: string;
   album: string;
   albumId: string;
+  genre?: string | null;
   duration: string;
   durationMs: number;
   track?: number | null;
