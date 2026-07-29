@@ -136,12 +136,6 @@ interface AnalyticsItem {
   sessions: number;
 }
 
-interface ActivityItem {
-  played_at: string;
-  song_id: string;
-  song?: AnalyticsSong;
-}
-
 function mapAnalyticsSong(s: AnalyticsSong): Song {
   return {
     id: s.id,
@@ -211,6 +205,7 @@ function SongRow({ song }: { song: Song }) {
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const likedSongs = usePlayerStore((s) => s.likedSongs);
+  const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
   const [stats, setStats] = useState<Stats | null>(null);
   const [topSongs, setTopSongs] = useState<Song[]>([]);
   const [recentSongs, setRecentSongs] = useState<Song[]>([]);
@@ -224,9 +219,8 @@ export default function ProfileScreen() {
       if (!token) { setLoading(false); return; }
 
       try {
-        const [topRes, recentRes, likesRes, playlistsRes] = await Promise.all([
+        const [topRes, likesRes, playlistsRes] = await Promise.all([
           api.topSongs('all', 50, token).catch(() => null),
-          api.recentActivity(10, token).catch(() => null),
           api.getLikes(token).catch(() => null),
           api.playlists(token).catch(() => null),
         ]);
@@ -237,9 +231,8 @@ export default function ProfileScreen() {
         const topSongsMapped = topItems.map((item) => mapAnalyticsSong(item.song));
         const songMap = new Map(topSongsMapped.map((s) => [s.id, s]));
 
-        const recentItems = (recentRes?.items ?? []) as ActivityItem[];
-        const recentSongIds = recentItems.map((item) => item.song_id ?? item.song?.id).filter(Boolean);
-        const recentSongsMapped = recentSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
+        const recIds = recentlyPlayed;
+        const recentSongsMapped = recIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
         const likedSongIds = likesRes?.songIds ?? [];
         const likedSongsMapped = likedSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
 
