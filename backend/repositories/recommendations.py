@@ -56,31 +56,54 @@ def _compute_weight(event_type: str, completion_pct: int, duration_ms: int, song
 
 
 async def get_all_user_interactions() -> list[dict]:
-    """Get all (user_id, song_id, weight) triples across all users for collaborative filtering."""
+    """Get aggregated (user_id, song_id, weight) across all users. Aggregated at SQL level."""
     async with SessionLocal() as session:
         stmt = select(
             ListeningEvent.user_id,
             ListeningEvent.song_id,
-            ListeningEvent.event_type,
-            ListeningEvent.completion_percentage,
-            ListeningEvent.duration_played_ms,
-            ListeningEvent.song_duration_ms,
+            func.sum(
+                case(
+                    (ListeningEvent.event_type == "complete", 1.0),
+                    (ListeningEvent.event_type == "skip", -0.5),
+                    (ListeningEvent.event_type == "play",
+                     case(
+                         (ListeningEvent.completion_percentage >= 80, 0.8),
+                         (ListeningEvent.completion_percentage >= 50, 0.5),
+                         (ListeningEvent.completion_percentage >= 20, 0.2),
+                         else_=0.1,
+                     )),
+                    else_=0.3,
+                )
+            ).label("weight"),
         ).where(
-            ListeningEvent.song_id.is_not(None),
             ListeningEvent.user_id.is_not(None),
-        ).order_by(ListeningEvent.user_id, ListeningEvent.started_at.desc())
+            ListeningEvent.song_id.is_not(None),
+        ).group_by(
+            ListeningEvent.user_id,
+            ListeningEvent.song_id,
+        ).having(
+            func.sum(
+                case(
+                    (ListeningEvent.event_type == "complete", 1.0),
+                    (ListeningEvent.event_type == "skip", -0.5),
+                    (ListeningEvent.event_type == "play",
+                     case(
+                         (ListeningEvent.completion_percentage >= 80, 0.8),
+                         (ListeningEvent.completion_percentage >= 50, 0.5),
+                         (ListeningEvent.completion_percentage >= 20, 0.2),
+                         else_=0.1,
+                     )),
+                    else_=0.3,
+                )
+            ) > 0
+        )
         result = await session.execute(stmt)
         rows = result.all()
 
-    interactions = []
-    for r in rows:
-        weight = _compute_weight(r.event_type, r.completion_percentage, r.duration_played_ms, r.song_duration_ms)
-        interactions.append({
-            "user_id": r.user_id,
-            "song_id": r.song_id,
-            "weight": weight,
-        })
-    return interactions
+    return [
+        {"user_id": r.user_id, "song_id": r.song_id, "weight": float(r.weight)}
+        for r in rows
+    ]
 
 
 async def get_song_features() -> dict[str, dict]:
@@ -136,26 +159,30 @@ async def get_user_features(user_id: str) -> dict:
     completion_sum = 0.0
     completion_count = 0
     
+    album_ids = [s.album_id for s in songs if s.album_id]
+    albums_map = {}
+    if album_ids:
+        async with SessionLocal() as session:
+            albums_result = await session.execute(select(Album).where(Album.id.in_(album_ids)))
+            for a in albums_result.scalars().all():
+                albums_map[a.id] = a
+    
     for interaction in interactions:
         song = songs_map.get(interaction["song_id"])
         if not song:
             continue
         if interaction["event_type"] == "complete":
             artist_counts[song.artist_id] += 2
-            if song.album_id:
-                album_result = await session.execute(select(Album).where(Album.id == song.album_id))
-                album = album_result.scalar_one_or_none()
-                if album:
-                    genre_counts[album.genre] += 2
+            album = albums_map.get(song.album_id) if song.album_id else None
+            if album:
+                genre_counts[album.genre] += 2
             completion_sum += 100.0
             completion_count += 1
         elif interaction["event_type"] == "play":
             artist_counts[song.artist_id] += 1
-            if song.album_id:
-                album_result = await session.execute(select(Album).where(Album.id == song.album_id))
-                album = album_result.scalar_one_or_none()
-                if album:
-                    genre_counts[album.genre] += 1
+            album = albums_map.get(song.album_id) if song.album_id else None
+            if album:
+                genre_counts[album.genre] += 1
             completion_sum += interaction.get("completion_percentage", 0)
             completion_count += 1
     

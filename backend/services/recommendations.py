@@ -1,4 +1,5 @@
 """Recommendation service: pure numpy/scipy ALS collaborative filtering with content fallback."""
+import asyncio
 import hashlib
 import logging
 from datetime import datetime, timezone
@@ -91,6 +92,8 @@ _item_id_map: dict[str, int] = {}
 _item_features_map: dict[str, dict] = {}
 _last_trained_at: datetime | None = None
 _model_version_hash: str = ""
+_training_lock = False
+_training_task: Any = None
 
 
 def _compute_version_hash() -> str:
@@ -102,7 +105,7 @@ def _compute_version_hash() -> str:
 
 
 async def _ensure_model() -> bool:
-    global _model, _user_factors, _item_factors, _user_id_map, _item_id_map, _item_features_map, _last_trained_at, _model_version_hash
+    global _model, _user_factors, _item_factors, _user_id_map, _item_id_map, _item_features_map, _last_trained_at, _model_version_hash, _training_lock
 
     try:
         interactions = await rec_repo.get_all_user_interactions()
@@ -164,6 +167,9 @@ async def _ensure_model() -> bool:
         _item_factors = None
         return False
 
+    finally:
+        _training_lock = False
+
 
 def _content_score(song_id: str, user_data: dict) -> float:
     song = _item_features_map.get(song_id, {})
@@ -176,12 +182,13 @@ def _content_score(song_id: str, user_data: dict) -> float:
 
 
 async def get_recommendations(user_id: str, limit: int = 20) -> list[dict]:
-    global _model, _user_factors, _item_factors, _user_id_map, _item_id_map
+    global _model, _user_factors, _item_factors, _user_id_map, _item_id_map, _training_lock, _training_task
 
     if _model is None or _user_factors is None or _item_factors is None:
-        trained = await _ensure_model()
-        if not trained:
-            return await rec_repo.get_popular_songs(limit)
+        if not _training_lock:
+            _training_lock = True
+            _training_task = asyncio.create_task(_ensure_model())
+        return await rec_repo.get_popular_songs(limit)
 
     try:
         user_data = await rec_repo.get_user_features(user_id)
