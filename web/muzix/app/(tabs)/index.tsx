@@ -1,4 +1,4 @@
-import { memo, useMemo, useState, useCallback } from 'react';
+import { memo, useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, type Href } from 'expo-router';
 import { Pressable, ScrollView, View, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
