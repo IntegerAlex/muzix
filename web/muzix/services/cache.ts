@@ -1,5 +1,9 @@
 import { Platform } from 'react-native';
 
+function getAuthStore() {
+  return require('@/store/authStore').useAuthStore;
+}
+
 interface CacheEntry {
   etag: string;
   data: unknown;
@@ -11,6 +15,7 @@ interface CacheEntry {
 const MAX_CACHE_ENTRIES = 200;
 const DEFAULT_TTL = 5 * 60 * 1000;
 const STORAGE_KEY = 'muzix-cache';
+const CACHE_VERSION = 2;
 
 const memCache = new Map<string, CacheEntry>();
 
@@ -55,6 +60,12 @@ function evictLRU(): void {
 function loadDiskSync(): Map<string, CacheEntry> {
   if (Platform.OS !== 'web') return new Map();
   try {
+    const storedVersion = localStorage.getItem(`${STORAGE_KEY}-version`);
+    if (storedVersion !== String(CACHE_VERSION)) {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.setItem(`${STORAGE_KEY}-version`, String(CACHE_VERSION));
+      return new Map();
+    }
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return new Map();
     const parsed = JSON.parse(raw);
@@ -72,6 +83,7 @@ function loadDiskSync(): Map<string, CacheEntry> {
 function saveDiskSync(cache: Map<string, CacheEntry>): void {
   if (Platform.OS !== 'web') return;
   try {
+    localStorage.setItem(`${STORAGE_KEY}-version`, String(CACHE_VERSION));
     const obj: Record<string, CacheEntry> = {};
     cache.forEach((v, k) => { obj[k] = v; });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
@@ -106,13 +118,20 @@ async function writeDisk(key: string, entry: CacheEntry): Promise<void> {
   debouncedSaveDisk();
 }
 
+function unwrapEnvelope<T>(raw: T): T {
+  if (raw && typeof raw === 'object' && 'data' in (raw as Record<string, unknown>)) {
+    return (raw as Record<string, unknown>).data as T;
+  }
+  return raw;
+}
+
 export async function cachedFetch<T>(path: string, token?: string, ttlMs?: number): Promise<T> {
   const key = `api:${path}`;
   const cached = await readDisk(key);
 
   if (cached && !isExpired(cached)) {
     touchEntry(key);
-    return cached.data as T;
+    return unwrapEnvelope<T>(cached.data as T);
   }
 
   const headers: Record<string, string> = {};
@@ -126,22 +145,33 @@ export async function cachedFetch<T>(path: string, token?: string, ttlMs?: numbe
 
     if (res.status === 304 && cached) {
       touchEntry(key);
-      return cached.data as T;
+      return unwrapEnvelope<T>(cached.data as T);
     }
     if (!res.ok) {
-      if (cached && !isExpired(cached)) return cached.data as T;
+      if (res.status === 401 && token) {
+        const authStore = getAuthStore();
+        const { token: currentToken } = authStore.getState();
+        if (currentToken) {
+          authStore.getState().logout();
+          if (typeof window !== 'undefined') window.location.href = '/login';
+        }
+      }
+      if (cached && !isExpired(cached)) return unwrapEnvelope<T>(cached.data as T);
       throw new Error(`API ${res.status}: ${await res.text()}`);
     }
 
     const etag = res.headers.get('ETag') ?? '';
-    const data = await res.json() as T;
+    const raw = await res.json();
+    const data = unwrapEnvelope<T>(
+      (raw && typeof raw === 'object' && 'data' in raw ? raw.data : raw) as T
+    );
 
-    if (Array.isArray(data) && data.length === 0 && cached && !isExpired(cached)) return cached.data as T;
+    if (Array.isArray(data) && data.length === 0 && cached && !isExpired(cached)) return unwrapEnvelope<T>(cached.data as T);
     const ttl = ttlMs ?? getTTL(path);
     await writeDisk(key, { etag, data, timestamp: Date.now(), accessTime: Date.now(), ttl });
     return data;
   } catch (e) {
-    if (cached && !isExpired(cached)) return cached.data as T;
+    if (cached && !isExpired(cached)) return unwrapEnvelope<T>(cached.data as T);
     throw e;
   }
 }
@@ -149,7 +179,10 @@ export async function cachedFetch<T>(path: string, token?: string, ttlMs?: numbe
 export function clearCache(): void {
   memCache.clear();
   if (Platform.OS === 'web') {
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(`${STORAGE_KEY}-version`);
+    } catch {}
   }
 }
 

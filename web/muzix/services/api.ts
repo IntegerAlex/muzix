@@ -1,5 +1,6 @@
 import { cachedFetch } from '@/services/cache';
 import { isOnline } from '@/services/networkStatus';
+import { useAuthStore } from '@/store/authStore';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -8,6 +9,20 @@ const MAX_RETRIES = 3;
 const RETRY_DELAYS = [1_000, 2_000, 4_000];
 
 const inFlight = new Map<string, Promise<unknown>>();
+
+let _authErrorHandled = false;
+function handleAuthError() {
+  if (_authErrorHandled) return;
+  _authErrorHandled = true;
+  const { token } = useAuthStore.getState();
+  if (token) {
+    useAuthStore.getState().logout();
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+  }
+  setTimeout(() => { _authErrorHandled = false; }, 5000);
+}
 
 export type ErrorKind = 'NetworkError' | 'AuthError' | 'ServerError' | 'ValidationError';
 
@@ -100,9 +115,13 @@ async function requestRaw<T>(path: string, options?: RequestOptions): Promise<T>
 
   if (!res.ok) {
     const msg = await parseErrorBody(res);
+    if (res.status === 401) {
+      handleAuthError();
+    }
     throw new ApiError(res.status, msg, classifyError(res.status));
   }
-  return res.json() as Promise<T>;
+  const raw = await res.json();
+  return (raw && typeof raw === 'object' && 'data' in raw ? raw.data : raw) as T;
 }
 
 async function request<T>(path: string, options?: RequestOptions): Promise<T> {
@@ -281,15 +300,15 @@ export interface BingeIndex {
 }
 
 export const api = {
-  songs: (limit = 50, offset = 0) => cachedFetch<ApiSong[]>(`/songs?limit=${limit}&offset=${offset}`),
-  song: (id: string) => cachedFetch<ApiSong>(`/songs/${id}`),
-  albums: () => cachedFetch<ApiAlbum[]>(`/albums`),
-  album: (id: string) => cachedFetch<ApiAlbum>(`/albums/${id}`),
-  artists: () => cachedFetch<ApiArtist[]>(`/artists`),
-  artist: (id: string) => cachedFetch<ApiArtist>(`/artists/${id}`),
-  playlists: () => cachedFetch<ApiPlaylist[]>(`/playlists`),
-  playlist: (id: string) => cachedFetch<ApiPlaylist>(`/playlists/${id}`),
-  search: (q: string) => cachedFetch<SearchResponse>(`/search?q=${encodeURIComponent(q)}`),
+  songs: (limit = 50, offset = 0, token?: string) => cachedFetch<ApiSong[]>(`/songs?limit=${limit}&offset=${offset}`, token),
+  song: (id: string, token?: string) => cachedFetch<ApiSong>(`/songs/${id}`, token),
+  albums: (token?: string) => cachedFetch<ApiAlbum[]>(`/albums`, token),
+  album: (id: string, token?: string) => cachedFetch<ApiAlbum>(`/albums/${id}`, token),
+  artists: (token?: string) => cachedFetch<ApiArtist[]>(`/artists`, token),
+  artist: (id: string, token?: string) => cachedFetch<ApiArtist>(`/artists/${id}`, token),
+  playlists: (token?: string) => cachedFetch<ApiPlaylist[]>(`/playlists`, token),
+  playlist: (id: string, token?: string) => cachedFetch<ApiPlaylist>(`/playlists/${id}`, token),
+  search: (q: string, token?: string) => cachedFetch<SearchResponse>(`/search?q=${encodeURIComponent(q)}`, token),
 
   stream: (id: string, token?: string) => {
     if (token) return requestAuthed<StreamResponse>(`/stream/${id}`, token, { skipRetry: true });
