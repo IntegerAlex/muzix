@@ -4,6 +4,8 @@ Music streaming app with FastAPI backend, PostgreSQL, Cloudflare R2 storage, and
 
 ## Architecture
 
+### Backend
+
 ```
 backend/
 ├── config.py          # Environment variables, constants, R2 client
@@ -13,6 +15,7 @@ backend/
 ├── main.py            # App bootstrap, exception handlers, router includes
 ├── db.py              # Async SQLAlchemy engine + session factory
 ├── models.py          # SQLAlchemy ORM models
+├── migrate.py         # Idempotent SQL migration (no Alembic)
 ├── repositories/      # Database operations per entity
 ├── services/          # Business logic per entity
 └── routes/            # API endpoints per entity
@@ -20,12 +23,51 @@ backend/
 
 **Layer flow:** `routes/` → `services/` → `repositories/` → `db.py` + `models.py`
 
+### Frontend
+
+```
+web/muzix/
+├── app/               # Expo Router file-based routes
+│   ├── (tabs)/        # Main tab screens (home, search, library, profile)
+│   ├── share/         # Public share link resolution
+│   ├── _layout.tsx    # Root layout: auth guard, offline banner, queue panel, keyboard shortcuts
+│   └── login.tsx, register.tsx
+├── components/        # Reusable UI components
+│   ├── NowPlaying.tsx # Full player view with lyrics sharing
+│   ├── MiniPlayer.tsx # Persistent mini player bar
+│   ├── QueuePanel.tsx # Queue management modal (reorder, remove, clear)
+│   ├── LyricsPanel.tsx, LyricsImageGenerator.tsx
+│   └── EmptyStates.tsx, ErrorBoundary.tsx
+├── hooks/             # Custom hooks
+│   ├── useSharing.ts           # Unified content sharing (API + native/web share)
+│   ├── useKeyboardShortcuts.ts # Web keyboard controls (Space, arrows, N/P, L, Q, Esc)
+│   ├── useHaptics.ts           # Haptic feedback (native only, web no-op)
+│   ├── useLyricsSharing.ts     # Lyrics image generation via view-shot
+│   └── useConnectivity.ts      # Online/offline detection
+├── store/             # Zustand state
+│   ├── playerStore.ts # Player, queue, likes state with localStorage persistence
+│   └── authStore.ts   # Auth token + user state
+├── services/          # API client, caching, offline queue
+└── lib/               # Colors, spacing, utilities, responsive breakpoints
+```
+
+## Features
+
+- **Content sharing:** Generate share links for songs, albums, artists, playlists, lyrics. 30-day token expiry. Web Share API / native share sheet / clipboard fallback.
+- **Lyrics sharing:** Select up to 5 lyrics lines, share as image (16:9 PNG) or plain text. Synced scrolling with LRC support.
+- **Queue management:** Slide-up panel with reorder (up/down arrows), remove, clear all.
+- **Keyboard shortcuts (web):** Space=play/pause, arrows=seek, N/P=next/prev, L=like, Q=queue, Esc=close.
+- **Haptic feedback:** Light/medium/success/error on native (no-op on web).
+- **Offline banner:** Persistent top banner when disconnected.
+- **Pull-to-refresh:** All detail screens (album, artist, playlist, profile).
+- **Responsive layout:** Desktop sidebar, tablet split-view, mobile bottom tabs. Orientation-aware.
+
 ## Security
 
 - **Password hashing:** argon2id (new registrations) with bcrypt fallback (existing users)
 - **JWT signing:** HS384 (SHA-384 HMAC) with 24-hour expiry + 30-day refresh tokens
 - **CORS:** Configurable allowed origins via `CORS_ORIGINS` env var
-- **Rate limiting:** Per-IP + per-path sliding window
+- **Rate limiting:** Per-IP + per-path sliding window; 10 shares/min per user
 - **Security headers:** X-Content-Type-Options, X-Frame-Options, HSTS, CSP, Referrer-Policy, Permissions-Policy
 - **Input validation:** Pydantic models with email/password complexity rules
 - **IDOR protection:** Playlist ownership checks on all mutation endpoints
@@ -87,6 +129,7 @@ The migration (`uv run python migrate.py`) creates:
 | `listening_events` | Per-play telemetry |
 | `user_sessions` | Session engagement metrics |
 | `user_likes` | User song likes (unique constraint) |
+| `shares` | Share links with 30-day expiry, per-content metadata |
 
 ## API
 
@@ -129,6 +172,8 @@ All endpoints return standardized JSON:
 | POST | `/telemetry/events` | Yes | Batch insert listening events |
 | POST | `/telemetry/session/start` | Yes | Start session |
 | POST | `/telemetry/session/end` | Yes | End session |
+| POST | `/api/share/generate` | Yes | Generate share link (10/min) |
+| GET | `/api/share/{token}` | No | Resolve share link (public) |
 | GET | `/analytics/user/top-songs` | Yes | User's top songs |
 | GET | `/analytics/user/stats` | Yes | User listening stats |
 
