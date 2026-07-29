@@ -236,27 +236,27 @@ export default function HomeScreen() {
             )}
 
             <SectionHeader title="Recently played" />
-            {playlistsLoading ? (
-              <View style={{ flexDirection: 'row', gap: SPACING.md, paddingLeft: SPACING.xl, paddingRight: SPACING.xl }}>
-                {[1, 2, 3].map((i) => <Skeleton key={i} width={280} height={170} borderRadius={RADIUS.lg} />)}
-              </View>
-            ) : playlists.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: SPACING.md, paddingLeft: SPACING.xl, paddingRight: SPACING.xl }}
-              >
-                {playlists.map((pl, i) => (
-                  <AnimatedEntrance key={pl.id} index={i}>
-                    <WideCard playlist={pl} />
-                  </AnimatedEntrance>
-                ))}
-              </ScrollView>
-            ) : (
-              <View style={{ marginHorizontal: SPACING.xl }}>
-                <SectionEmpty label="No playlists yet" />
-              </View>
-            )}
+            {(() => {
+              const recentIds = usePlayerStore.getState().recentlyPlayed;
+              const playedSongs = recentIds.map((id) => songIndexMap.has(id) ? songs[songIndexMap.get(id)!] : null).filter(Boolean) as Song[];
+              if (playedSongs.length === 0) {
+                return <View style={{ marginHorizontal: SPACING.xl }}><SectionEmpty label="No recently played songs" /></View>;
+              }
+              return (
+                <View style={{ paddingHorizontal: SPACING.xl }}>
+                  {playedSongs.slice(0, 6).map((songItem, i) => (
+                    <AnimatedEntrance key={songItem.id} index={i}>
+                      <SongRow
+                        song={songItem}
+                        index={i}
+                        queue={playedSongs}
+                        isCurrent={current?.id === songItem.id}
+                      />
+                    </AnimatedEntrance>
+                  ))}
+                </View>
+              );
+            })()}
 
             <SectionHeader title="Top picks for you" />
             <View style={{ paddingHorizontal: SPACING.xl }}>
@@ -279,6 +279,29 @@ export default function HomeScreen() {
                 <SectionEmpty label="No songs available" />
               )}
             </View>
+
+            <SectionHeader title="Playlists" />
+            {playlistsLoading ? (
+              <View style={{ flexDirection: 'row', gap: SPACING.md, paddingLeft: SPACING.xl, paddingRight: SPACING.xl }}>
+                {[1, 2, 3].map((i) => <Skeleton key={i} width={280} height={170} borderRadius={RADIUS.lg} />)}
+              </View>
+            ) : playlists.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: SPACING.md, paddingLeft: SPACING.xl, paddingRight: SPACING.xl }}
+              >
+                {playlists.map((pl, i) => (
+                  <AnimatedEntrance key={pl.id} index={i}>
+                    <WideCard playlist={pl} />
+                  </AnimatedEntrance>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={{ marginHorizontal: SPACING.xl }}>
+                <SectionEmpty label="No playlists yet" />
+              </View>
+            )}
           </>
         )}
       </ScrollView>
