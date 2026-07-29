@@ -1,5 +1,5 @@
-import { Pressable, ScrollView } from 'react-native';
-import { useEffect, useState, useMemo } from 'react';
+import { Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text } from 'tamagui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -8,11 +8,26 @@ import { AnimatedBackdrop } from '@/components/AnimatedBackdrop';
 import { Artwork } from '@/components/Artwork';
 import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
-import { getSongs, getPlaylists } from '@/services/data';
+import { api, type ApiSong, type SkipRateItem } from '@/services/api';
+import { mapSong } from '@/services/data';
 import type { Song } from '@/services/types';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
+
+interface Stats {
+  totalPlays: number;
+  totalListeningMs: number;
+  totalListeningHours: number;
+  likedCount: number;
+  playlistCount: number;
+}
+
+interface RecentItem {
+  playedAt: string;
+  songId: string;
+  song?: ApiSong;
+}
 
 function StatCard({ icon: Icon, value, label, color, subtitle }: {
   icon: React.ComponentType<{ size: number; color: string }>;
@@ -114,39 +129,117 @@ function formatListeningTime(ms: number): string {
   return `${hours}h ${mins}m`;
 }
 
+function SongRow({ song }: { song: Song }) {
+  const playSong = usePlayerStore((s) => s.playSong);
+  const current = usePlayerStore((s) => s.current);
+  const isPlaying = current?.id === song.id;
+
+  return (
+    <Pressable
+      onPress={() => playSong(song)}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 10,
+        paddingHorizontal: SPACING.lg,
+        opacity: pressed ? 0.6 : 1,
+      })}
+      accessibilityLabel={`Play ${song.title} by ${song.artist}`}
+      accessibilityRole="button"
+    >
+      <Artwork colors={song.colors} style={{ width: 42, height: 42, borderRadius: 8 }} radius={8} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 14, fontWeight: '600', color: TEXT_PRIMARY }} numberOfLines={1}>
+          {song.title}
+        </Text>
+        <Text style={{ fontSize: 12, color: TEXT_SECONDARY }} numberOfLines={1}>
+          {song.artist}
+        </Text>
+      </View>
+      {isPlaying && (
+        <View style={{
+          width: 22, height: 22, borderRadius: 11,
+          backgroundColor: ACCENT,
+          alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Headphones size={11} color="white" />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const likedSongs = usePlayerStore((s) => s.likedSongs);
-  const totalPlays = usePlayerStore((s) => s.totalPlays);
-  const totalListeningMs = usePlayerStore((s) => s.totalListeningMs);
-  const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
-  const [songs, setSongs] = useState<Song[]>([]);
-  const [totalPlaylists, setTotalPlaylists] = useState(0);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [topSongs, setTopSongs] = useState<Song[]>([]);
+  const [recentSongs, setRecentSongs] = useState<Song[]>([]);
+  const [likedList, setLikedList] = useState<Song[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setSongs(getSongs());
-    setTotalPlaylists(getPlaylists().length);
-    const unsub = () => {};
-    return unsub;
+    let cancelled = false;
+    async function load() {
+      const token = useAuthStore.getState().token;
+      if (!token) { setLoading(false); return; }
+
+      try {
+        const [statsRes, topRes, recentRes, likesRes, allSongsRes, playlistsRes] = await Promise.all([
+          api.userStats('all', token).catch(() => null),
+          api.topSongs('all', 10, token).catch(() => null),
+          api.recentActivity(10, token).catch(() => null),
+          api.getLikes(token).catch(() => null),
+          api.songs(500, 0, token).catch(() => null),
+          api.playlists(token).catch(() => null),
+        ]);
+
+        if (cancelled) return;
+
+        const allSongs = (allSongsRes ?? []).map(mapSong);
+        const songMap = new Map(allSongs.map((s) => [s.id, s]));
+
+        const topSongsMapped = (topRes?.items ?? []).map((item: SkipRateItem) => mapSong(item.song));
+        const recentSongIds = (recentRes?.items ?? []).map((item: RecentItem) => item.songId ?? item.song?.id).filter(Boolean);
+        const recentSongsMapped = recentSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
+        const likedSongIds = likesRes?.songIds ?? [];
+        const likedSongsMapped = likedSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
+
+        setStats({
+          totalPlays: statsRes?.totalPlays ?? 0,
+          totalListeningMs: statsRes?.totalListeningMs ?? 0,
+          totalListeningHours: statsRes?.totalListeningHours ?? 0,
+          likedCount: likedSongIds.length,
+          playlistCount: (playlistsRes ?? []).length,
+        });
+        setTopSongs(topSongsMapped);
+        setRecentSongs(recentSongsMapped);
+        setLikedList(likedSongsMapped);
+      } catch {}
+
+      setLoading(false);
+    }
+
+    load();
+    return () => { cancelled = true; };
   }, []);
 
-  const likedList = useMemo(() => {
-    return songs.filter((s) => likedSongs[s.id]);
-  }, [songs, likedSongs]);
-
-  const recentSongs = useMemo(() => {
-    return recentlyPlayed
-      .map((id) => songs.find((s) => s.id === id))
-      .filter(Boolean) as Song[];
-  }, [recentlyPlayed, songs]);
-
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout();
     router.replace('/login');
-  };
+  }, [logout]);
 
   const initials = (user?.displayName ?? user?.email ?? 'U').slice(0, 1).toUpperCase();
   const memberSince = '2026';
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={ACCENT} />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -193,10 +286,10 @@ export default function ProfileScreen() {
         </View>
 
         <View style={{ flexDirection: 'row', marginHorizontal: SPACING.xl, gap: SPACING.sm, marginTop: SPACING.md }}>
-          <StatCard icon={Play} value={totalPlays} label="Played" color={ACCENT} />
-          <StatCard icon={Clock} value={formatListeningTime(totalListeningMs)} label="Listened" color="#8b5cf6" />
-          <StatCard icon={Heart} value={likedList.length} label="Liked" color="#ec4899" />
-          <StatCard icon={ListMusic} value={totalPlaylists} label="Playlists" color="#f59e0b" />
+          <StatCard icon={Play} value={stats?.totalPlays ?? 0} label="Played" color={ACCENT} />
+          <StatCard icon={Clock} value={formatListeningTime(stats?.totalListeningMs ?? 0)} label="Listened" color="#8b5cf6" />
+          <StatCard icon={Heart} value={stats?.likedCount ?? 0} label="Liked" color="#ec4899" />
+          <StatCard icon={ListMusic} value={stats?.playlistCount ?? 0} label="Playlists" color="#f59e0b" />
         </View>
 
         {recentSongs.length > 0 && (
@@ -232,12 +325,44 @@ export default function ProfileScreen() {
           </>
         )}
 
+        {topSongs.length > 0 && (
+          <>
+            <View style={{
+              flexDirection: 'row', alignItems: 'center',
+              marginTop: SPACING.xl, marginBottom: SPACING.sm, paddingHorizontal: SPACING.xl,
+            }}>
+              <View style={{
+                width: 28, height: 28, borderRadius: 7,
+                backgroundColor: 'rgba(245,158,11,0.1)',
+                alignItems: 'center', justifyContent: 'center',
+                marginRight: 10,
+              }}>
+                <Music size={14} color="#f59e0b" />
+              </View>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: TEXT_PRIMARY, letterSpacing: -0.2, flex: 1 }}>
+                Top Songs
+              </Text>
+            </View>
+            <View style={{
+              marginHorizontal: SPACING.xl,
+              backgroundColor: 'rgba(255,255,255,0.02)',
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: BORDER,
+              overflow: 'hidden',
+            }}>
+              {topSongs.slice(0, 10).map((song, i) => (
+                <TopSongRow key={`${song.id}`} song={song} index={i} rank={i + 1} />
+              ))}
+            </View>
+          </>
+        )}
+
         {likedList.length > 0 && (
           <>
             <View style={{
               flexDirection: 'row', alignItems: 'center',
-              marginTop: recentSongs.length > 0 ? SPACING.xl : SPACING.xxl,
-              marginBottom: SPACING.sm, paddingHorizontal: SPACING.xl,
+              marginTop: SPACING.xl, marginBottom: SPACING.sm, paddingHorizontal: SPACING.xl,
             }}>
               <View style={{
                 width: 28, height: 28, borderRadius: 7,
@@ -263,7 +388,7 @@ export default function ProfileScreen() {
               overflow: 'hidden',
             }}>
               {likedList.slice(0, 5).map((song, i) => (
-                <TopSongRow key={song.id} song={song} index={i} rank={i + 1} />
+                <SongRow key={song.id} song={song} />
               ))}
             </View>
           </>

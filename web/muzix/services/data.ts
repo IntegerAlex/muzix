@@ -31,7 +31,7 @@ function toColors(raw: string[]): [string, string] {
   return [c0, c1];
 }
 
-function mapSong(s: ApiSong): Song {
+export function mapSong(s: ApiSong): Song {
   return {
     id: String(s.id),
     title: s.title,
