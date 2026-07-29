@@ -12,12 +12,13 @@ import Animated, {
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
-import { Pause, Play } from 'lucide-react-native';
+import { Pause, Play, SkipBack, SkipForward } from 'lucide-react-native';
 import { View, Text } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { GlassCard } from '@/components/GlassCard';
 import { usePlayerStore } from '@/store/playerStore';
 import { formatTime } from '@/lib/utils';
+import { useResponsive } from '@/lib/useResponsive';
 import { SURFACE_ICON, SURFACE_ELEVATED, TEXT_PRIMARY } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 
@@ -31,12 +32,15 @@ export function MiniPlayer() {
   const loadingId = usePlayerStore((s) => s.loadingId);
   const setPlaying = usePlayerStore((s) => s.setPlaying);
   const setShowNowPlaying = usePlayerStore((s) => s.setShowNowPlaying);
+  const next = usePlayerStore((s) => s.next);
+  const previous = usePlayerStore((s) => s.previous);
 
   const translateY = useSharedValue(100);
   const opacity = useSharedValue(0);
   const progress = useSharedValue(0);
   const [elapsedText, setElapsedText] = useState('0:00');
   const [progressPct, setProgressPct] = useState(0);
+  const { isDesktop } = useResponsive();
 
   const isLoading = current ? loadingId === current.id : false;
 
@@ -132,52 +136,135 @@ export function MiniPlayer() {
           />
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2 }}>
-          <Pressable
-            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-            onPress={() => setShowNowPlaying(true)}
-            hitSlop={8}
-            accessibilityLabel={`Now playing: ${current.title} by ${current.artist}`}
-            accessibilityRole="button"
-          >
-            <Artwork source={current.imageUrl ? { uri: current.imageUrl } : undefined} colors={current.colors} style={{ height: 44, width: 44 }} radius={8} />
-            <View style={{ flex: 1 }}>
-              <Text fontSize={13} fontWeight="600" color="white" numberOfLines={1}>
-                {current.title}
-              </Text>
-              <Text fontSize={11} color="rgba(255,255,255,0.5)" numberOfLines={1}>
-                {current.artist}
-              </Text>
-            </View>
-            {isLoading ? (
-              <ActivityIndicator size="small" color="rgba(255,255,255,0.5)" style={{ marginRight: 4 }} />
-            ) : (
-              <Text fontSize={10} color="rgba(255,255,255,0.3)" style={{ marginRight: 4 }}>{elapsedText}</Text>
-            )}
-          </Pressable>
-          <Pressable
-              onPress={() => setPlaying(!isPlaying)}
-              style={{
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: SURFACE_ICON,
-              }}
+        {isDesktop ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}
+              onPress={() => setShowNowPlaying(true)}
               hitSlop={8}
-              accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+              accessibilityLabel={`Now playing: ${current.title} by ${current.artist}`}
               accessibilityRole="button"
             >
+              <Artwork source={current.imageUrl ? { uri: current.imageUrl } : undefined} colors={current.colors} style={{ height: 44, width: 44 }} radius={8} />
+              <View>
+                <Text fontSize={13} fontWeight="600" color="white" numberOfLines={1}>
+                  {current.title}
+                </Text>
+                <Text fontSize={11} color="rgba(255,255,255,0.5)" numberOfLines={1}>
+                  {current.artist}
+                </Text>
+              </View>
               {isLoading ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : isPlaying ? (
-                <Pause size={18} color="white" />
+                <ActivityIndicator size="small" color="rgba(255,255,255,0.5)" style={{ marginRight: 4 }} />
               ) : (
-                <Play size={18} color="white" style={{ marginLeft: 2 }} />
+                <Text fontSize={10} color="rgba(255,255,255,0.3)" style={{ marginRight: 4 }}>{elapsedText}</Text>
               )}
             </Pressable>
-        </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Pressable
+                onPress={() => previous()}
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: SURFACE_ICON,
+                }}
+                hitSlop={8}
+                accessibilityLabel="Previous track"
+                accessibilityRole="button"
+              >
+                <SkipBack size={18} color="white" />
+              </Pressable>
+              <Pressable
+                onPress={() => setPlaying(!isPlaying)}
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: SURFACE_ICON,
+                }}
+                hitSlop={8}
+                accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+                accessibilityRole="button"
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : isPlaying ? (
+                  <Pause size={18} color="white" />
+                ) : (
+                  <Play size={18} color="white" style={{ marginLeft: 2 }} />
+                )}
+              </Pressable>
+              <Pressable
+                onPress={() => next()}
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: SURFACE_ICON,
+                }}
+                hitSlop={8}
+                accessibilityLabel="Next track"
+                accessibilityRole="button"
+              >
+                <SkipForward size={18} color="white" />
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2 }}>
+            <Pressable
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+              onPress={() => setShowNowPlaying(true)}
+              hitSlop={8}
+              accessibilityLabel={`Now playing: ${current.title} by ${current.artist}`}
+              accessibilityRole="button"
+            >
+              <Artwork source={current.imageUrl ? { uri: current.imageUrl } : undefined} colors={current.colors} style={{ height: 44, width: 44 }} radius={8} />
+              <View style={{ flex: 1 }}>
+                <Text fontSize={13} fontWeight="600" color="white" numberOfLines={1}>
+                  {current.title}
+                </Text>
+                <Text fontSize={11} color="rgba(255,255,255,0.5)" numberOfLines={1}>
+                  {current.artist}
+                </Text>
+              </View>
+              {isLoading ? (
+                <ActivityIndicator size="small" color="rgba(255,255,255,0.5)" style={{ marginRight: 4 }} />
+              ) : (
+                <Text fontSize={10} color="rgba(255,255,255,0.3)" style={{ marginRight: 4 }}>{elapsedText}</Text>
+              )}
+            </Pressable>
+            <Pressable
+                onPress={() => setPlaying(!isPlaying)}
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: SURFACE_ICON,
+                }}
+                hitSlop={8}
+                accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+                accessibilityRole="button"
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : isPlaying ? (
+                  <Pause size={18} color="white" />
+                ) : (
+                  <Play size={18} color="white" style={{ marginLeft: 2 }} />
+                )}
+              </Pressable>
+          </View>
+        )}
       </GlassCard>
     </Animated.View>
   );
