@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import { View } from 'react-native';
+import { View, Platform } from 'react-native';
 import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 
@@ -16,9 +16,21 @@ export function useLyricsSharing() {
       const uri = await captureRef(imageRef.current, {
         format: 'png',
         quality: 1,
-        result: 'tmpfile',
+        result: Platform.OS === 'web' ? 'data-uri' : 'tmpfile',
       });
-      if (await Sharing.isAvailableAsync()) {
+
+      if (Platform.OS === 'web') {
+        const blob = await (await fetch(uri)).blob();
+        const file = new File([blob], 'lyrics.png', { type: 'image/png' });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file] });
+        } else {
+          const a = document.createElement('a');
+          a.href = uri;
+          a.download = 'lyrics.png';
+          a.click();
+        }
+      } else if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'image/png',
           dialogTitle: 'Share lyrics',
