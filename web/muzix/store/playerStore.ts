@@ -82,6 +82,21 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled;
 }
 
+async function patchLyrics(song: Song): Promise<void> {
+  if (song.lyrics) return;
+  try {
+    const full = await api.song(song.id);
+    const lyrics = full.lyrics ?? undefined;
+    if (lyrics) {
+      usePlayerStore.setState((state) =>
+        state.current?.id === song.id ? { current: { ...state.current!, lyrics } } : {}
+      );
+    }
+  } catch (e) {
+    console.warn('Failed to fetch lyrics for', song.title, e);
+  }
+}
+
 async function driveQueue(queue: Song[], index: number) {
   if (!REAL) return;
   try {
@@ -138,6 +153,7 @@ export const usePlayerStore = create<PlayerState>()(
           history: [],
           error: null,
         });
+        patchLyrics(song);
         driveQueue(resolvedQueue, resolvedIndex);
         saveQueue({ queue: resolvedQueue, currentIndex: resolvedIndex, shuffle: get().shuffle, repeat: get().repeat });
       },
@@ -167,6 +183,7 @@ export const usePlayerStore = create<PlayerState>()(
             const song = queue[0];
             if (!song) return;
             set({ current: song, currentIndex: 0, history: [...get().history, currentIndex], error: null });
+            patchLyrics(song);
             driveSkipToIndex(0);
           }
           return;
@@ -174,6 +191,7 @@ export const usePlayerStore = create<PlayerState>()(
 
         const song = queue[ni];
         set({ current: song, currentIndex: ni, history: [...get().history, currentIndex], error: null });
+        patchLyrics(song);
         if (REAL) {
           try { playerService.next(); } catch (e) {
             console.error('playerService next failed', e);
@@ -190,6 +208,7 @@ export const usePlayerStore = create<PlayerState>()(
           const song = queue[prevIndex];
           if (song) {
             set({ current: song, currentIndex: prevIndex, history: newHistory, error: null });
+            patchLyrics(song);
             try { driveSkipToIndex(prevIndex); } catch (e) {
               console.error('playerService previous failed', e);
             }
@@ -200,6 +219,7 @@ export const usePlayerStore = create<PlayerState>()(
         const song = queue[pi];
         if (!song) return;
         set({ current: song, currentIndex: pi, error: null });
+        patchLyrics(song);
         if (REAL) {
           try { playerService.previous(); } catch (e) {
             console.error('playerService previous failed', e);
@@ -293,6 +313,7 @@ export const usePlayerStore = create<PlayerState>()(
         }
         const newCurrent = newQueue[newIndex] ?? null;
         set({ queue: newQueue, currentIndex: newIndex, current: newCurrent });
+        if (newCurrent) patchLyrics(newCurrent);
         if (index === currentIndex && newCurrent) {
           driveQueue(newQueue, newIndex);
         }
