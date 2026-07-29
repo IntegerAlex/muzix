@@ -310,7 +310,8 @@ export function useSongs(): QueryResult<Song[]> {
     return fresh;
   }, [], staleRef.current);
 
-  return { data: data.length > 0 ? data : staleData, loading, error, refetch };
+  const resolved = data.length > 0 ? data : staleData;
+  return { data: resolved, loading: loading && resolved.length === 0, error, refetch };
 }
 
 export function useAlbums(): QueryResult<Album[]> {
@@ -333,7 +334,8 @@ export function useAlbums(): QueryResult<Album[]> {
     return fresh;
   }, [], staleRef.current);
 
-  return { data: data.length > 0 ? data : staleData, loading, error, refetch };
+  const resolvedAlbums = data.length > 0 ? data : staleData;
+  return { data: resolvedAlbums, loading: loading && resolvedAlbums.length === 0, error, refetch };
 }
 
 export function useArtists(): QueryResult<Artist[]> {
@@ -356,7 +358,8 @@ export function useArtists(): QueryResult<Artist[]> {
     return fresh;
   }, [], staleRef.current);
 
-  return { data: data.length > 0 ? data : staleData, loading, error, refetch };
+  const resolvedArtists = data.length > 0 ? data : staleData;
+  return { data: resolvedArtists, loading: loading && resolvedArtists.length === 0, error, refetch };
 }
 
 export function usePlaylists(): QueryResult<Playlist[]> {
@@ -379,7 +382,8 @@ export function usePlaylists(): QueryResult<Playlist[]> {
     return fresh;
   }, [], staleRef.current);
 
-  return { data: data.length > 0 ? data : staleData, loading, error, refetch };
+  const resolvedPlaylists = data.length > 0 ? data : staleData;
+  return { data: resolvedPlaylists, loading: loading && resolvedPlaylists.length === 0, error, refetch };
 }
 
 export function useAlbum(id: string): { data: Album | undefined; loading: boolean; error: string | null; refetch: () => void } {
