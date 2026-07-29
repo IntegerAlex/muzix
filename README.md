@@ -14,8 +14,10 @@ backend/
 ├── crypto.py          # Password hashing: argon2id (new) + bcrypt (legacy)
 ├── main.py            # App bootstrap, exception handlers, router includes
 ├── db.py              # Async SQLAlchemy engine + session factory
-├── models.py          # SQLAlchemy ORM models
+├── models.py          # SQLAlchemy ORM models (songs with genre)
 ├── migrate.py         # Idempotent SQL migration (no Alembic)
+├── backfill_genre.py  # Song genre enrichment via MusicBrainz + Wikipedia
+├── import_songs.py    # Catalog import: Genius lyrics + YouTube download + MusicBrainz genre
 ├── repositories/      # Database operations per entity
 ├── services/          # Business logic per entity
 └── routes/            # API endpoints per entity
@@ -45,9 +47,10 @@ web/muzix/
 │   ├── useLyricsSharing.ts     # Lyrics image generation via view-shot
 │   └── useConnectivity.ts      # Online/offline detection
 ├── store/             # Zustand state
-│   ├── playerStore.ts # Player, queue, likes state with localStorage persistence
-│   └── authStore.ts   # Auth token + user state
-├── services/          # API client, caching, offline queue
+│   ├── playerStore.ts # Player, queue, likes state with zustand persist
+│   ├── authStore.ts   # Auth token + user state
+│   └── storage.ts     # Cross-platform storage adapter (AsyncStorage on native, localStorage on web)
+├── services/          # API client, caching, offline queue, player service
 └── lib/               # Colors, spacing, utilities, responsive breakpoints
 ```
 
@@ -55,6 +58,11 @@ web/muzix/
 
 - **Content sharing:** Generate share links for songs, albums, artists, playlists, lyrics. 30-day token expiry. Web Share API / native share sheet / clipboard fallback.
 - **Lyrics sharing:** Select up to 5 lyrics lines, share as image (16:9 PNG) or plain text. Synced scrolling with LRC support.
+- **Home screen dashboard:** 2x2 smart grid with current time, live weather (geolocation + wttr.in), mood derived from recently played song genres.
+- **Mood detection:** Analyzes genre of your recent plays and displays a mood label + icon (Energetic, Calm, Confident, etc.).
+- **Genre enrichment:** Song genre metadata fetched from MusicBrainz + Wikipedia, stored per-track in the database.
+- **SafeStorage:** Cross-platform zustand persist adapter (AsyncStorage native / localStorage web) with in-memory fallback for Expo Go.
+- **Audio playback:** Uses `expo-audio` for cross-platform playback; downloads audio to cache via `expo-file-system`. Falls back gracefully when native TrackPlayer module is unavailable.
 - **Queue management:** Slide-up panel with reorder (up/down arrows), remove, clear all.
 - **Keyboard shortcuts (web):** Space=play/pause, arrows=seek, N/P=next/prev, L=like, Q=queue, Esc=close.
 - **Haptic feedback:** Light/medium/success/error on native (no-op on web).
@@ -121,7 +129,7 @@ The migration (`uv run python migrate.py`) creates:
 
 | Table | Description |
 |-------|-------------|
-| `songs` | Track metadata with full-text search (tsvector) |
+| `songs` | Track metadata with genre, full-text search (tsvector) |
 | `albums` | Album metadata with FTS |
 | `artists` | Artist metadata with FTS |
 | `playlists` | User playlists (with M2M `playlist_songs`) |
@@ -147,8 +155,8 @@ All endpoints return standardized JSON:
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/health` | No | Health check |
-| GET | `/songs` | No | List songs (paginated, brief) |
-| GET | `/songs/{id}` | No | Get song by ID (full) |
+| GET | `/songs` | No | List songs (paginated, brief, includes genre) |
+| GET | `/songs/{id}` | No | Get song by ID (full, includes genre) |
 | GET | `/albums` | No | List albums |
 | GET | `/albums/{id}` | No | Get album by ID |
 | GET | `/artists` | No | List artists |
