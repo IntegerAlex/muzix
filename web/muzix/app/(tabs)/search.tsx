@@ -9,6 +9,7 @@ import { SongSkeleton } from '@/components/Skeleton';
 import { useSearch } from '@/services/data';
 import type { Album, Artist } from '@/services/types';
 import { usePlayerStore } from '@/store/playerStore';
+import { useSharing } from '@/hooks/useSharing';
 import { AnimatedEntrance } from '@/lib/useEntrance';
 import { Artwork } from '@/components/Artwork';
 import { RADIUS } from '@/lib/sizing';
@@ -46,6 +47,7 @@ export default function SearchScreen() {
   const [recentSearches, setRecentSearches] = useState<string[]>(loadRecent);
   const playSong = usePlayerStore((s) => s.playSong);
   const current = usePlayerStore((s) => s.current);
+  const { share } = useSharing();
 
   const { data: results, loading } = useSearch(query);
   const hasQuery = query.trim().length > 0;
@@ -226,6 +228,7 @@ export default function SearchScreen() {
                       index={i}
                       queue={results.songs}
                       isCurrent={current?.id === songItem.id}
+                      onShare={(song) => share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl })}
                     />
                   </AnimatedEntrance>
                 ))}
@@ -357,15 +360,16 @@ export default function SearchScreen() {
          ) : hasResults ? (
            <>
              {results.songs.map((songItem, i) => (
-               <AnimatedEntrance key={songItem.id} index={i}>
-                 <SongRow
-                   song={songItem}
-                   index={i}
-                   queue={results.songs}
-                  isCurrent={current?.id === songItem.id}
-                />
-              </AnimatedEntrance>
-            ))}
+                <AnimatedEntrance key={songItem.id} index={i}>
+                  <SongRow
+                    song={songItem}
+                    index={i}
+                    queue={results.songs}
+                   isCurrent={current?.id === songItem.id}
+                   onShare={(song) => share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl })}
+                 />
+               </AnimatedEntrance>
+             ))}
 
             {results.albums.length > 0 && <SectionHeader title="Albums" />}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md }}>

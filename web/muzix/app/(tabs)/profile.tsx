@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { Pressable, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text } from 'tamagui';
 import { router } from 'expo-router';
@@ -211,44 +211,56 @@ export default function ProfileScreen() {
   const [recentSongs, setRecentSongs] = useState<Song[]>([]);
   const [likedList, setLikedList] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadProfile = useCallback(async () => {
+    const token = useAuthStore.getState().token;
+    if (!token) { setLoading(false); return; }
+    try {
+      const [topRes, likesRes, playlistsRes] = await Promise.all([
+        api.topSongs('all', 50, token).catch(() => null),
+        api.getLikes(token).catch(() => null),
+        api.playlists(token).catch(() => null),
+      ]);
+
+      const topItems = (topRes?.items ?? []) as AnalyticsItem[];
+      const topSongsMapped = topItems.map((item) => mapAnalyticsSong(item.song));
+      const songMap = new Map(topSongsMapped.map((s) => [s.id, s]));
+
+      const recIds = usePlayerStore.getState().recentlyPlayed;
+      const recentSongsMapped = recIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
+      const likedSongIds = likesRes?.songIds ?? [];
+      const likedSongsMapped = likedSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
+
+      const totalPlays = topItems.reduce((sum, item) => sum + Number(item.play_count ?? 0), 0);
+      const totalListeningMs = topItems.reduce((sum, item) => sum + Number(item.total_listening_ms ?? 0), 0);
+
+      setStats({
+        totalPlays, totalListeningMs,
+        likedCount: likedSongIds.length,
+        playlistCount: (playlistsRes ?? []).length,
+      });
+      setTopSongs(topSongsMapped);
+      setRecentSongs(recentSongsMapped);
+      setLikedList(likedSongsMapped);
+    } catch (e) {
+      console.error('Failed to load profile data:', e);
+    }
+    setLoading(false);
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadProfile();
+    setRefreshing(false);
+  }, [loadProfile]);
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      const token = useAuthStore.getState().token;
-      if (!token) { setLoading(false); return; }
-      try {
-        const [topRes, likesRes, playlistsRes] = await Promise.all([
-          api.topSongs('all', 50, token).catch(() => null),
-          api.getLikes(token).catch(() => null),
-          api.playlists(token).catch(() => null),
-        ]);
-        if (cancelled) return;
-
-        const topItems = (topRes?.items ?? []) as AnalyticsItem[];
-        const topSongsMapped = topItems.map((item) => mapAnalyticsSong(item.song));
-        const songMap = new Map(topSongsMapped.map((s) => [s.id, s]));
-
-        const recIds = recentlyPlayed;
-        const recentSongsMapped = recIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
-        const likedSongIds = likesRes?.songIds ?? [];
-        const likedSongsMapped = likedSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
-
-        const totalPlays = topItems.reduce((sum, item) => sum + Number(item.play_count ?? 0), 0);
-        const totalListeningMs = topItems.reduce((sum, item) => sum + Number(item.total_listening_ms ?? 0), 0);
-
-        setStats({
-          totalPlays, totalListeningMs,
-          likedCount: likedSongIds.length,
-          playlistCount: (playlistsRes ?? []).length,
-        });
-        setTopSongs(topSongsMapped);
-        setRecentSongs(recentSongsMapped);
-        setLikedList(likedSongsMapped);
-      } catch {}
-      setLoading(false);
-    }
-    load();
+    (async () => {
+      await loadProfile();
+      if (cancelled) return;
+    })();
     return () => { cancelled = true; };
   }, []);
 
@@ -269,7 +281,11 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: SPACING.xxxl }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: SPACING.xxxl }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#1DB954" />}
+      >
         <View style={{
           paddingTop: 80, paddingBottom: SPACING.xxl,
           paddingHorizontal: SPACING.xl,

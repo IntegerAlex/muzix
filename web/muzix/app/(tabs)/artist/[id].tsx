@@ -1,8 +1,8 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
-import { FlatList, ScrollView, Pressable, View } from 'react-native';
+import { FlatList, ScrollView, Pressable, View, RefreshControl } from 'react-native';
 import { Text } from 'tamagui';
-import { Music, ChevronLeft, UserPlus, UserCheck } from 'lucide-react-native';
+import { Music, ChevronLeft, UserPlus, UserCheck, Share2 } from 'lucide-react-native';
 import { GlassCard } from '@/components/GlassCard';
 import { RADIUS } from '@/lib/sizing';
 import { SPACING } from '@/lib/spacing';
@@ -12,6 +12,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { Skeleton, SongSkeleton, CardSkeleton } from '@/components/Skeleton';
 import { useArtist, useAlbums, useSongs } from '@/services/data';
 import { usePlayerStore } from '@/store/playerStore';
+import { useSharing } from '@/hooks/useSharing';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT } from '@/lib/colors';
 
 function ArtistSkeletonView() {
@@ -45,11 +46,19 @@ function ArtistSkeletonView() {
 
 export default function ArtistDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: artist, loading, error } = useArtist(id);
+  const { data: artist, loading, error, refetch } = useArtist(id);
   const { data: allAlbums } = useAlbums();
   const { data: allSongs } = useSongs();
   const current = usePlayerStore((s) => s.current);
   const [isFollowing, setIsFollowing] = useState(false);
+  const { share } = useSharing();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   const popular = useMemo(() => {
     if (!artist) return [];
@@ -99,27 +108,41 @@ export default function ArtistDetail() {
         <ChevronLeft size={22} color={TEXT_PRIMARY} />
       </Pressable>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, paddingTop: 64 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 100, paddingTop: 64 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#1DB954" />}
+      >
         <View style={{ alignItems: 'center', paddingHorizontal: SPACING.xl }}>
           <Artwork colors={artist.colors} style={{ height: 160, width: 160 }} radius={9999} />
           <Text style={{ marginTop: SPACING.xl, textAlign: 'center' }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY} numberOfLines={2}>
             {artist.name}
           </Text>
-          <Pressable
-            onPress={toggleFollow}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.md, borderRadius: 9999, backgroundColor: isFollowing ? ACCENT : '#242424', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm }}
-            accessibilityLabel={isFollowing ? 'Unfollow artist' : 'Follow artist'}
-            accessibilityRole="button"
-          >
-            {isFollowing ? (
-              <UserCheck size={14} color="white" />
-            ) : (
-              <UserPlus size={14} color={TEXT_PRIMARY} />
-            )}
-            <Text fontSize={13} fontWeight="500" color={isFollowing ? 'white' : TEXT_PRIMARY}>
-              {isFollowing ? 'Following' : 'Follow'}
-            </Text>
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.md }}>
+            <Pressable
+              onPress={toggleFollow}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, borderRadius: 9999, backgroundColor: isFollowing ? ACCENT : '#242424', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm }}
+              accessibilityLabel={isFollowing ? 'Unfollow artist' : 'Follow artist'}
+              accessibilityRole="button"
+            >
+              {isFollowing ? (
+                <UserCheck size={14} color="white" />
+              ) : (
+                <UserPlus size={14} color={TEXT_PRIMARY} />
+              )}
+              <Text fontSize={13} fontWeight="500" color={isFollowing ? 'white' : TEXT_PRIMARY}>
+                {isFollowing ? 'Following' : 'Follow'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => share({ contentType: 'artist', contentId: artist.id, title: artist.name, imageUrl: artist.imageUrl })}
+              style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }}
+              accessibilityLabel="Share artist"
+              accessibilityRole="button"
+            >
+              <Share2 size={16} color={TEXT_PRIMARY} />
+            </Pressable>
+          </View>
         </View>
 
         <GlassCard padding={SPACING.lg} style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.xxl }}>

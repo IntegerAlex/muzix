@@ -258,6 +258,34 @@ async def migrate() -> None:
             text("CREATE INDEX IF NOT EXISTS idx_user_likes_song ON user_likes(song_id);")
         )
 
+        # ----- shares -----
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS shares (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    content_type TEXT NOT NULL,
+                    content_id TEXT NOT NULL,
+                    title TEXT,
+                    artist TEXT,
+                    image_url TEXT,
+                    lyrics TEXT,
+                    selected_lyrics_lines INTEGER[],
+                    share_token TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    expires_at TIMESTAMPTZ NOT NULL
+                );
+                """
+            )
+        )
+        await conn.execute(
+            text("CREATE UNIQUE INDEX IF NOT EXISTS idx_shares_token ON shares(share_token);")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_shares_user ON shares(user_id);")
+        )
+
     await engine.dispose()
     print("Migration complete: all tables ready.")
 

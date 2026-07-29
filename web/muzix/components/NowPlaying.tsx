@@ -25,10 +25,11 @@ import { GlassCard } from '@/components/GlassCard';
 import { LyricsPanel } from '@/components/LyricsPanel';
 import { LyricsImageGenerator } from '@/components/LyricsImageGenerator';
 import { useLyricsSharing } from '@/hooks/useLyricsSharing';
+import { useSharing } from '@/hooks/useSharing';
 import { usePlayerStore } from '@/store/playerStore';
 import type { Song } from '@/services/types';
 import { formatTime } from '@/lib/utils';
-import { SURFACE_ICON, BORDER } from '@/lib/colors';
+import { SURFACE_ICON, BORDER, ACCENT } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 import { useResponsive } from '@/lib/useResponsive';
 
@@ -77,7 +78,9 @@ export function NowPlaying() {
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [selectedLyrics, setSelectedLyrics] = useState<string[]>([]);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [shareSuccess, setShareSuccess] = useState(false);
   const { imageRef, generate, shareUri, isGenerating, shareError } = useLyricsSharing();
+  const { share, isSharing: isSharingLink, shareError: shareLinkError, resetError } = useSharing();
 
   const isLiked = current ? !!likedSongs[current.id] : false;
 
@@ -162,11 +165,36 @@ export function NowPlaying() {
   }, [selectedLyrics, generate]);
 
   const handleShareLyrics = useCallback(
-    (selectedTexts: string[]) => {
-      setSelectedLyrics(selectedTexts);
+    async (selectedTexts: string[], mode: 'image' | 'text') => {
+      if (mode === 'text') {
+        if (!current) return;
+        try {
+          await share({
+            contentType: 'lyrics',
+            contentId: current.id,
+            title: current.title,
+            artist: current.artist,
+            lyrics: selectedTexts,
+            selectedLyricsLines: selectedTexts.map(
+              t => current.lyrics?.split('\n').indexOf(t) ?? 0
+            ),
+          });
+          setShareSuccess(true);
+          setTimeout(() => setShareSuccess(false), 2000);
+        } catch {}
+      } else {
+        setSelectedLyrics(selectedTexts);
+      }
     },
-    []
+    [current, share]
   );
+
+  const handleRetryGenerate = useCallback(async () => {
+    const uri = await generate();
+    if (uri) {
+      setPreviewUri(uri);
+    }
+  }, [generate]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],
@@ -202,7 +230,13 @@ export function NowPlaying() {
                 {current.album}
               </Text>
             </View>
-            <View style={{ width: 64 }} />
+            <Pressable
+              onPress={() => share({ contentType: 'song', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl })}
+              hitSlop={8}
+              accessibilityLabel="Share"
+            >
+              <Share2 size={20} color={ACCENT} />
+            </Pressable>
           </View>
 
           <View style={{ flex: 1, flexDirection: 'row', paddingHorizontal: SPACING.xl }}>
@@ -360,6 +394,7 @@ export function NowPlaying() {
             artist={current.artist}
             imageUrl={current.imageUrl}
             colors={current.colors}
+            timestamp={elapsedText}
           />
         )}
         {isGenerating && (
@@ -413,30 +448,54 @@ export function NowPlaying() {
                     width: '100%',
                     height: 200,
                     borderRadius: 12,
-                    marginBottom: 16,
                     resizeMode: 'cover',
                   }}
                 />
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: '#1DB954',
-                    borderRadius: 12,
-                    paddingVertical: SPACING.md,
-                    paddingHorizontal: SPACING.xxl,
-                    marginBottom: 12,
-                    width: '100%',
-                    alignItems: 'center',
-                  }}
-                  onPress={async () => {
-                    await shareUri(previewUri);
-                    setPreviewUri(null);
-                    setSelectedLyrics([]);
-                  }}
-                >
-                  <Text style={{ fontSize: 16, fontWeight: '600', color: 'white' }}>
-                    Share via...
+                {shareError && (
+                  <Text style={{ color: '#f43f5e', fontSize: 13, marginTop: 8, marginBottom: 8 }}>
+                    {shareError}
                   </Text>
-                </TouchableOpacity>
+                )}
+                {shareError ? (
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: SURFACE_ICON,
+                      borderRadius: 12,
+                      paddingVertical: SPACING.md,
+                      paddingHorizontal: SPACING.xxl,
+                      marginBottom: 12,
+                      width: '100%',
+                      alignItems: 'center',
+                    }}
+                    onPress={handleRetryGenerate}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: 'white' }}>
+                      Retry
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#1DB954',
+                      borderRadius: 12,
+                      paddingVertical: SPACING.md,
+                      paddingHorizontal: SPACING.xxl,
+                      marginTop: 16,
+                      marginBottom: 12,
+                      width: '100%',
+                      alignItems: 'center',
+                    }}
+                    onPress={async () => {
+                      await share({ contentType: 'lyrics', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl, lyrics: selectedLyrics });
+                      setPreviewUri(null);
+                      setSelectedLyrics([]);
+                    }}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: 'white' }}>
+                      Share via...
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={{
                     backgroundColor: SURFACE_ICON,
@@ -458,6 +517,29 @@ export function NowPlaying() {
               </View>
             </TouchableOpacity>
           </Modal>
+        )}
+        {shareSuccess && (
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 200,
+          }}>
+            <View style={{
+              backgroundColor: '#1DB954',
+              borderRadius: 16,
+              paddingVertical: 20,
+              paddingHorizontal: 32,
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: 'white' }}>Shared!</Text>
+            </View>
+          </View>
         )}
       </View>
     );
@@ -504,7 +586,13 @@ export function NowPlaying() {
                 {current.album}
               </Text>
             </View>
-            <View style={{ width: 64 }} />
+            <Pressable
+              onPress={() => share({ contentType: 'song', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl })}
+              hitSlop={8}
+              accessibilityLabel="Share"
+            >
+              <Share2 size={20} color={ACCENT} />
+            </Pressable>
           </View>
 
           <View style={{ alignItems: 'center', paddingVertical: 32 }}>
@@ -730,6 +818,7 @@ export function NowPlaying() {
           artist={current.artist}
           imageUrl={current.imageUrl}
           colors={current.colors}
+          timestamp={elapsedText}
         />
       )}
       {isGenerating && (
@@ -777,57 +866,104 @@ export function NowPlaying() {
               <Text style={{ fontSize: 18, fontWeight: '600', color: 'white', marginBottom: 16 }}>
                 Share Lyrics
               </Text>
-              <Image
-                source={{ uri: previewUri }}
-                style={{
-                  width: '100%',
-                  height: 200,
-                  borderRadius: 12,
-                  marginBottom: 16,
-                  resizeMode: 'cover',
-                }}
-              />
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#1DB954',
-                  borderRadius: 12,
-                  paddingVertical: SPACING.md,
-                  paddingHorizontal: SPACING.xxl,
-                  marginBottom: 12,
-                  width: '100%',
-                  alignItems: 'center',
-                }}
-                onPress={async () => {
-                  await shareUri(previewUri);
-                  setPreviewUri(null);
-                  setSelectedLyrics([]);
-                }}
-              >
-                <Text style={{ fontSize: 16, fontWeight: '600', color: 'white' }}>
-                  Share via...
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: SURFACE_ICON,
-                  borderRadius: 12,
-                  paddingVertical: SPACING.md,
-                  paddingHorizontal: SPACING.xxl,
-                  width: '100%',
-                  alignItems: 'center',
-                }}
-                onPress={() => {
-                  setPreviewUri(null);
-                  setSelectedLyrics([]);
-                }}
-              >
-                <Text style={{ fontSize: 16, fontWeight: '500', color: 'rgba(255,255,255,0.7)' }}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
+                <Image
+                  source={{ uri: previewUri }}
+                  style={{
+                    width: '100%',
+                    height: 200,
+                    borderRadius: 12,
+                    resizeMode: 'cover',
+                  }}
+                />
+                {shareError && (
+                  <Text style={{ color: '#f43f5e', fontSize: 13, marginTop: 8, marginBottom: 8 }}>
+                    {shareError}
+                  </Text>
+                )}
+                {shareError ? (
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: SURFACE_ICON,
+                      borderRadius: 12,
+                      paddingVertical: SPACING.md,
+                      paddingHorizontal: SPACING.xxl,
+                      marginBottom: 12,
+                      width: '100%',
+                      alignItems: 'center',
+                    }}
+                    onPress={handleRetryGenerate}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: 'white' }}>
+                      Retry
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#1DB954',
+                      borderRadius: 12,
+                      paddingVertical: SPACING.md,
+                      paddingHorizontal: SPACING.xxl,
+                      marginTop: 16,
+                      marginBottom: 12,
+                      width: '100%',
+                      alignItems: 'center',
+                    }}
+                    onPress={async () => {
+                      await share({ contentType: 'lyrics', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl, lyrics: selectedLyrics });
+                      setPreviewUri(null);
+                      setSelectedLyrics([]);
+                    }}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: 'white' }}>
+                      Share via...
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: SURFACE_ICON,
+                    borderRadius: 12,
+                    paddingVertical: SPACING.md,
+                    paddingHorizontal: SPACING.xxl,
+                    width: '100%',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => {
+                    setPreviewUri(null);
+                    setSelectedLyrics([]);
+                  }}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: '500', color: 'rgba(255,255,255,0.7)' }}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </Modal>
+      )}
+      {shareSuccess && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 200,
+        }}>
+          <View style={{
+            backgroundColor: '#1DB954',
+            borderRadius: 16,
+            paddingVertical: 20,
+            paddingHorizontal: 32,
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: 'white' }}>Shared!</Text>
+          </View>
+        </View>
       )}
     </View>
   );

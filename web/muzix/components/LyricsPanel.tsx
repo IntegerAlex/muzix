@@ -14,7 +14,7 @@ interface LyricsPanelProps {
   currentTime: number; // seconds
   duration: number; // seconds
   onSeek?: (time: number) => void;
-  onShare?: (selectedTexts: string[]) => void;
+  onShare?: (selectedTexts: string[], shareMode: 'image' | 'text') => void;
 }
 
 function parseLRC(lrc: string): LyricLine[] {
@@ -55,6 +55,7 @@ export function LyricsPanel({ lyrics, currentTime, duration, onSeek, onShare }: 
   const lineRefs = useRef(new Map<number, View>());
   const [shareMode, setShareMode] = useState(false);
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [shareImageMode, setShareImageMode] = useState(true);
 
   useEffect(() => {
     if (!lyrics) {
@@ -130,19 +131,22 @@ export function LyricsPanel({ lyrics, currentTime, duration, onSeek, onShare }: 
       Alert.alert('No lines selected', 'Tap on lyrics lines to select them before sharing.');
       return;
     }
-    onShare?.(selected);
+    onShare?.(selected, shareImageMode ? 'image' : 'text');
     setShareMode(false);
     setSelectedIndices(new Set());
-  }, [selectedIndices, lines, onShare]);
+    setShareImageMode(true);
+  }, [selectedIndices, lines, onShare, shareImageMode]);
 
   const handleShareCancel = useCallback(() => {
     setShareMode(false);
     setSelectedIndices(new Set());
+    setShareImageMode(true);
   }, []);
 
   const toggleShareMode = useCallback(() => {
     setShareMode((v) => !v);
     setSelectedIndices(new Set());
+    setShareImageMode(true);
   }, []);
 
   if (lines.length === 0) {
@@ -162,13 +166,47 @@ export function LyricsPanel({ lyrics, currentTime, duration, onSeek, onShare }: 
           <Pressable onPress={handleShareCancel} hitSlop={8} accessibilityLabel="Cancel" accessibilityRole="button">
             <Text style={{ fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.5)' }}>Cancel</Text>
           </Pressable>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.7)' }}>
-            {selectedIndices.size} selected
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {selectedIndices.size > 0 && (
+              <View style={{ flexDirection: 'row', gap: 4 }}>
+                <Pressable
+                  onPress={() => setShareImageMode(true)}
+                  hitSlop={8}
+                  accessibilityLabel="Share as image"
+                  accessibilityRole="button"
+                >
+                  <Text style={{
+                    fontSize: 12, fontWeight: '600',
+                    color: shareImageMode ? 'white' : 'rgba(255,255,255,0.4)',
+                    backgroundColor: shareImageMode ? '#1DB954' : 'transparent',
+                    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 9999,
+                  }}>Image</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setShareImageMode(false)}
+                  hitSlop={8}
+                  accessibilityLabel="Share as text"
+                  accessibilityRole="button"
+                >
+                  <Text style={{
+                    fontSize: 12, fontWeight: '600',
+                    color: !shareImageMode ? 'white' : 'rgba(255,255,255,0.4)',
+                    backgroundColor: !shareImageMode ? '#1DB954' : 'transparent',
+                    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 9999,
+                  }}>Text</Text>
+                </Pressable>
+              </View>
+            )}
+            <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.7)' }}>
+              {selectedIndices.size} selected
+            </Text>
+          </View>
           <Pressable onPress={handleShareConfirm} hitSlop={8} accessibilityLabel="Share" accessibilityRole="button">
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#1DB954', borderRadius: 9999, paddingHorizontal: 14, paddingVertical: 6 }}>
               <Share2 size={12} color="white" />
-              <Text style={{ fontSize: 13, fontWeight: '600', color: 'white' }}>Share</Text>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: 'white' }}>
+                {shareImageMode ? 'Share' : 'Share as text'}
+              </Text>
             </View>
           </Pressable>
         </View>

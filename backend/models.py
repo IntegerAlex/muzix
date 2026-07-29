@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Table, Text, ARRAY, Computed, UniqueConstraint
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Table, Text, ARRAY, Computed, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import relationship
 
@@ -38,6 +38,24 @@ class UserLike(Base):
     song_id = Column(String(64), ForeignKey("songs.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     __table_args__ = (UniqueConstraint('user_id', 'song_id', name='uq_user_song_like'),)
+
+
+class Share(Base):
+    __tablename__ = "shares"
+    id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content_type = Column(String(20), nullable=False)
+    content_id = Column(String(64), nullable=False)
+    title = Column(String(255), nullable=True)
+    artist = Column(String(255), nullable=True)
+    image_url = Column(String(512), nullable=True)
+    lyrics = Column(Text, nullable=True)
+    selected_lyrics_lines = Column(ARRAY(Integer), nullable=True)
+    share_token = Column(String(20), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+    user = relationship("User", backref="shares")
 
 
 class Song(Base):

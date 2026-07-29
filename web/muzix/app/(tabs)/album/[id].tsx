@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ScrollView, Pressable, View, Share } from 'react-native';
+import { ScrollView, Pressable, View, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from 'tamagui';
 import { Music, ChevronLeft, Share2, Shuffle, Play } from 'lucide-react-native';
@@ -12,6 +12,7 @@ import { SongRow } from '@/components/SongRow';
 import { Skeleton, SongSkeleton } from '@/components/Skeleton';
 import { useAlbum, useSongs } from '@/services/data';
 import { usePlayerStore } from '@/store/playerStore';
+import { useSharing } from '@/hooks/useSharing';
 import type { Song } from '@/services/types';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
@@ -45,10 +46,18 @@ function AlbumSkeletonView() {
 
 export default function AlbumDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: album, loading, error } = useAlbum(id);
+  const { data: album, loading, error, refetch } = useAlbum(id);
   const { data: allSongs } = useSongs();
   const current = usePlayerStore((s) => s.current);
   const playSong = usePlayerStore((s) => s.playSong);
+  const { share } = useSharing();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   const songs = useMemo(() => {
     if (!album) return [];
@@ -66,14 +75,10 @@ export default function AlbumDetail() {
     playSong(shuffled[0], shuffled, 0);
   }, [songs, playSong]);
 
-  const handleShare = useCallback(async () => {
+  const handleShare = useCallback(() => {
     if (!album) return;
-    try {
-      await Share.share({
-        message: `Check out "${album.title}" by ${album.artist} on Muzix`,
-      });
-    } catch {}
-  }, [album]);
+    share({ contentType: 'album', contentId: album.id, title: album.title, artist: album.artist, imageUrl: album.imageUrl });
+  }, [album, share]);
 
   if (loading) {
     return <AlbumSkeletonView />;
@@ -110,6 +115,7 @@ export default function AlbumDetail() {
       </Pressable>
 
       <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#1DB954" />}
         contentContainerStyle={{ paddingBottom: 100, paddingTop: 64 }}
         showsVerticalScrollIndicator={false}
       >

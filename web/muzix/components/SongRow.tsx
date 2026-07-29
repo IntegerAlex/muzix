@@ -1,4 +1,5 @@
 import { useCallback, useEffect, memo, useRef } from 'react';
+import { Pressable } from 'react-native';
 import { Text, View } from 'tamagui';
 import Animated, {
   useAnimatedStyle,
@@ -7,12 +8,14 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
+import { Share2 } from 'lucide-react-native';
 import { Artwork } from '@/components/Artwork';
 import { PressableScale } from '@/components/PressableScale';
 import { SPACING } from '@/lib/spacing';
 import { Skeleton } from '@/components/Skeleton';
 import { usePlayerStore } from '@/store/playerStore';
 import type { Song } from '@/services/types';
+import { TEXT_MUTED } from '@/lib/colors';
 
 export function EqualizerBar({ phase }: { phase: number }) {
   const h = useSharedValue(4 + Math.sin(phase) * 4);
@@ -43,9 +46,10 @@ interface SongRowProps {
   queue: Song[];
   isCurrent: boolean;
   subtitle?: string;
+  onShare?: (song: Song) => void;
 }
 
-export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, subtitle }: SongRowProps) {
+export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, subtitle, onShare }: SongRowProps) {
   const playSong = usePlayerStore((s) => s.playSong);
   const queueRef = useRef(queue);
   queueRef.current = queue;
@@ -75,6 +79,16 @@ export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, su
           {subtitle ?? song.artist}
         </Text>
       </View>
+      {onShare && (
+        <Pressable
+          onPress={() => onShare(song)}
+          style={{ opacity: 0.6, padding: 4 }}
+          hitSlop={8}
+          accessibilityLabel={`Share ${song.title}`}
+        >
+          <Share2 size={16} color={TEXT_MUTED} />
+        </Pressable>
+      )}
       {isCurrent ? (
         <Equalizer />
       ) : (

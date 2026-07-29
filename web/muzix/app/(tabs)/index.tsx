@@ -2,14 +2,16 @@ import { memo, useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, type Href } from 'expo-router';
 import { Pressable, ScrollView, View, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Play } from 'lucide-react-native';
+import { Play, Share2 } from 'lucide-react-native';
 import { Text, YStack } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
+import { PressableScale } from '@/components/PressableScale';
 import { SongRow } from '@/components/SongRow';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Skeleton, SongSkeleton, CardSkeleton } from '@/components/Skeleton';
 import { useAlbums, usePlaylists, useSongs, reloadAll } from '@/services/data';
 import { api } from '@/services/api';
+import { useSharing } from '@/hooks/useSharing';
 import type { Album, Playlist, Song } from '@/services/types';
 import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
@@ -19,44 +21,55 @@ import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
 
 function prefetchAlbum(id: string): void {
-  api.album(id).catch(() => {});
+  api.album(id).catch((e) => console.error('Failed to prefetch album:', e));
 }
 
 function prefetchPlaylist(id: string): void {
-  api.playlist(id).catch(() => {});
+  api.playlist(id).catch((e) => console.error('Failed to prefetch playlist:', e));
 }
 
-const HeroCard = memo(function HeroCard({ album }: { album: Album }) {
+const HeroCard = memo(function HeroCard({ album, onShare }: { album: Album; onShare?: (album: Album) => void }) {
    return (
-    <Link href={`/album/${album.id}` as Href} asChild>
+    <View style={{ marginHorizontal: SPACING.xl }}>
       <Pressable
         onLongPress={() => prefetchAlbum(album.id)}
         onHoverIn={() => prefetchAlbum(album.id)}
-        style={{ marginHorizontal: SPACING.xl, overflow: 'hidden', borderRadius: 20 }}
+        style={{ overflow: 'hidden', borderRadius: 20 }}
         accessibilityLabel={`${album.title} by ${album.artist}`}
         accessibilityRole="button"
       >
-        <View style={{ position: 'relative', height: 230, width: '100%' }}>
-          <Artwork colors={album.colors} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} radius={0} />
-          <LinearGradient
-            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.88)']}
-            locations={[0, 0.5, 1]}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-          />
-          <YStack style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: SPACING.xl, paddingBottom: SPACING.xxl }}>
-            <Text fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={2} color={TEXT_SECONDARY}>
-              New Release
-            </Text>
-            <Text style={{ marginTop: SPACING.sm }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY}>
-              {album.title}
-            </Text>
-            <Text style={{ marginTop: SPACING.xs }} fontSize={14} fontWeight="500" color={TEXT_SECONDARY}>
-              {album.artist} · {album.year}
-            </Text>
-          </YStack>
-        </View>
+        <Link href={`/album/${album.id}` as Href} asChild>
+          <View style={{ position: 'relative', height: 230, width: '100%' }}>
+            <Artwork colors={album.colors} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} radius={0} />
+            <LinearGradient
+              colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.88)']}
+              locations={[0, 0.5, 1]}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+            />
+            <YStack style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: SPACING.xl, paddingBottom: SPACING.xxl }}>
+              <Text fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={2} color={TEXT_SECONDARY}>
+                New Release
+              </Text>
+              <Text style={{ marginTop: SPACING.sm }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY}>
+                {album.title}
+              </Text>
+              <Text style={{ marginTop: SPACING.xs }} fontSize={14} fontWeight="500" color={TEXT_SECONDARY}>
+                {album.artist} · {album.year}
+              </Text>
+            </YStack>
+          </View>
+        </Link>
       </Pressable>
-    </Link>
+      {onShare && (
+        <PressableScale
+          onPress={() => onShare(album)}
+          style={{ position: 'absolute', top: SPACING.sm, right: SPACING.sm, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', zIndex: 10 }}
+          accessibilityLabel="Share album"
+        >
+          <Share2 size={14} color="white" />
+        </PressableScale>
+      )}
+    </View>
   );
 });
 
@@ -165,6 +178,7 @@ export default function HomeScreen() {
   const { data: playlists, loading: playlistsLoading, error: playlistsError, refetch: reloadPlaylists } = usePlaylists();
   const { data: songs, loading: songsLoading, error: songsError, refetch: reloadSongs } = useSongs();
   const token = useAuthStore((s) => s.token);
+  const { share } = useSharing();
 
   const [refreshing, setRefreshing] = useState(false);
   const [topPicks, setTopPicks] = useState<Song[]>([]);
@@ -291,7 +305,7 @@ export default function HomeScreen() {
             {albums[0] ? (
               <View style={{ marginTop: SPACING.xxl }}>
                 <AnimatedEntrance index={0}>
-                  <HeroCard album={albums[0]} />
+                  <HeroCard album={albums[0]} onShare={(album) => share({ contentType: 'album', contentId: album.id, title: album.title, artist: album.artist, imageUrl: album.imageUrl })} />
                 </AnimatedEntrance>
               </View>
             ) : (
@@ -316,6 +330,7 @@ export default function HomeScreen() {
                         index={i}
                         queue={playedSongs}
                         isCurrent={current?.id === songItem.id}
+                        onShare={(song) => share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl })}
                       />
                     </AnimatedEntrance>
                   ))}
@@ -337,6 +352,7 @@ export default function HomeScreen() {
                       index={i}
                       queue={topPicks}
                       isCurrent={current?.id === songItem.id}
+                      onShare={(song) => share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl })}
                     />
                   </AnimatedEntrance>
                 ))

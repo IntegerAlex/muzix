@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
-import { FlatList, ScrollView, Pressable, View, Modal, TextInput, Alert, Share } from 'react-native';
+import { FlatList, ScrollView, Pressable, View, Modal, TextInput, Alert, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from 'tamagui';
 import { Music, Plus, Trash2, ChevronLeft, Share2, ListPlus, Play } from 'lucide-react-native';
@@ -14,6 +14,7 @@ import { Skeleton, SongSkeleton } from '@/components/Skeleton';
 import { usePlaylist, useSongs } from '@/services/data';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore } from '@/store/authStore';
+import { useSharing } from '@/hooks/useSharing';
 import { api } from '@/services/api';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
 import type { Song } from '@/services/types';
@@ -46,12 +47,20 @@ function PlaylistSkeletonView() {
 
 export default function PlaylistDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: playlist, loading, error } = usePlaylist(id);
+  const { data: playlist, loading, error, refetch } = usePlaylist(id);
   const { data: allSongs } = useSongs();
   const current = usePlayerStore((s) => s.current);
   const playSong = usePlayerStore((s) => s.playSong);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNextSong = usePlayerStore((s) => s.playNext);
+  const [refreshing, setRefreshing] = useState(false);
+  const { share } = useSharing();
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   const songs = useMemo(() => {
     if (!playlist) return [];
@@ -133,7 +142,9 @@ export default function PlaylistDetail() {
       await api.updatePlaylist(playlist.id, editTitle, playlistSongIds, token);
       setEditing(false);
       router.back();
-    } catch {}
+    } catch (e) {
+      console.error('Failed to save playlist:', e);
+    }
   }, [playlist, editTitle, playlistSongIds, token]);
 
   const deletePlaylist = useCallback(async () => {
@@ -147,7 +158,9 @@ export default function PlaylistDetail() {
           try {
             await api.deletePlaylist(playlist.id, token);
             router.back();
-          } catch {}
+          } catch (e) {
+            console.error('Failed to delete playlist:', e);
+          }
         },
       },
     ]);
@@ -158,14 +171,10 @@ export default function PlaylistDetail() {
     setShowAddSongModal(false);
   }, []);
 
-  const handleShare = useCallback(async () => {
+  const handleShare = useCallback(() => {
     if (!playlist) return;
-    try {
-      await Share.share({
-        message: `Check out "${playlist.title}" on Muzix — ${songs.length} songs`,
-      });
-    } catch {}
-  }, [playlist, songs.length]);
+    share({ contentType: 'playlist', contentId: playlist.id, title: playlist.title, imageUrl: playlist.imageUrl });
+  }, [playlist, share]);
 
   const handleContextAction = useCallback((action: 'queue' | 'next') => {
     if (!contextSong) return;
@@ -209,7 +218,11 @@ export default function PlaylistDetail() {
         <ChevronLeft size={22} color={TEXT_PRIMARY} />
       </Pressable>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, paddingTop: 64 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 100, paddingTop: 64 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#1DB954" />}
+      >
         <View style={{ position: 'relative', alignItems: 'center', paddingHorizontal: SPACING.xl }}>
           <View style={{ position: 'relative', height: 200, width: 200 }}>
             <Artwork colors={playlist.colors} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} radius={RADIUS.xxl} />

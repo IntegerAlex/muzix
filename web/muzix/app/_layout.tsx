@@ -5,9 +5,15 @@ import { ThemeProvider } from 'expo-router/react-navigation';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
-import { Text, View } from 'react-native';
+import { Text, View, Animated } from 'react-native';
 import { router, usePathname } from 'expo-router';
-import { useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useConnectivity } from '@/hooks/useConnectivity';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useHaptics } from '@/hooks/useHaptics';
+import QueuePanel from '@/components/QueuePanel';
+import { usePlayerStore } from '@/store/playerStore';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { NowPlaying } from '@/components/NowPlaying';
 import { PlayerBridge } from '@/components/PlayerBridge';
@@ -18,7 +24,7 @@ import config from '../tamagui.config';
 import { loadAll } from '@/services/data';
 import { ToastProvider } from '@/components/Toast';
 import { useAuthStore } from '@/store/authStore';
-import { BG, TEXT_PRIMARY, ACCENT, SURFACE_ICON } from '@/lib/colors';
+import { BG, TEXT_PRIMARY, ACCENT, SURFACE_ICON, DANGER, BORDER } from '@/lib/colors';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const PUBLIC_ROUTES = ['/login', '/register'];
@@ -31,6 +37,39 @@ export default function RootLayout() {
 
   const isPublic = PUBLIC_ROUTES.includes(pathname);
   const authed = !!token;
+
+  const [showQueue, setShowQueue] = useState(false);
+  const insets = useSafeAreaInsets();
+
+  useKeyboardShortcuts({
+    onQueue: () => setShowQueue(v => !v),
+    onCloseNowPlaying: () => usePlayerStore.getState().setShowNowPlaying(false),
+  });
+
+  const { isOnline } = useConnectivity();
+  const [offlineAnim] = useState(() => new Animated.Value(0));
+  const [prevOnline, setPrevOnline] = useState(true);
+
+  useEffect(() => {
+    if (!isOnline && prevOnline) {
+      Animated.timing(offlineAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    } else if (isOnline && !prevOnline) {
+      Animated.timing(offlineAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+    }
+    setPrevOnline(isOnline);
+  }, [isOnline]);
+
+  const { impact } = useHaptics();
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleLike = () => { impact('medium'); };
+    window.addEventListener('like-song', handleLike);
+    window.addEventListener('unlike-song', handleLike);
+    return () => {
+      window.removeEventListener('like-song', handleLike);
+      window.removeEventListener('unlike-song', handleLike);
+    };
+  }, [impact]);
 
   useEffect(() => {
     loadAll();
@@ -89,11 +128,31 @@ export default function RootLayout() {
           <StatusBar style="light" />
           <ErrorBoundary>
             <View style={{ flex: 1 }}>
-              <AnimatedBackdrop />
-              <Stack screenOptions={{ headerShown: false }} />
-              <MiniPlayer />
-              <NowPlaying />
-              <PlayerBridge />
+              <Animated.View style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                backgroundColor: DANGER,
+                zIndex: 1000,
+                paddingTop: insets.top,
+                paddingBottom: 8,
+                paddingHorizontal: 16,
+                alignItems: 'center',
+                transform: [{ translateY: offlineAnim.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) }],
+              }}>
+                <Text style={{ color: TEXT_PRIMARY, fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
+                  You're offline — some features may be limited
+                </Text>
+              </Animated.View>
+              <View style={{ flex: 1 }}>
+                <AnimatedBackdrop />
+                <Stack screenOptions={{ headerShown: false }} />
+                <MiniPlayer />
+                <NowPlaying />
+                <PlayerBridge />
+              </View>
+              <QueuePanel visible={showQueue} onClose={() => setShowQueue(false)} />
             </View>
           </ErrorBoundary>
         </ThemeProvider>

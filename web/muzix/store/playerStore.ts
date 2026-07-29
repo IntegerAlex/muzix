@@ -69,6 +69,7 @@ interface PlayerState {
   playNext: (song: Song) => void;
   removeFromQueue: (index: number) => void;
   reorderQueue: (from: number, to: number) => void;
+  clearQueue: () => void;
   shuffleQueue: () => void;
   removeHistoryTop: () => void;
   setVolume: (v: number) => void;
@@ -365,6 +366,11 @@ export const usePlayerStore = create<PlayerState>()(
         }
         set({ queue: newQueue, currentIndex: newIndex });
         saveQueue({ queue: newQueue, currentIndex: newIndex, shuffle: get().shuffle, repeat: get().repeat });
+      },
+
+      clearQueue: () => {
+        set({ queue: [], currentIndex: 0 });
+        saveQueue({ queue: [], currentIndex: 0, shuffle: get().shuffle, repeat: get().repeat });
       },
 
       shuffleQueue: () => {

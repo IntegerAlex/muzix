@@ -12,14 +12,15 @@ import Animated, {
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
-import { Pause, Play, SkipBack, SkipForward } from 'lucide-react-native';
+import { Pause, Play, SkipBack, SkipForward, Share2 } from 'lucide-react-native';
 import { View, Text } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { GlassCard } from '@/components/GlassCard';
 import { usePlayerStore } from '@/store/playerStore';
+import { useSharing } from '@/hooks/useSharing';
 import { formatTime } from '@/lib/utils';
 import { useResponsive } from '@/lib/useResponsive';
-import { SURFACE_ICON, SURFACE_ELEVATED, TEXT_PRIMARY } from '@/lib/colors';
+import { SURFACE_ICON, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_MUTED } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 
 const TAB_BAR_HEIGHT = 64;
@@ -41,6 +42,7 @@ export function MiniPlayer() {
   const [elapsedText, setElapsedText] = useState('0:00');
   const [progressPct, setProgressPct] = useState(0);
   const { isDesktop } = useResponsive();
+  const { share } = useSharing();
 
   const isLoading = current ? loadingId === current.id : false;
 
@@ -162,6 +164,14 @@ export function MiniPlayer() {
             </Pressable>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Pressable
+                onPress={() => share({ contentType: 'song', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl })}
+                style={{ alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}
+                hitSlop={8}
+                accessibilityLabel="Share"
+              >
+                <Share2 size={18} color={TEXT_MUTED} />
+              </Pressable>
+              <Pressable
                 onPress={() => previous()}
                 style={{
                   alignItems: 'center',
@@ -240,6 +250,14 @@ export function MiniPlayer() {
               ) : (
                 <Text fontSize={10} color="rgba(255,255,255,0.3)" style={{ marginRight: 4 }}>{elapsedText}</Text>
               )}
+            </Pressable>
+            <Pressable
+              onPress={() => share({ contentType: 'song', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl })}
+              style={{ alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}
+              hitSlop={8}
+              accessibilityLabel="Share"
+            >
+              <Share2 size={18} color={TEXT_MUTED} />
             </Pressable>
             <Pressable
                 onPress={() => setPlaying(!isPlaying)}

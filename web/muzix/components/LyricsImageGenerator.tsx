@@ -8,6 +8,7 @@ interface LyricsImageGeneratorProps {
   artist: string;
   imageUrl?: string;
   colors?: [string, string];
+  timestamp?: string;
 }
 
 const { width: screenW, height: screenH } = Dimensions.get('window');
@@ -21,7 +22,7 @@ const FONT_FAMILY = Platform.select({
 });
 
 export const LyricsImageGenerator = forwardRef<View, LyricsImageGeneratorProps>(
-  function LyricsImageGenerator({ lines, title, artist, imageUrl, colors }, ref) {
+  function LyricsImageGenerator({ lines, title, artist, imageUrl, colors, timestamp }, ref) {
     const [c0, c1] = colors ?? ['#1DB954', '#0a0a0a'];
 
     return (
@@ -43,6 +44,9 @@ export const LyricsImageGenerator = forwardRef<View, LyricsImageGeneratorProps>(
               <Text key={i} style={styles.lyricLine}>{line}</Text>
             ))}
           </View>
+          {timestamp && timestamp > '0:00' && (
+            <Text style={styles.timestamp}>{timestamp}</Text>
+          )}
           <Text style={styles.songTitle} numberOfLines={2}>{title}</Text>
           <Text style={styles.artistName} numberOfLines={1}>{artist}</Text>
         </View>
@@ -91,6 +95,14 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILY,
     letterSpacing: -0.5,
     lineHeight: 64,
+  },
+  timestamp: {
+    position: 'absolute',
+    bottom: '13%',
+    right: '5%',
+    fontSize: 14,
+    color: 'white',
+    fontFamily: FONT_FAMILY,
   },
   songTitle: {
     position: 'absolute',
