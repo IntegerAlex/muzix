@@ -117,6 +117,7 @@ export async function loadAll(): Promise<void> {
       _playlists = playlistsRaw.map(mapPlaylist);
       rebuildMaps();
       _emitVersionChange();
+      await new Promise((r) => setTimeout(r, 0));
 
       await loadSongs();
 
@@ -148,6 +149,7 @@ async function loadSongs(): Promise<void> {
     offset += chunk.length;
     hasMore = chunk.length === chunkSize;
     _emitVersionChange();
+    await new Promise((r) => setTimeout(r, 0));
   }
 }
 
