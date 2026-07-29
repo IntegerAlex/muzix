@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable } from 'react-native';
-import { Interactive } from 'interactkit';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useAnimatedReaction,
@@ -156,8 +156,7 @@ export function MiniPlayer() {
               <Text fontSize={10} color="rgba(255,255,255,0.3)" style={{ marginRight: 4 }}>{elapsedText}</Text>
             )}
           </Pressable>
-          <Interactive hover={{ sound: "bubble-pop-01", volume: 0.4 }} click={{ sound: "bubble-pop-01", volume: 0.6 }}>
-            <Pressable
+          <Pressable
               onPress={() => setPlaying(!isPlaying)}
               style={{
                 alignItems: 'center',
@@ -179,7 +178,6 @@ export function MiniPlayer() {
                 <Play size={18} color="white" style={{ marginLeft: 2 }} />
               )}
             </Pressable>
-          </Interactive>
         </View>
       </GlassCard>
     </Animated.View>

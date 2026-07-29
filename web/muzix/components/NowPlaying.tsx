@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image } from 'react-native';
-import { Interactive } from 'interactkit';
+
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -322,8 +322,7 @@ export function NowPlaying() {
               <SkipBack size={30} color="white" fill="white" />
             </Pressable>
 
-            <Interactive hover={{ sound: "bubble-pop-01", volume: 0.5 }} click={{ sound: "success-03", volume: 0.9 }}>
-              <Pressable
+            <Pressable
                 onPress={() => setPlaying(!isPlaying)}
                 style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 9999, backgroundColor: 'white', width: 64, height: 64 }}
                 hitSlop={12}
@@ -338,7 +337,6 @@ export function NowPlaying() {
                   <Play size={28} color="#000" fill="#000" style={{ marginLeft: 3 }} />
                 )}
               </Pressable>
-            </Interactive>
 
             <Pressable onPress={next} hitSlop={12} accessibilityLabel="Next track" accessibilityRole="button">
               <SkipForward size={30} color="white" fill="white" />

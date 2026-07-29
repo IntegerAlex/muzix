@@ -31,7 +31,7 @@
     "expo-splash-screen": "~56.0.11",
     "expo-status-bar": "~56.0.4",
     "expo-system-ui": "~56.0.5",
-    "interactkit": "^0.2.1",
+
     "lucide-react-native": "^1.21.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",

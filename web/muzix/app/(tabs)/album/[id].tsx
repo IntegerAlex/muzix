@@ -4,7 +4,7 @@ import { ScrollView, Pressable, View, Share } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from 'tamagui';
 import { Music, ChevronLeft, Share2, Shuffle, Play } from 'lucide-react-native';
-import { Interactive } from 'interactkit';
+
 import { GlassCard } from '@/components/GlassCard';
 import { RADIUS } from '@/lib/sizing';
 import { Artwork } from '@/components/Artwork';
@@ -146,7 +146,6 @@ export default function AlbumDetail() {
             >
               <Shuffle size={14} color={TEXT_PRIMARY} />
             </Pressable>
-            <Interactive click={{ sound: "bubble-pop-01", volume: 0.6 }}>
               <Pressable
                 onPress={() => { if (songs.length === 0) return; playSong(songs[0], songs, 0); }}
                 style={{ borderRadius: 9999, backgroundColor: 'white', paddingHorizontal: 24, paddingVertical: 10 }}
@@ -156,7 +155,6 @@ export default function AlbumDetail() {
               >
                 <Text fontSize={13} fontWeight="700" color="black">Play</Text>
               </Pressable>
-            </Interactive>
           </View>
         </GlassCard>
 
