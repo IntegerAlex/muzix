@@ -400,7 +400,12 @@ export const usePlayerStore = create<PlayerState>()(
     }),
     {
       name: 'player-liked-songs',
-      partialize: (state) => ({ likedSongs: state.likedSongs }),
+      partialize: (state) => ({
+        likedSongs: state.likedSongs,
+        recentlyPlayed: state.recentlyPlayed,
+        totalPlays: state.totalPlays,
+        totalListeningMs: state.totalListeningMs,
+      }),
     }
   )
 );
