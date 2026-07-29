@@ -16,13 +16,15 @@ import Animated, {
 import {
   Pause, Play, SkipBack, SkipForward, ChevronDown,
   Shuffle, Repeat, Repeat1, Heart,
-  VolumeX, Volume2, AlertCircle, Maximize2, Minimize2,
+  VolumeX, Volume2, AlertCircle, Maximize2, Minimize2, Share2,
 } from 'lucide-react-native';
 import { View, Text } from 'tamagui';
 import { useShallow } from 'zustand/react/shallow';
 import { Artwork } from '@/components/Artwork';
 import { GlassCard } from '@/components/GlassCard';
 import { LyricsPanel } from '@/components/LyricsPanel';
+import { LyricsImageGenerator } from '@/components/LyricsImageGenerator';
+import { useLyricsSharing } from '@/hooks/useLyricsSharing';
 import { usePlayerStore } from '@/store/playerStore';
 import type { Song } from '@/services/types';
 import { formatTime } from '@/lib/utils';
@@ -67,6 +69,8 @@ export function NowPlaying() {
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubValue, setScrubValue] = useState(0);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
+  const [selectedLyrics, setSelectedLyrics] = useState<string[]>([]);
+  const { imageRef, share } = useLyricsSharing();
 
   const isLiked = current ? !!likedSongs[current.id] : false;
 
@@ -137,6 +141,22 @@ export function NowPlaying() {
       progress.value = withTiming(1, { duration: remainingMs, easing: Easing.linear });
     }
   }, [seekPosition, current, isPlaying, progress, loadingId]);
+
+  useEffect(() => {
+    if (selectedLyrics.length > 0) {
+      const timer = setTimeout(() => {
+        share().then(() => setSelectedLyrics([]));
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedLyrics, share]);
+
+  const handleShareLyrics = useCallback(
+    (selectedTexts: string[]) => {
+      setSelectedLyrics(selectedTexts);
+    },
+    []
+  );
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],
@@ -401,6 +421,7 @@ export function NowPlaying() {
                         setSeekPosition(t / (current.durationMs / 1000));
                       }
                     }}
+                    onShare={handleShareLyrics}
                   />
                 </GlassCard>
               )}
@@ -408,6 +429,16 @@ export function NowPlaying() {
           )}
         </ScrollView>
       </View>
+      {current && (
+        <LyricsImageGenerator
+          ref={imageRef}
+          lines={selectedLyrics}
+          title={current.title}
+          artist={current.artist}
+          imageUrl={current.imageUrl}
+          colors={current.colors}
+        />
+      )}
     </View>
   );
 }

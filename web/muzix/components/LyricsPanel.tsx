@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { ScrollView, Pressable, Text, View } from 'react-native';
+import { ScrollView, Pressable, Text, View, Alert } from 'react-native';
 import Animated, { useSharedValue, withTiming, Easing, useAnimatedStyle } from 'react-native-reanimated';
+import { Check, Share2, X } from 'lucide-react-native';
 import { GlassCard } from '@/components/GlassCard';
 
 interface LyricLine {
@@ -13,6 +14,7 @@ interface LyricsPanelProps {
   currentTime: number; // seconds
   duration: number; // seconds
   onSeek?: (time: number) => void;
+  onShare?: (selectedTexts: string[]) => void;
 }
 
 function parseLRC(lrc: string): LyricLine[] {
@@ -44,13 +46,15 @@ function plainTextToLines(text: string): LyricLine[] {
     }));
 }
 
-export function LyricsPanel({ lyrics, currentTime, duration, onSeek }: LyricsPanelProps) {
+export function LyricsPanel({ lyrics, currentTime, duration, onSeek, onShare }: LyricsPanelProps) {
   const [lines, setLines] = useState<LyricLine[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [userScrolling, setUserScrolling] = useState(false);
   const scrollTimeout = useRef<ReturnType<typeof setTimeout>>(undefined);
   const listRef = useRef<ScrollView>(null);
   const lineRefs = useRef(new Map<number, View>());
+  const [shareMode, setShareMode] = useState(false);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!lyrics) {
@@ -95,12 +99,47 @@ export function LyricsPanel({ lyrics, currentTime, duration, onSeek }: LyricsPan
   }, []);
 
   const handleLinePress = useCallback(
-    (time: number) => {
-      onSeek?.(time);
-      setUserScrolling(false);
+    (time: number, index: number) => {
+      if (shareMode) {
+        setSelectedIndices((prev) => {
+          const next = new Set(prev);
+          if (next.has(index)) {
+            next.delete(index);
+          } else {
+            next.add(index);
+          }
+          return next;
+        });
+      } else {
+        onSeek?.(time);
+        setUserScrolling(false);
+      }
     },
-    [onSeek]
+    [onSeek, shareMode]
   );
+
+  const handleShareConfirm = useCallback(() => {
+    const selected = Array.from(selectedIndices)
+      .sort((a, b) => a - b)
+      .map((i) => lines[i].text);
+    if (selected.length === 0) {
+      Alert.alert('No lines selected', 'Tap on lyrics lines to select them before sharing.');
+      return;
+    }
+    onShare?.(selected);
+    setShareMode(false);
+    setSelectedIndices(new Set());
+  }, [selectedIndices, lines, onShare]);
+
+  const handleShareCancel = useCallback(() => {
+    setShareMode(false);
+    setSelectedIndices(new Set());
+  }, []);
+
+  const toggleShareMode = useCallback(() => {
+    setShareMode((v) => !v);
+    setSelectedIndices(new Set());
+  }, []);
 
   if (lines.length === 0) {
     return (
@@ -113,36 +152,75 @@ export function LyricsPanel({ lyrics, currentTime, duration, onSeek }: LyricsPan
   }
 
   return (
-    <ScrollView
-      ref={listRef}
-      style={{ maxHeight: 300 }}
-      showsVerticalScrollIndicator={false}
-      onScrollBeginDrag={handleScrollBegin}
-      onMomentumScrollEnd={handleScrollEnd}
-      scrollEventThrottle={16}
-    >
-      <View style={{ paddingVertical: 20 }}>
-        {lines.map((line, i) => {
-          const isActive = i === activeIndex;
-          const isPast = i < activeIndex;
+    <View>
+      {shareMode ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4, paddingBottom: 8 }}>
+          <Pressable onPress={handleShareCancel} hitSlop={8} accessibilityLabel="Cancel" accessibilityRole="button">
+            <Text style={{ fontSize: 13, fontWeight: '500', color: 'rgba(255,255,255,0.5)' }}>Cancel</Text>
+          </Pressable>
+          <Text style={{ fontSize: 13, fontWeight: '600', color: 'rgba(255,255,255,0.7)' }}>
+            {selectedIndices.size} selected
+          </Text>
+          <Pressable onPress={handleShareConfirm} hitSlop={8} accessibilityLabel="Share" accessibilityRole="button">
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#1DB954', borderRadius: 9999, paddingHorizontal: 14, paddingVertical: 6 }}>
+              <Share2 size={12} color="white" />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: 'white' }}>Share</Text>
+            </View>
+          </Pressable>
+        </View>
+      ) : onShare && (
+        <View style={{ alignItems: 'flex-end', paddingBottom: 4 }}>
+          <Pressable onPress={toggleShareMode} hitSlop={8} accessibilityLabel="Share lyrics" accessibilityRole="button">
+            <Share2 size={16} color="rgba(255,255,255,0.35)" />
+          </Pressable>
+        </View>
+      )}
+      <ScrollView
+        ref={listRef}
+        style={{ maxHeight: 300 }}
+        showsVerticalScrollIndicator={false}
+        onScrollBeginDrag={handleScrollBegin}
+        onMomentumScrollEnd={handleScrollEnd}
+        scrollEventThrottle={16}
+        scrollEnabled={!shareMode}
+      >
+        <View style={{ paddingVertical: 20 }}>
+          {lines.map((line, i) => {
+            const isActive = i === activeIndex;
+            const isPast = i < activeIndex;
 
-          return (
-            <Pressable
-              key={`${i}-${line.time}`}
-              ref={(ref) => { if (ref) lineRefs.current.set(i, ref); }}
-              onPress={() => handleLinePress(line.time)}
-              style={{ paddingVertical: 6, paddingHorizontal: 4 }}
-            >
-              <AnimatedLine
-                text={line.text}
-                isActive={isActive}
-                isPast={isPast}
-              />
-            </Pressable>
-          );
-        })}
-      </View>
-    </ScrollView>
+            return (
+              <Pressable
+                key={`${i}-${line.time}`}
+                ref={(ref) => { if (ref) lineRefs.current.set(i, ref); }}
+                onPress={() => handleLinePress(line.time, i)}
+                style={{ paddingVertical: 6, paddingHorizontal: 4 }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {shareMode && (
+                    <View style={{
+                      width: 20, height: 20, borderRadius: 4, borderWidth: 2,
+                      borderColor: selectedIndices.has(i) ? '#1DB954' : 'rgba(255,255,255,0.3)',
+                      backgroundColor: selectedIndices.has(i) ? '#1DB954' : 'transparent',
+                      justifyContent: 'center', alignItems: 'center',
+                    }}>
+                      {selectedIndices.has(i) && <Check size={14} color="white" strokeWidth={3} />}
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <AnimatedLine
+                      text={line.text}
+                      isActive={isActive}
+                      isPast={isPast}
+                    />
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
