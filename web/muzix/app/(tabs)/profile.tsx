@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, ActivityIndicator } from 'react-native';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { View, Text } from 'tamagui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -8,8 +8,7 @@ import { AnimatedBackdrop } from '@/components/AnimatedBackdrop';
 import { Artwork } from '@/components/Artwork';
 import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
-import { api, type ApiSong, type SkipRateItem } from '@/services/api';
-import { mapSong } from '@/services/data';
+import { api } from '@/services/api';
 import type { Song } from '@/services/types';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
@@ -18,15 +17,8 @@ import { RADIUS } from '@/lib/sizing';
 interface Stats {
   totalPlays: number;
   totalListeningMs: number;
-  totalListeningHours: number;
   likedCount: number;
   playlistCount: number;
-}
-
-interface RecentItem {
-  playedAt: string;
-  songId: string;
-  song?: ApiSong;
 }
 
 function StatCard({ icon: Icon, value, label, color, subtitle }: {
@@ -121,6 +113,50 @@ function TopSongRow({ song, index, rank }: { song: Song; index: number; rank: nu
   );
 }
 
+function toColors(raw: string[]): [string, string] {
+  return [raw?.[0] ?? '#6d28d9', raw?.[1] ?? '#db2777'];
+}
+
+interface AnalyticsSong {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration_ms: number;
+  colors: string[];
+  artist_id?: string;
+  album_id?: string;
+  image_url?: string;
+}
+
+interface AnalyticsItem {
+  song: AnalyticsSong;
+  play_count: number;
+  total_listening_ms: number;
+  sessions: number;
+}
+
+interface ActivityItem {
+  played_at: string;
+  song_id: string;
+  song?: AnalyticsSong;
+}
+
+function mapAnalyticsSong(s: AnalyticsSong): Song {
+  return {
+    id: s.id,
+    title: s.title,
+    artist: s.artist,
+    artistId: s.artist_id,
+    album: s.album,
+    albumId: s.album_id,
+    duration: '',
+    durationMs: s.duration_ms,
+    colors: toColors(s.colors),
+    imageUrl: s.image_url,
+  };
+}
+
 function formatListeningTime(ms: number): string {
   const totalMinutes = Math.floor(ms / 60000);
   if (totalMinutes < 60) return `${totalMinutes}m`;
@@ -195,25 +231,22 @@ export default function ProfileScreen() {
 
         if (cancelled) return;
 
-        const topItems = (topRes?.items ?? []) as SkipRateItem[];
-        const topSongsMapped = topItems.map((item) => mapSong(item.song));
+        const topItems = (topRes?.items ?? []) as AnalyticsItem[];
+        const topSongsMapped = topItems.map((item) => mapAnalyticsSong(item.song));
         const songMap = new Map(topSongsMapped.map((s) => [s.id, s]));
 
-        const recentSongIds = (recentRes?.items ?? []).map((item: RecentItem) => item.songId ?? item.song?.id).filter(Boolean);
+        const recentItems = (recentRes?.items ?? []) as ActivityItem[];
+        const recentSongIds = recentItems.map((item) => item.song_id ?? item.song?.id).filter(Boolean);
         const recentSongsMapped = recentSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
         const likedSongIds = likesRes?.songIds ?? [];
         const likedSongsMapped = likedSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
 
-        const totalPlays = topItems.reduce((sum, item) => sum + Number(item.playCount ?? 0), 0);
-        const avgMs = topSongsMapped.length > 0
-          ? topSongsMapped.reduce((sum, s) => sum + (s.durationMs || 0), 0) / topSongsMapped.length
-          : 180000;
-        const estimatedListeningMs = totalPlays * avgMs;
+        const totalPlays = topItems.reduce((sum, item) => sum + Number(item.play_count ?? 0), 0);
+        const totalListeningMs = topItems.reduce((sum, item) => sum + Number(item.total_listening_ms ?? 0), 0);
 
         setStats({
           totalPlays,
-          totalListeningMs: estimatedListeningMs,
-          totalListeningHours: Math.floor(estimatedListeningMs / 3600000),
+          totalListeningMs,
           likedCount: likedSongIds.length,
           playlistCount: (playlistsRes ?? []).length,
         });
