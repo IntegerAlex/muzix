@@ -19,10 +19,9 @@ import { loadAll } from '@/services/data';
 import { ToastProvider } from '@/components/Toast';
 import { useAuthStore } from '@/store/authStore';
 import { BG, TEXT_PRIMARY, ACCENT, SURFACE_ICON } from '@/lib/colors';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const PUBLIC_ROUTES = ['/login', '/register'];
-
-export { ErrorBoundary } from 'expo-router';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -88,13 +87,15 @@ export default function RootLayout() {
       <ToastProvider>
         <ThemeProvider value={NAV_THEME[(colorScheme ?? 'light') as 'light' | 'dark']}>
           <StatusBar style="light" />
-          <View style={{ flex: 1 }}>
-            <AnimatedBackdrop />
-            <Stack screenOptions={{ headerShown: false }} />
-            <MiniPlayer />
-            <NowPlaying />
-            <PlayerBridge />
-          </View>
+          <ErrorBoundary>
+            <View style={{ flex: 1 }}>
+              <AnimatedBackdrop />
+              <Stack screenOptions={{ headerShown: false }} />
+              <MiniPlayer />
+              <NowPlaying />
+              <PlayerBridge />
+            </View>
+          </ErrorBoundary>
         </ThemeProvider>
       </ToastProvider>
     </TamaguiProvider>

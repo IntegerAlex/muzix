@@ -25,10 +25,12 @@ function handleAuthError() {
 }
 
 export type ErrorKind = 'NetworkError' | 'AuthError' | 'ServerError' | 'ValidationError';
+export type ErrorSeverity = 'fatal' | 'recoverable' | 'info';
 
 export class ApiError extends Error {
   status: number;
   kind: ErrorKind;
+  severity: ErrorSeverity;
   retryable: boolean;
 
   constructor(status: number, message: string, kind: ErrorKind) {
@@ -36,6 +38,7 @@ export class ApiError extends Error {
     this.name = 'ApiError';
     this.status = status;
     this.kind = kind;
+    this.severity = status >= 500 ? 'fatal' : status >= 400 ? 'recoverable' : 'info';
     this.retryable = kind === 'NetworkError' || (status >= 500 && status < 600);
   }
 }
@@ -364,4 +367,9 @@ export const api = {
      requestAuthed<SourceEffectiveness>(`/analytics/user/source-effectiveness?period=${period}`, token),
    bingeIndex: (period: string, token: string) =>
      requestAuthed<BingeIndex>(`/analytics/user/binge-index?period=${period}`, token),
+
+  logError(error: Error, context: string) {
+    console.error(`[MUZIX API] ${context}:`, error);
+    // TODO: Integrate with Sentry or similar
+  },
 };

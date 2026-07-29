@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { View, Text } from 'tamagui';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useAuthStore, login as apiLogin } from '@/store/authStore';
 import { useToast } from '@/components/Toast';
 import { AnimatedBackdrop } from '@/components/AnimatedBackdrop';
-import { BG, SURFACE, SURFACE_ELEVATED, SURFACE_ICON, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS, BORDER, DANGER } from '@/lib/colors';
+import { BG, SURFACE, SURFACE_ICON, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS, BORDER, DANGER, SURFACE_ELEVATED } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
 
-interface FieldProps {
+function Field({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, autoComplete, autoFocus, icon }: {
   label: string;
   value: string;
   onChangeText: (t: string) => void;
@@ -20,19 +19,18 @@ interface FieldProps {
   autoCapitalize?: 'none' | 'words' | 'sentences' | 'characters';
   autoComplete?: string;
   autoFocus?: boolean;
-}
-
-function Field({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, autoComplete, autoFocus }: FieldProps) {
+  icon?: string;
+}) {
   const [focused, setFocused] = useState(false);
 
   return (
-    <View style={{ marginBottom: 16 }}>
+    <View style={{ marginBottom: 14 }}>
       <Text style={{
-        fontSize: 13,
-        fontWeight: '500',
-        color: focused ? ACCENT : TEXT_MUTED,
-        marginBottom: 8,
-        letterSpacing: 0.3,
+        fontSize: 12,
+        fontWeight: '600',
+        color: TEXT_MUTED,
+        marginBottom: 6,
+        letterSpacing: 0.5,
         textTransform: 'uppercase',
       }}>
         {label}
@@ -41,7 +39,7 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, keybo
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="rgba(255,255,255,0.2)"
+        placeholderTextColor="rgba(255,255,255,0.15)"
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
@@ -51,14 +49,13 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, keybo
         onBlur={() => setFocused(false)}
         style={{
           backgroundColor: INPUT_BG,
-          borderRadius: 12,
+          borderRadius: 10,
           borderWidth: 1,
           borderColor: focused ? INPUT_BORDER_FOCUS : INPUT_BORDER,
           paddingHorizontal: SPACING.lg,
-          paddingVertical: SPACING.md,
-          fontSize: 16,
+          paddingVertical: 13,
+          fontSize: 15,
           color: TEXT_PRIMARY,
-          letterSpacing: 0.2,
         }}
       />
     </View>
@@ -100,39 +97,32 @@ export default function LoginScreen() {
       <AnimatedBackdrop />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 }}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: SPACING.xxl, paddingVertical: SPACING.xxxl }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Logo + Heading */}
-          <View style={{ alignItems: 'center', marginBottom: 48 }}>
-            <LinearGradient
-              colors={[ACCENT, '#134E3A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{
-                width: 72, height: 72, borderRadius: 20,
-                alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 6px 20px rgba(29,185,84,0.35)',
-                elevation: 10,
-              }}
-            >
-              <Text style={{ fontSize: 32, fontWeight: '700', color: 'white', letterSpacing: -1 }}>M</Text>
-            </LinearGradient>
-            <Text style={{ fontSize: 28, fontWeight: '700', color: TEXT_PRIMARY, marginTop: 28, letterSpacing: -0.5 }}>
-              Welcome back
+          <View style={{ alignItems: 'center', marginBottom: SPACING.xxl }}>
+            <View style={{
+              width: 64, height: 64, borderRadius: 18,
+              backgroundColor: ACCENT,
+              alignItems: 'center', justifyContent: 'center',
+              marginBottom: SPACING.lg,
+            }}>
+              <Text style={{ fontSize: 28, fontWeight: '800', color: 'white', letterSpacing: -1 }}>M</Text>
+            </View>
+            <Text style={{ fontSize: 24, fontWeight: '700', color: TEXT_PRIMARY, letterSpacing: -0.3 }}>
+              Sign in to Muzix
             </Text>
-            <Text style={{ fontSize: 15, color: TEXT_SECONDARY, marginTop: 6 }}>
-              Sign in to continue listening
+            <Text style={{ fontSize: 14, color: TEXT_SECONDARY, marginTop: SPACING.xs }}>
+              Welcome back! Enter your details.
             </Text>
           </View>
 
-          {/* Form */}
           <View style={{
             backgroundColor: SURFACE,
-            borderRadius: RADIUS.xl,
+            borderRadius: RADIUS.lg,
             borderWidth: 1,
             borderColor: BORDER,
-            padding: 24,
+            padding: SPACING.xl,
           }}>
             <Field
               label="Email"
@@ -153,47 +143,99 @@ export default function LoginScreen() {
               autoComplete="password"
             />
 
-            {/* Error */}
             {error ? (
               <View style={{
                 backgroundColor: SURFACE_ELEVATED,
-                borderRadius: 10,
+                borderRadius: 8,
                 borderWidth: 1,
                 borderColor: DANGER,
-                paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
-                marginBottom: 16,
+                paddingHorizontal: SPACING.md,
+                paddingVertical: SPACING.sm,
+                marginBottom: SPACING.md,
               }}>
-                <Text style={{ fontSize: 13, color: '#f43f5e', textAlign: 'center' }}>{error}</Text>
+                <Text style={{ fontSize: 13, color: DANGER, textAlign: 'center' }}>{error}</Text>
               </View>
             ) : null}
 
-            {/* Submit */}
             <Pressable
               onPress={handleLogin}
               disabled={!canSubmit}
               style={({ pressed }) => ({
                 backgroundColor: canSubmit ? ACCENT : SURFACE_ICON,
-                borderRadius: 12,
-                paddingVertical: SPACING.md,
+                borderRadius: 10,
+                paddingVertical: 13,
                 alignItems: 'center',
+                justifyContent: 'center',
+                opacity: busy ? 0.7 : 1,
                 transform: [{ scale: pressed ? 0.98 : 1 }],
               })}
               accessibilityLabel={busy ? 'Signing in...' : 'Sign In'}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canSubmit }}
             >
-              <Text style={{
-                fontSize: 16,
-                fontWeight: '700',
-                color: canSubmit ? 'white' : 'rgba(255,255,255,0.4)',
-                letterSpacing: 0.3,
-              }}>
-                {busy ? 'Signing in...' : 'Sign In'}
-              </Text>
+              {busy ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={{
+                  fontSize: 15,
+                  fontWeight: '700',
+                  color: canSubmit ? 'white' : TEXT_MUTED,
+                }}>
+                  Sign In
+                </Text>
+              )}
             </Pressable>
           </View>
 
-          {/* Footer link */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: SPACING.xxl, gap: SPACING.lg }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: BORDER }} />
+            <Text style={{ fontSize: 13, color: TEXT_MUTED }}>or continue with</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: BORDER }} />
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.lg }}>
+            <Pressable
+              style={({ pressed }) => ({
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: SURFACE,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: BORDER,
+                paddingVertical: 12,
+                opacity: pressed ? 0.7 : 1,
+              })}
+              accessibilityLabel="Sign in with Google"
+              accessibilityRole="button"
+            >
+              <Text style={{ fontSize: 18 }}>G</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: TEXT_SECONDARY }}>Google</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => ({
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: SURFACE,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: BORDER,
+                paddingVertical: 12,
+                opacity: pressed ? 0.7 : 1,
+              })}
+              accessibilityLabel="Sign in with GitHub"
+              accessibilityRole="button"
+            >
+              <Text style={{ fontSize: 18 }}>⌘</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: TEXT_SECONDARY }}>GitHub</Text>
+            </Pressable>
+          </View>
+
           <Pressable
             onPress={() => router.push('/register')}
             style={{ alignItems: 'center', marginTop: SPACING.xxl }}
@@ -202,7 +244,7 @@ export default function LoginScreen() {
           >
             <Text style={{ fontSize: 14, color: TEXT_MUTED }}>
               Don't have an account?{' '}
-              <Text style={{ color: ACCENT, fontWeight: '700' }}>Create one</Text>
+              <Text style={{ color: ACCENT, fontWeight: '700' }}>Sign up</Text>
             </Text>
           </Pressable>
         </ScrollView>

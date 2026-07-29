@@ -11,7 +11,7 @@ from typing import Literal
 
 import jwt
 from fastapi import Depends, Header, HTTPException, Request
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import ORJSONResponse, Response
 from pydantic import BaseModel, field_validator
 
 from config import (
@@ -100,17 +100,18 @@ def compute_etag(data: dict | list) -> str:
     return hashlib.sha256(serialized).hexdigest()[:32]
 
 
-def make_cached_response(body: dict, request: Request) -> ORJSONResponse:
+def make_cached_response(body: dict, request: Request) -> Response:
+    serialized = orjson.dumps(body)
     if_none_match = request.headers.get("If-None-Match")
     if not if_none_match:
         etag = compute_etag(body.get("data"))
-        return ORJSONResponse(content=body, headers={"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"})
+        return Response(content=serialized, media_type="application/json", headers={"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"})
     raw_data = body.get("data")
     etag = compute_etag(raw_data)
     cache_headers = {"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"}
     if if_none_match.strip('"') == etag:
         raise HTTPException(status_code=304, headers=cache_headers)
-    return ORJSONResponse(content=body, headers=cache_headers)
+    return Response(content=serialized, media_type="application/json", headers=cache_headers)
 
 
 # ---------------------------------------------------------------------------

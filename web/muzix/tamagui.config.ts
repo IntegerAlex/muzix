@@ -65,6 +65,12 @@ const tamaguiConfig = createTamagui({
     ...defaultConfig.tokens,
     ...customTokens,
   },
+  media: {
+    sm: { maxWidth: 640 },
+    md: { maxWidth: 768 },
+    lg: { maxWidth: 1023 },
+    xl: { minWidth: 1024 },
+  },
 });
 
 export default tamaguiConfig;

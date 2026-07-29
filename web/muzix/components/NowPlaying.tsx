@@ -30,9 +30,13 @@ import type { Song } from '@/services/types';
 import { formatTime } from '@/lib/utils';
 import { SURFACE_ICON, BORDER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
+import { useResponsive } from '@/lib/useResponsive';
 
 export function NowPlaying() {
   const insets = useSafeAreaInsets();
+  const { orientation, isDesktop, isTablet, isMobile, width } = useResponsive();
+  const isLandscape = orientation === 'landscape';
+  const isWide = (isTablet || isDesktop) && isLandscape;
   const [showLyrics, setShowLyrics] = useState(false);
 
   const { current, loadingId, error } = usePlayerStore(
@@ -173,6 +177,291 @@ export function NowPlaying() {
   }));
 
   if (!current || !showNowPlaying) return null;
+
+  if (isWide) {
+    return (
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50 }}>
+        <Pressable
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)' }}
+          onPress={() => setShowNowPlaying(false)}
+        />
+        <View style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          paddingTop: insets.top, paddingBottom: insets.bottom,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm }}>
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 9999, backgroundColor: SURFACE_ICON, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }}
+              onPress={() => setShowNowPlaying(false)}
+            >
+              <ChevronDown size={18} color="rgba(255,255,255,0.7)" />
+              <Text fontSize={13} fontWeight="500" color="rgba(255,255,255,0.7)">Dismiss</Text>
+            </Pressable>
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Text fontSize={13} fontWeight="600" color="rgba(255,255,255,0.8)" numberOfLines={1}>
+                {current.album}
+              </Text>
+            </View>
+            <View style={{ width: 64 }} />
+          </View>
+
+          <View style={{ flex: 1, flexDirection: 'row', paddingHorizontal: SPACING.xl }}>
+            <View style={{ flex: 0.4, justifyContent: 'center', alignItems: 'center', paddingRight: SPACING.xl }}>
+              <Animated.View style={pulseStyle}>
+                <Artwork
+                  source={current.imageUrl ? { uri: current.imageUrl } : undefined}
+                  colors={current.colors}
+                  style={{ height: 240, width: 240, borderRadius: 24 }}
+                  radius={24}
+                />
+              </Animated.View>
+              <View style={{ marginTop: SPACING.lg, alignItems: 'center', width: '100%' }}>
+                <Text fontSize={20} fontWeight="700" letterSpacing={-0.5} color="white" numberOfLines={1}>
+                  {current.title}
+                </Text>
+                <Text fontSize={14} fontWeight="500" color="rgba(255,255,255,0.5)" numberOfLines={1}>
+                  {current.artist}
+                </Text>
+              </View>
+
+              {error ? (
+                <View style={{ marginTop: 24, alignItems: 'center', gap: 12 }}>
+                  <AlertCircle size={32} color="#f43f5e" />
+                  <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", textAlign: "center" }}>{error}</Text>
+                  <Pressable
+                    onPress={retry}
+                    style={{ backgroundColor: SURFACE_ICON, borderRadius: 9999, paddingHorizontal: 24, paddingVertical: 10 }}
+                  >
+                    <Text fontSize={14} fontWeight="600" color="white">Retry</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={{ marginTop: SPACING.lg, width: '100%' }}>
+                  <Slider
+                    minimumValue={0}
+                    maximumValue={1}
+                    minimumTrackTintColor="white"
+                    maximumTrackTintColor="rgba(255,255,255,0.12)"
+                    thumbTintColor="white"
+                    value={scrubbing ? scrubValue : progressPct / 100}
+                    onSlidingStart={(v) => { setScrubbing(true); setScrubValue(v); }}
+                    onValueChange={(v) => setScrubValue(v)}
+                    onSlidingComplete={(v) => {
+                      setScrubbing(false);
+                      setSeekPosition(v);
+                      setProgressPct(Math.round(v * 100));
+                      if (current) setElapsedText(formatTime(v * current.durationMs));
+                    }}
+                    style={{ flex: 1, height: 28 }}
+                  />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text fontSize={11} fontWeight="500" color="rgba(255,255,255,0.4)">
+                      {scrubbing ? formatTime(scrubValue * current.durationMs) : elapsedText}
+                    </Text>
+                    <Text fontSize={11} fontWeight="500" color="rgba(255,255,255,0.4)">{current.duration}</Text>
+                  </View>
+                </View>
+              )}
+
+              <View style={{ marginTop: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28 }}>
+                <Pressable onPress={toggleShuffle} hitSlop={12}>
+                  <Shuffle size={18} color={shuffle ? '#1DB954' : 'rgba(255,255,255,0.35)'} strokeWidth={shuffle ? 2.5 : 1.8} />
+                </Pressable>
+                <Pressable onPress={previous} hitSlop={12}>
+                  <SkipBack size={26} color="white" fill="white" />
+                </Pressable>
+                <Pressable
+                  onPress={() => setPlaying(!isPlaying)}
+                  style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 9999, backgroundColor: 'white', width: 56, height: 56 }}
+                  hitSlop={12}
+                >
+                  {loadingId === current.id ? (
+                    <ActivityIndicator color="#000" />
+                  ) : isPlaying ? (
+                    <Pause size={24} color="#000" fill="#000" />
+                  ) : (
+                    <Play size={24} color="#000" fill="#000" style={{ marginLeft: 3 }} />
+                  )}
+                </Pressable>
+                <Pressable onPress={next} hitSlop={12}>
+                  <SkipForward size={26} color="white" fill="white" />
+                </Pressable>
+                <Pressable onPress={toggleRepeat} hitSlop={12}>
+                  {repeat === 'one' ? (
+                    <Repeat1 size={18} color="#1DB954" strokeWidth={2.5} />
+                  ) : (
+                    <Repeat size={18} color={repeat === 'all' ? '#1DB954' : 'rgba(255,255,255,0.35)'} strokeWidth={repeat === 'all' ? 2.5 : 1.8} />
+                  )}
+                </Pressable>
+              </View>
+
+              <View style={{ marginTop: SPACING.md, flexDirection: 'row', alignItems: 'center', gap: 12, width: '80%' }}>
+                <VolumeX size={14} color="rgba(255,255,255,0.35)" />
+                <Slider
+                  value={volume}
+                  onValueChange={setVolume}
+                  minimumValue={0}
+                  maximumValue={1}
+                  minimumTrackTintColor="rgba(255,255,255,0.6)"
+                  maximumTrackTintColor="rgba(255,255,255,0.12)"
+                  thumbTintColor="white"
+                  style={{ flex: 1, height: 28 }}
+                />
+                <Volume2 size={14} color="rgba(255,255,255,0.35)" />
+              </View>
+            </View>
+
+            <View style={{ flex: 0.6, paddingLeft: SPACING.xl, borderLeftWidth: 1, borderLeftColor: BORDER }}>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {current.lyrics ? (
+                  <LyricsPanel
+                    lyrics={current.lyrics}
+                    currentTime={currentTimeSec}
+                    duration={current.durationMs / 1000}
+                    onSeek={(t) => {
+                      if (current) setSeekPosition(t / (current.durationMs / 1000));
+                    }}
+                    onShare={handleShareLyrics}
+                  />
+                ) : (
+                  <View style={{ paddingVertical: SPACING.xl, alignItems: 'center' }}>
+                    <Text fontSize={14} color="rgba(255,255,255,0.3)">No lyrics available</Text>
+                  </View>
+                )}
+                {upNext.length > 0 && (
+                  <View style={{ marginTop: current.lyrics ? SPACING.xl : 0 }}>
+                    <Text fontSize={13} fontWeight="600" color="rgba(255,255,255,0.6)" style={{ marginBottom: SPACING.sm }}>
+                      Up Next
+                    </Text>
+                    {upNext.map((item: Song, i) => (
+                      <Pressable
+                        key={item.id}
+                        onPress={() => playSong(item, queue, currentIndex + 1 + i)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}
+                      >
+                        <Artwork source={item.imageUrl ? { uri: item.imageUrl } : undefined} colors={item.colors} style={{ height: 40, width: 40 }} radius={8} />
+                        <View style={{ flex: 1 }}>
+                          <Text fontSize={13} fontWeight="500" color="white" numberOfLines={1}>{item.title}</Text>
+                          <Text fontSize={11} color="rgba(255,255,255,0.4)" numberOfLines={1}>{item.artist}</Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+        {current && (
+          <LyricsImageGenerator
+            ref={imageRef}
+            lines={selectedLyrics}
+            title={current.title}
+            artist={current.artist}
+            imageUrl={current.imageUrl}
+            colors={current.colors}
+          />
+        )}
+        {isGenerating && (
+          <View style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 100,
+          }}>
+            <ActivityIndicator size="large" color="white" />
+            <Text style={{ marginTop: 16, fontSize: 16, color: 'white' }}>Generating share image...</Text>
+          </View>
+        )}
+        {previewUri && (
+          <Modal
+            visible={true}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setPreviewUri(null)}
+          >
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+              onPress={() => setPreviewUri(null)}
+              activeOpacity={1}
+            >
+              <View style={{
+                backgroundColor: '#1a1a1a',
+                borderRadius: 20,
+                padding: SPACING.xxl,
+                width: '90%',
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: BORDER,
+              }}>
+                <Text style={{ fontSize: 18, fontWeight: '600', color: 'white', marginBottom: 16 }}>
+                  Share Lyrics
+                </Text>
+                <Image
+                  source={{ uri: previewUri }}
+                  style={{
+                    width: '100%',
+                    height: 200,
+                    borderRadius: 12,
+                    marginBottom: 16,
+                    resizeMode: 'cover',
+                  }}
+                />
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#1DB954',
+                    borderRadius: 12,
+                    paddingVertical: SPACING.md,
+                    paddingHorizontal: SPACING.xxl,
+                    marginBottom: 12,
+                    width: '100%',
+                    alignItems: 'center',
+                  }}
+                  onPress={async () => {
+                    await shareUri(previewUri);
+                    setPreviewUri(null);
+                    setSelectedLyrics([]);
+                  }}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: 'white' }}>
+                    Share via...
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: SURFACE_ICON,
+                    borderRadius: 12,
+                    paddingVertical: SPACING.md,
+                    paddingHorizontal: SPACING.xxl,
+                    width: '100%',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => {
+                    setPreviewUri(null);
+                    setSelectedLyrics([]);
+                  }}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: '500', color: 'rgba(255,255,255,0.7)' }}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 50, pointerEvents: 'box-none' }}>
