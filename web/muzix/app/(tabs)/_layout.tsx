@@ -88,13 +88,14 @@ export default function TabsLayout() {
           borderTopWidth: 0.5,
           elevation: 0,
           shadowOpacity: 0,
+          paddingBottom: 8,
         },
         tabBarActiveTintColor: ACCENT,
         tabBarInactiveTintColor: TEXT_MUTED,
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: '500',
-          marginBottom: 2,
+          marginBottom: 6,
         },
       }}
     >
