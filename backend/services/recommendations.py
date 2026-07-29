@@ -1,20 +1,90 @@
-"""Recommendation service: implicit ALS collaborative filtering with content fallback."""
+"""Recommendation service: pure numpy/scipy ALS collaborative filtering with content fallback."""
 import hashlib
 import logging
-from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
 import numpy as np
-from scipy.sparse import coo_matrix
-from implicit.als import AlternatingLeastSquares
+from scipy.sparse import coo_matrix, csr_matrix, csc_matrix
 
 import repositories.recommendations as rec_repo
 from repositories import listening_events as event_repo
 
 logger = logging.getLogger("muzix.recommendations")
 
-_model: AlternatingLeastSquares | None = None
+
+def _als_step(factors: np.ndarray, other_factors: np.ndarray,
+              indptr: np.ndarray, indices: np.ndarray, data: np.ndarray,
+              reg: float, alpha: float) -> np.ndarray:
+    """One ALS half-step: update factors for one dimension (users or items)."""
+    n = len(indptr) - 1
+    new_factors = np.empty_like(factors)
+    OtO = other_factors.T @ other_factors
+
+    for i in range(n):
+        start, end = indptr[i], indptr[i + 1]
+        if start == end:
+            new_factors[i] = factors[i]
+            continue
+
+        item_ids = indices[start:end]
+        ratings = data[start:end]
+        X = other_factors[item_ids]
+        conf = 1.0 + alpha * ratings
+
+        A = OtO.copy()
+        for j in range(len(item_ids)):
+            x = X[j]
+            A += (conf[j] - 1.0) * np.outer(x, x)
+        A += reg * np.eye(factors.shape[1], dtype=np.float64)
+
+        b = np.dot(conf, X)
+        new_factors[i] = np.linalg.solve(A, b)
+
+    return new_factors
+
+
+class NumpyALS:
+    """Pure numpy/scipy ALS for implicit feedback. No compiled extensions."""
+
+    def __init__(self, factors=50, regularization=0.01, alpha=40, iterations=20, random_state=42):
+        self.factors = factors
+        self.regularization = regularization
+        self.alpha = alpha
+        self.iterations = iterations
+        self.random_state = random_state
+        self.user_factors: np.ndarray | None = None
+        self.item_factors: np.ndarray | None = None
+
+    def fit(self, user_items: csr_matrix):
+        n_users, n_items = user_items.shape
+        rng = np.random.RandomState(self.random_state)
+
+        self.user_factors = rng.normal(0, 0.1, (n_users, self.factors)).astype(np.float64)
+        self.item_factors = rng.normal(0, 0.1, (n_items, self.factors)).astype(np.float64)
+        reg = self.regularization
+        alpha = self.alpha
+
+        # CSC for column-efficient access (item updates)
+        user_items_csc = user_items.tocsc()
+
+        for iteration in range(self.iterations):
+            self.user_factors = _als_step(
+                self.user_factors, self.item_factors,
+                user_items.indptr, user_items.indices, user_items.data,
+                reg, alpha,
+            )
+
+            self.item_factors = _als_step(
+                self.item_factors, self.user_factors,
+                user_items_csc.indptr, user_items_csc.indices, user_items_csc.data,
+                reg, alpha,
+            )
+
+            logger.debug("ALS iteration %d/%d complete", iteration + 1, self.iterations)
+
+
+_model: NumpyALS | None = None
 _user_factors: np.ndarray | None = None
 _item_factors: np.ndarray | None = None
 _user_id_map: dict[str, int] = {}
@@ -73,14 +143,11 @@ async def _ensure_model() -> bool:
         if not rows:
             return False
 
-        interaction_matrix = coo_matrix((data, (rows, cols)), shape=(len(user_id_map), len(item_id_map)), dtype=np.float32).tocsr()
+        interaction_matrix = coo_matrix((data, (rows, cols)),
+                                        shape=(len(user_id_map), len(item_id_map)),
+                                        dtype=np.float64).tocsr()
 
-        model = AlternatingLeastSquares(
-            factors=50,
-            regularization=0.01,
-            iterations=20,
-            random_state=42,
-        )
+        model = NumpyALS(factors=50, regularization=0.01, alpha=40, iterations=15, random_state=42)
         model.fit(interaction_matrix)
 
         _model = model
@@ -88,7 +155,7 @@ async def _ensure_model() -> bool:
         _item_factors = model.item_factors
         _last_trained_at = datetime.now(timezone.utc)
         _model_version_hash = _compute_version_hash()
-        logger.info("Recommendation model trained successfully with %d interactions", len(rows))
+        logger.info("Recommendation model trained with %d interactions", len(rows))
         return True
 
     except Exception as exc:
