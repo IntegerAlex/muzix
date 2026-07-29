@@ -60,6 +60,7 @@ from routes.search import router as search_router
 from routes.local import router as local_router
 from routes.telemetry import router as telemetry_router
 from routes.analytics import router as analytics_router
+from routes.recommendations import router as recommendations_router
 
 app.include_router(health_router)
 app.include_router(auth_router)
@@ -74,3 +75,4 @@ app.include_router(search_router)
 app.include_router(local_router)
 app.include_router(telemetry_router)
 app.include_router(analytics_router)
+app.include_router(recommendations_router)

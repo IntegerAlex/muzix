@@ -338,6 +338,8 @@ export const api = {
 
    topSongs: (period: string, limit: number, token: string) =>
      requestAuthed<{ period: string; items: SkipRateItem[] }>(`/analytics/user/top-songs?period=${period}&limit=${limit}`, token),
+   recommendations: (limit: number, token: string) =>
+     requestAuthed<{ items: Song[]; meta: { trained: boolean; lastTrainedAt: string | null } }>(`/recommendations/user/top-picks?limit=${limit}`, token),
    userStats: (period: string, token: string) =>
      requestAuthed<{ period: string; totalListeningMs: number; totalListeningHours: number; totalPlays: number; uniqueSongs: number; uniqueArtists: number; sessions: number; avgSessionMs: number }>(`/analytics/user/stats?period=${period}`, token),
    recentActivity: (limit: number, token: string) =>

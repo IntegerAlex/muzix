@@ -11,6 +11,7 @@ import { Skeleton, SongSkeleton, CardSkeleton } from '@/components/Skeleton';
 import { useAlbums, usePlaylists, useSongs, reloadAll } from '@/services/data';
 import { api } from '@/services/api';
 import type { Album, Playlist, Song } from '@/services/types';
+import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { AnimatedEntrance } from '@/lib/useEntrance';
 import { CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
@@ -163,8 +164,12 @@ export default function HomeScreen() {
   const { data: albums, loading: albumsLoading, error: albumsError, refetch: reloadAlbums } = useAlbums();
   const { data: playlists, loading: playlistsLoading, error: playlistsError, refetch: reloadPlaylists } = usePlaylists();
   const { data: songs, loading: songsLoading, error: songsError, refetch: reloadSongs } = useSongs();
+  const token = useAuthStore((s) => s.token);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [topPicks, setTopPicks] = useState<Song[]>([]);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [recommendationsError, setRecommendationsError] = useState<string | null>(null);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -192,6 +197,39 @@ export default function HomeScreen() {
     if (h < 18) return 'Good afternoon';
     return 'Good evening';
   }, []);
+
+  useEffect(() => {
+    async function loadRecommendations() {
+      if (!token) return;
+      setRecommendationsLoading(true);
+      setRecommendationsError(null);
+      try {
+        const result = await api.recommendations(20, token);
+        const items = (result as any).data?.items ?? [];
+        setTopPicks(items.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          artist: item.artist,
+          artistId: '',
+          album: item.album,
+          albumId: '',
+          duration: '',
+          durationMs: item.duration_ms || 0,
+          track: undefined,
+          colors: item.colors || ['#6d28d9', '#db2777'],
+          lyrics: undefined,
+          imageUrl: undefined,
+          audioUrl: undefined,
+        })));
+      } catch (err) {
+        setRecommendationsError(String(err));
+        setTopPicks(recentSongs);
+      } finally {
+        setRecommendationsLoading(false);
+      }
+    }
+    loadRecommendations();
+  }, [token, recentSongs]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -260,23 +298,23 @@ export default function HomeScreen() {
 
             <SectionHeader title="Top picks for you" />
             <View style={{ paddingHorizontal: SPACING.xl }}>
-              {songsLoading ? (
+              {recommendationsLoading ? (
                 <>
                   {[1, 2, 3, 4, 5].map((i) => <SongSkeleton key={i} />)}
                 </>
-              ) : recentSongs.length > 0 ? (
-                recentSongs.map((songItem, i) => (
+              ) : topPicks.length > 0 ? (
+                topPicks.map((songItem, i) => (
                   <AnimatedEntrance key={songItem.id} index={i}>
                     <SongRow
                       song={songItem}
                       index={i}
-                      queue={recentSongs}
+                      queue={topPicks}
                       isCurrent={current?.id === songItem.id}
                     />
                   </AnimatedEntrance>
                 ))
               ) : (
-                <SectionEmpty label="No songs available" />
+                <SectionEmpty label="No recommendations available" />
               )}
             </View>
 
