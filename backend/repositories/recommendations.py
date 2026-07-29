@@ -55,6 +55,34 @@ def _compute_weight(event_type: str, completion_pct: int, duration_ms: int, song
     return 0.3
 
 
+async def get_all_user_interactions() -> list[dict]:
+    """Get all (user_id, song_id, weight) triples across all users for collaborative filtering."""
+    async with SessionLocal() as session:
+        stmt = select(
+            ListeningEvent.user_id,
+            ListeningEvent.song_id,
+            ListeningEvent.event_type,
+            ListeningEvent.completion_percentage,
+            ListeningEvent.duration_played_ms,
+            ListeningEvent.song_duration_ms,
+        ).where(
+            ListeningEvent.song_id.is_not(None),
+            ListeningEvent.user_id.is_not(None),
+        ).order_by(ListeningEvent.user_id, ListeningEvent.started_at.desc())
+        result = await session.execute(stmt)
+        rows = result.all()
+
+    interactions = []
+    for r in rows:
+        weight = _compute_weight(r.event_type, r.completion_percentage, r.duration_played_ms, r.song_duration_ms)
+        interactions.append({
+            "user_id": r.user_id,
+            "song_id": r.song_id,
+            "weight": weight,
+        })
+    return interactions
+
+
 async def get_song_features() -> dict[str, dict]:
     """Get song features for content-based filtering."""
     async with SessionLocal() as session:

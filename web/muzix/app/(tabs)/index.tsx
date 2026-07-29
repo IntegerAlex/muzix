@@ -205,7 +205,8 @@ export default function HomeScreen() {
       setRecommendationsError(null);
       try {
         const result = await api.recommendations(20, token);
-        const items = (result as any).data?.items ?? [];
+        const body = result as any;
+        const items = Array.isArray(body.data) ? body.data : body.data?.items ?? [];
         setTopPicks(items.map((item: any) => ({
           id: item.id,
           title: item.title,

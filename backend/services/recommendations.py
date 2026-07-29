@@ -8,7 +8,6 @@ import numpy as np
 from scipy.sparse import coo_matrix, csr_matrix, csc_matrix
 
 import repositories.recommendations as rec_repo
-from repositories import listening_events as event_repo
 
 logger = logging.getLogger("muzix.recommendations")
 
@@ -106,7 +105,7 @@ async def _ensure_model() -> bool:
     global _model, _user_factors, _item_factors, _user_id_map, _item_id_map, _item_features_map, _last_trained_at, _model_version_hash
 
     try:
-        interactions = await event_repo.get_top_songs("all", "all", 1000)
+        interactions = await rec_repo.get_all_user_interactions()
         if not interactions:
             logger.warning("No interactions available for training")
             return False
@@ -133,7 +132,7 @@ async def _ensure_model() -> bool:
             sid = item.get("song_id")
             if not uid or not sid or uid not in user_id_map or sid not in item_id_map:
                 continue
-            weight = float(item.get("play_count", 1))
+            weight = float(item.get("weight", 1))
             if weight <= 0:
                 continue
             rows.append(user_id_map[uid])
