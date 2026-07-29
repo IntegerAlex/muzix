@@ -71,7 +71,7 @@ export function MiniPlayer() {
     if (current && isPlaying && loadingId !== current.id) {
       progress.value = withTiming(1, { duration: current.durationMs, easing: Easing.linear });
     }
-  }, [current?.id]);
+  }, [current?.id, loadingId]);
 
   useEffect(() => {
     if (!current || !isPlaying) return;
@@ -80,7 +80,7 @@ export function MiniPlayer() {
     if (remainingMs > 0) {
       progress.value = withTiming(1, { duration: remainingMs, easing: Easing.linear });
     }
-  }, [isPlaying]);
+  }, [isPlaying, loadingId]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],

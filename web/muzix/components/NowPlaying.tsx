@@ -110,7 +110,7 @@ export function NowPlaying() {
     if (current && isPlaying && !error && loadingId !== current.id) {
       progress.value = withTiming(1, { duration: current.durationMs, easing: Easing.linear });
     }
-  }, [current?.id]);
+  }, [current?.id, loadingId]);
 
   useEffect(() => {
     if (!current || error) return;
@@ -122,7 +122,7 @@ export function NowPlaying() {
     } else {
       progress.value = progress.value;
     }
-  }, [isPlaying]);
+  }, [isPlaying, loadingId]);
 
   const seekPosition = usePlayerStore((s) => s.seekPosition);
 
@@ -132,11 +132,11 @@ export function NowPlaying() {
     lastSeek.current = seekPosition;
     const fraction = Math.min(1, Math.max(0, seekPosition));
     progress.value = fraction;
-    if (isPlaying) {
+    if (isPlaying && loadingId !== current.id) {
       const remainingMs = (1 - fraction) * current.durationMs;
       progress.value = withTiming(1, { duration: remainingMs, easing: Easing.linear });
     }
-  }, [seekPosition, current, isPlaying, progress]);
+  }, [seekPosition, current, isPlaying, progress, loadingId]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulse.value }],
