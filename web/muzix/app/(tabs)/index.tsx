@@ -32,7 +32,7 @@ const HeroCard = memo(function HeroCard({ album }: { album: Album }) {
       <Pressable
         onLongPress={() => prefetchAlbum(album.id)}
         onHoverIn={() => prefetchAlbum(album.id)}
-        style={{ marginHorizontal: 20, overflow: 'hidden', borderRadius: 20 }}
+        style={{ marginHorizontal: SPACING.xl, overflow: 'hidden', borderRadius: 20 }}
         accessibilityLabel={`${album.title} by ${album.artist}`}
         accessibilityRole="button"
       >
@@ -66,7 +66,7 @@ const WideCard = memo(function WideCard({ playlist }: { playlist: Playlist }) {
       <Pressable
         onLongPress={() => prefetchPlaylist(playlist.id)}
         onHoverIn={() => prefetchPlaylist(playlist.id)}
-        style={{ width: 280, overflow: 'hidden', borderRadius: 16 }}
+        style={{ width: 280, overflow: 'hidden', borderRadius: RADIUS.lg }}
         accessibilityLabel={playlist.title}
         accessibilityRole="button"
       >
@@ -140,7 +140,7 @@ function ErrorView({ message, onRetry }: { message: string; onRetry: () => void 
       <Text style={{ fontSize: 15, color: TEXT_MUTED, textAlign: 'center', marginBottom: 16 }}>{message}</Text>
       <Pressable
         onPress={onRetry}
-        style={{ backgroundColor: ACCENT, borderRadius: RADIUS.md, paddingHorizontal: SPACING.xxl, paddingVertical: 10 }}
+        style={{ backgroundColor: ACCENT, borderRadius: RADIUS.md, paddingHorizontal: SPACING.xxl, paddingVertical: SPACING.sm }}
         accessibilityLabel="Retry loading"
         accessibilityRole="button"
       >

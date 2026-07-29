@@ -6,7 +6,9 @@ import { router } from 'expo-router';
 import { useAuthStore, login as apiLogin } from '@/store/authStore';
 import { useToast } from '@/components/Toast';
 import { AnimatedBackdrop } from '@/components/AnimatedBackdrop';
-import { BG, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS } from '@/lib/colors';
+import { BG, SURFACE, SURFACE_ELEVATED, SURFACE_ICON, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS, BORDER, DANGER } from '@/lib/colors';
+import { SPACING } from '@/lib/spacing';
+import { RADIUS } from '@/lib/sizing';
 
 interface FieldProps {
   label: string;
@@ -52,8 +54,8 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, keybo
           borderRadius: 12,
           borderWidth: 1,
           borderColor: focused ? INPUT_BORDER_FOCUS : INPUT_BORDER,
-          paddingHorizontal: 16,
-          paddingVertical: 14,
+          paddingHorizontal: SPACING.lg,
+          paddingVertical: SPACING.md,
           fontSize: 16,
           color: TEXT_PRIMARY,
           letterSpacing: 0.2,
@@ -126,10 +128,10 @@ export default function LoginScreen() {
 
           {/* Form */}
           <View style={{
-            backgroundColor: 'rgba(255,255,255,0.03)',
-            borderRadius: 20,
+            backgroundColor: SURFACE,
+            borderRadius: RADIUS.xl,
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.06)',
+            borderColor: BORDER,
             padding: 24,
           }}>
             <Field
@@ -154,11 +156,11 @@ export default function LoginScreen() {
             {/* Error */}
             {error ? (
               <View style={{
-                backgroundColor: 'rgba(244,63,94,0.1)',
+                backgroundColor: SURFACE_ELEVATED,
                 borderRadius: 10,
                 borderWidth: 1,
-                borderColor: 'rgba(244,63,94,0.2)',
-                paddingHorizontal: 14, paddingVertical: 10,
+                borderColor: DANGER,
+                paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
                 marginBottom: 16,
               }}>
                 <Text style={{ fontSize: 13, color: '#f43f5e', textAlign: 'center' }}>{error}</Text>
@@ -170,11 +172,10 @@ export default function LoginScreen() {
               onPress={handleLogin}
               disabled={!canSubmit}
               style={({ pressed }) => ({
-                backgroundColor: canSubmit ? ACCENT : 'rgba(29,185,84,0.3)',
+                backgroundColor: canSubmit ? ACCENT : SURFACE_ICON,
                 borderRadius: 12,
-                paddingVertical: 15,
+                paddingVertical: SPACING.md,
                 alignItems: 'center',
-                opacity: pressed ? 0.85 : 1,
                 transform: [{ scale: pressed ? 0.98 : 1 }],
               })}
               accessibilityLabel={busy ? 'Signing in...' : 'Sign In'}
@@ -195,7 +196,7 @@ export default function LoginScreen() {
           {/* Footer link */}
           <Pressable
             onPress={() => router.push('/register')}
-            style={{ alignItems: 'center', marginTop: 24 }}
+            style={{ alignItems: 'center', marginTop: SPACING.xxl }}
             accessibilityLabel="Create an account"
             accessibilityRole="button"
           >

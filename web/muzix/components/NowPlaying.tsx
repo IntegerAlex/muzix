@@ -28,6 +28,8 @@ import { useLyricsSharing } from '@/hooks/useLyricsSharing';
 import { usePlayerStore } from '@/store/playerStore';
 import type { Song } from '@/services/types';
 import { formatTime } from '@/lib/utils';
+import { SURFACE_ICON, BORDER } from '@/lib/colors';
+import { SPACING } from '@/lib/spacing';
 
 export function NowPlaying() {
   const insets = useSafeAreaInsets();
@@ -194,12 +196,12 @@ export function NowPlaying() {
       >
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 8, paddingBottom: 32 }}
+          contentContainerStyle={{ paddingHorizontal: SPACING.xxl, paddingTop: SPACING.sm, paddingBottom: SPACING.xxxl }}
           showsVerticalScrollIndicator={false}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Pressable
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 9999, backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 8 }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 9999, backgroundColor: SURFACE_ICON, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }}
               hitSlop={8}
               onPress={() => setShowNowPlaying(false)}
               accessibilityLabel="Dismiss"
@@ -263,7 +265,7 @@ export function NowPlaying() {
               <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", textAlign: "center" }}>{error}</Text>
               <Pressable
                 onPress={retry}
-                style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 9999, paddingHorizontal: 24, paddingVertical: 10 }}
+                style={{ backgroundColor: SURFACE_ICON, borderRadius: 9999, paddingHorizontal: 24, paddingVertical: 10 }}
                 accessibilityLabel="Retry playback"
                 accessibilityRole="button"
               >
@@ -377,7 +379,7 @@ export function NowPlaying() {
           </View>
 
           {upNext.length > 0 && (
-            <GlassCard style={{ marginTop: 24, paddingHorizontal: 16, paddingVertical: 12 }} intensity={30}>
+            <GlassCard style={{ marginTop: 24, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md }} intensity={30}>
               <Text style={{ marginBottom: 8 }} fontSize={13} fontWeight="600" color="rgba(255,255,255,0.6)">Up Next</Text>
               {upNext.map((item: Song, i) => (
                 <Pressable
@@ -413,7 +415,7 @@ export function NowPlaying() {
                 <Text fontSize={13} fontWeight="500" color="rgba(255,255,255,0.35)">{showLyrics ? 'Hide' : 'Show'}</Text>
               </Pressable>
               {showLyrics && (
-                <GlassCard style={{ marginTop: 12, paddingHorizontal: 8, paddingVertical: 8 }} intensity={25}>
+                <GlassCard style={{ marginTop: 12, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.sm }} intensity={25}>
                   <LyricsPanel
                     lyrics={current.lyrics}
                     currentTime={currentTimeSec}
@@ -477,11 +479,11 @@ export function NowPlaying() {
             <View style={{
               backgroundColor: '#1a1a1a',
               borderRadius: 20,
-              padding: 24,
+              padding: SPACING.xxl,
               width: '90%',
               alignItems: 'center',
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.1)',
+              borderColor: BORDER,
             }}>
               <Text style={{ fontSize: 18, fontWeight: '600', color: 'white', marginBottom: 16 }}>
                 Share Lyrics
@@ -500,8 +502,8 @@ export function NowPlaying() {
                 style={{
                   backgroundColor: '#1DB954',
                   borderRadius: 12,
-                  paddingVertical: 14,
-                  paddingHorizontal: 24,
+                  paddingVertical: SPACING.md,
+                  paddingHorizontal: SPACING.xxl,
                   marginBottom: 12,
                   width: '100%',
                   alignItems: 'center',
@@ -518,10 +520,10 @@ export function NowPlaying() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.1)',
+                  backgroundColor: SURFACE_ICON,
                   borderRadius: 12,
-                  paddingVertical: 14,
-                  paddingHorizontal: 24,
+                  paddingVertical: SPACING.md,
+                  paddingHorizontal: SPACING.xxl,
                   width: '100%',
                   alignItems: 'center',
                 }}

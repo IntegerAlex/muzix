@@ -18,11 +18,11 @@ function ArtistSkeletonView() {
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <View style={{ paddingTop: 64, paddingBottom: 100 }}>
-        <View style={{ alignItems: 'center', paddingHorizontal: 20 }}>
+        <View style={{ alignItems: 'center', paddingHorizontal: SPACING.xl }}>
           <Skeleton width={160} height={160} borderRadius={9999} />
-          <Skeleton width={140} height={24} borderRadius={6} style={{ marginTop: 20 }} />
+          <Skeleton width={140} height={24} borderRadius={6} style={{ marginTop: SPACING.xl }} />
         </View>
-        <GlassCard padding={16} style={{ marginHorizontal: 20, marginTop: 24 }}>
+        <GlassCard padding={SPACING.lg} style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.xxl }}>
           <Skeleton width={80} height={12} borderRadius={4} />
           <View style={{ marginTop: 8 }}>
             {[0, 1, 2, 3, 4].map((i) => (
@@ -30,10 +30,10 @@ function ArtistSkeletonView() {
             ))}
           </View>
         </GlassCard>
-        <View style={{ marginTop: 28, paddingHorizontal: 20 }}>
+        <View style={{ marginTop: SPACING.xxxl, paddingHorizontal: SPACING.xl }}>
           <Skeleton width={80} height={20} borderRadius={6} />
         </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20, marginTop: 12 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md, paddingHorizontal: SPACING.xl, marginTop: SPACING.md }}>
           {[0, 1].map((i) => (
             <CardSkeleton key={i} width={155} />
           ))}
@@ -100,14 +100,14 @@ export default function ArtistDetail() {
       </Pressable>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, paddingTop: 64 }}>
-        <View style={{ alignItems: 'center', paddingHorizontal: 20 }}>
+        <View style={{ alignItems: 'center', paddingHorizontal: SPACING.xl }}>
           <Artwork colors={artist.colors} style={{ height: 160, width: 160 }} radius={9999} />
-          <Text style={{ marginTop: 20, textAlign: 'center' }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY} numberOfLines={2}>
+          <Text style={{ marginTop: SPACING.xl, textAlign: 'center' }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY} numberOfLines={2}>
             {artist.name}
           </Text>
           <Pressable
             onPress={toggleFollow}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, borderRadius: 9999, backgroundColor: isFollowing ? ACCENT : '#242424', paddingHorizontal: 20, paddingVertical: 8 }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.md, borderRadius: 9999, backgroundColor: isFollowing ? ACCENT : '#242424', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm }}
             accessibilityLabel={isFollowing ? 'Unfollow artist' : 'Follow artist'}
             accessibilityRole="button"
           >
@@ -122,9 +122,9 @@ export default function ArtistDetail() {
           </Pressable>
         </View>
 
-        <GlassCard padding={16} style={{ marginHorizontal: 20, marginTop: 24 }}>
+        <GlassCard padding={SPACING.lg} style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.xxl }}>
            <Text fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={2} color={TEXT_MUTED}>
-             Popular
+              Popular
            </Text>
            {popular.length === 0 ? (
              <View style={{ marginTop: 8, alignItems: 'center', paddingVertical: 16 }}>
@@ -154,7 +154,7 @@ export default function ArtistDetail() {
          </GlassCard>
 
         <SectionHeader title="Albums" />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 20 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md, paddingHorizontal: SPACING.xl }}>
           {artistAlbums.length === 0 ? (
             <View style={{ width: '100%', alignItems: 'center', paddingVertical: 24 }}>
               <Music size={32} color={TEXT_MUTED} strokeWidth={1.5} />

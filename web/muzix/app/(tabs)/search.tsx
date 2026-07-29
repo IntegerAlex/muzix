@@ -68,7 +68,7 @@ export default function SearchScreen() {
       <ScrollView
         style={{ flex: 1 }}
         contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 96, paddingTop: 64 }}
+        contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: 96, paddingTop: 64 }}
       >
         <Text fontSize={28} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY}>Search</Text>
 
@@ -78,13 +78,13 @@ export default function SearchScreen() {
           placeholder="Songs, artists, albums…"
           placeholderTextColor={TEXT_MUTED}
           style={{
-            marginTop: 16,
+            marginTop: SPACING.lg,
             borderRadius: 16,
             borderWidth: 1,
             borderColor: BORDER,
             backgroundColor: CARD_BG,
             paddingHorizontal: 16,
-            paddingVertical: 14,
+            paddingVertical: SPACING.md,
             fontSize: 15,
             color: TEXT_PRIMARY,
           }}
@@ -100,19 +100,19 @@ export default function SearchScreen() {
               </Text>
             </View>
             {recentSearches.length > 0 && (
-              <View style={{ marginTop: 24 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, marginTop: 28 }}>
+              <View style={{ marginTop: SPACING.xxl }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md, marginTop: SPACING.xxxl }}>
                   <Text fontSize={20} fontWeight="700" color={TEXT_PRIMARY}>Recent</Text>
                   <Pressable onPress={clearRecent} accessibilityLabel="Clear recent searches" accessibilityRole="button">
                     <Text fontSize={14} fontWeight="500" color={TEXT_SECONDARY}>Clear</Text>
                   </Pressable>
                 </View>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm }}>
                   {recentSearches.map((term) => (
                     <Pressable
                       key={term}
                       onPress={() => handleRecentPress(term)}
-                      style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER }}
+                      style={{ paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: 16, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER }}
                       accessibilityLabel={`Search ${term}`}
                       accessibilityRole="button"
                     >
@@ -125,7 +125,7 @@ export default function SearchScreen() {
           </>
         ) : loading ? (
           <View style={{ paddingTop: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: 12 }}>
               <ActivityIndicator size="small" color={ACCENT} />
               <Text fontSize={13} color={TEXT_MUTED}>Searching…</Text>
             </View>
@@ -145,17 +145,17 @@ export default function SearchScreen() {
             ))}
 
             {results.albums.length > 0 && <SectionHeader title="Albums" />}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md }}>
               {results.albums.map((album, i) => (
                 <AnimatedEntrance key={album.id} index={i}>
                   <View style={{ width: '47%' }}>
                     <Link href={`/album/${album.id}` as Href} asChild>
                       <Pressable accessibilityLabel={`${album.title} by ${album.artist}`} accessibilityRole="button">
                         <Artwork colors={album.colors} style={{ height: 160, width: '100%' }} radius={RADIUS.lg} />
-                        <Text style={{ marginTop: 10 }} fontSize={13} fontWeight="700" color={TEXT_PRIMARY} numberOfLines={1}>
+                        <Text style={{ marginTop: SPACING.sm }} fontSize={13} fontWeight="700" color={TEXT_PRIMARY} numberOfLines={1}>
                           {album.title}
                         </Text>
-                        <Text style={{ marginTop: 2 }} fontSize={11} fontWeight="500" color={TEXT_SECONDARY} numberOfLines={1}>
+                        <Text style={{ marginTop: SPACING.xs }} fontSize={11} fontWeight="500" color={TEXT_SECONDARY} numberOfLines={1}>
                           {album.artist}
                         </Text>
                       </Pressable>
@@ -170,7 +170,7 @@ export default function SearchScreen() {
               <AnimatedEntrance key={artist.id} index={i}>
                 <Link href={`/artist/${artist.id}` as Href} asChild>
                   <Pressable
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm }}
                     accessibilityLabel={artist.name}
                     accessibilityRole="button"
                   >
@@ -187,7 +187,7 @@ export default function SearchScreen() {
             <Text style={{ marginTop: SPACING.md, textAlign: 'center', fontWeight: '500' }} fontSize={15} color={TEXT_SECONDARY}>
               No results for "{query.trim()}"
             </Text>
-            <Text style={{ marginTop: 8, textAlign: 'center' }} fontSize={13} color={TEXT_MUTED}>
+            <Text style={{ marginTop: SPACING.sm, textAlign: 'center' }} fontSize={13} color={TEXT_MUTED}>
               Try different keywords or check the spelling
             </Text>
           </View>

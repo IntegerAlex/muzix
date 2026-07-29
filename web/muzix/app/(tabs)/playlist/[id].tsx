@@ -22,19 +22,19 @@ function PlaylistSkeletonView() {
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <View style={{ paddingTop: 64, paddingBottom: 100 }}>
-        <View style={{ alignItems: 'center', paddingHorizontal: 20 }}>
+        <View style={{ alignItems: 'center', paddingHorizontal: SPACING.xl }}>
           <Skeleton width={200} height={200} borderRadius={RADIUS.xxl} />
-          <Skeleton width={160} height={24} borderRadius={6} style={{ marginTop: 20 }} />
-          <Skeleton width={120} height={14} borderRadius={4} style={{ marginTop: 8 }} />
+          <Skeleton width={160} height={24} borderRadius={6} style={{ marginTop: SPACING.xl }} />
+          <Skeleton width={120} height={14} borderRadius={4} style={{ marginTop: SPACING.sm }} />
         </View>
         <GlassCard padding={SPACING.lg} style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Skeleton width={100} height={16} borderRadius={4} />
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
             <Skeleton width={60} height={36} borderRadius={9999} />
             <Skeleton width={60} height={36} borderRadius={9999} />
           </View>
         </GlassCard>
-        <View style={{ marginTop: 16 }}>
+        <View style={{ marginTop: SPACING.lg }}>
           {[0, 1, 2, 3, 4].map((i) => (
             <SongSkeleton key={i} />
           ))}
@@ -101,7 +101,7 @@ export default function PlaylistDetail() {
       {editing ? (
         <Pressable
           onPress={() => removeSong(item.id)}
-          style={{ paddingRight: 16 }}
+          style={{ paddingRight: SPACING.lg }}
           accessibilityLabel={`Remove ${item.title}`}
           hitSlop={8}
         >
@@ -110,7 +110,7 @@ export default function PlaylistDetail() {
       ) : (
         <Pressable
           onPress={() => openContextMenu(item)}
-          style={{ paddingRight: 16 }}
+          style={{ paddingRight: SPACING.lg }}
           accessibilityLabel={`Options for ${item.title}`}
           accessibilityRole="button"
         >
@@ -210,7 +210,7 @@ export default function PlaylistDetail() {
       </Pressable>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100, paddingTop: 64 }}>
-        <View style={{ position: 'relative', alignItems: 'center', paddingHorizontal: 20 }}>
+        <View style={{ position: 'relative', alignItems: 'center', paddingHorizontal: SPACING.xl }}>
           <View style={{ position: 'relative', height: 200, width: 200 }}>
             <Artwork colors={playlist.colors} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} radius={RADIUS.xxl} />
             <LinearGradient
@@ -219,10 +219,10 @@ export default function PlaylistDetail() {
               style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: RADIUS.xxl }}
             />
           </View>
-          <Text style={{ marginTop: 20, textAlign: 'center' }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY} numberOfLines={2}>
+          <Text style={{ marginTop: SPACING.xl, textAlign: 'center' }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY} numberOfLines={2}>
             {playlist.title}
           </Text>
-          <Text style={{ marginTop: 4 }} fontSize={13} fontWeight="500" color={TEXT_SECONDARY}>
+          <Text style={{ marginTop: SPACING.xs }} fontSize={13} fontWeight="500" color={TEXT_SECONDARY}>
             Playlist · {songs.length} songs
           </Text>
         </View>
@@ -232,39 +232,39 @@ export default function PlaylistDetail() {
             <TextInput
               value={editTitle}
               onChangeText={setEditTitle}
-              style={{ flex: 1, fontSize: 15, fontWeight: '600', color: TEXT_PRIMARY, backgroundColor: '#242424', borderRadius: 8, padding: 8 }}
+              style={{ flex: 1, fontSize: 15, fontWeight: '600', color: TEXT_PRIMARY, backgroundColor: '#242424', borderRadius: 8, padding: SPACING.sm }}
             />
           ) : (
             <Text fontSize={15} fontWeight="500" color={TEXT_SECONDARY}>Your playlist</Text>
           )}
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
             {editing ? (
               <>
-                <Pressable onPress={() => setEditing(false)} style={{ borderRadius: 9999, paddingHorizontal: 16, paddingVertical: 10 }} accessibilityLabel="Cancel editing" accessibilityRole="button">
+                <Pressable onPress={() => setEditing(false)} style={{ borderRadius: 9999, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm }} accessibilityLabel="Cancel editing" accessibilityRole="button">
                   <Text fontSize={13} fontWeight="500" color={TEXT_MUTED}>Cancel</Text>
                 </Pressable>
-                <Pressable onPress={saveEdit} style={{ borderRadius: 9999, backgroundColor: ACCENT, paddingHorizontal: 24, paddingVertical: 10 }} accessibilityLabel="Save changes" accessibilityRole="button">
+                <Pressable onPress={saveEdit} style={{ borderRadius: 9999, backgroundColor: ACCENT, paddingHorizontal: SPACING.xxl, paddingVertical: SPACING.sm }} accessibilityLabel="Save changes" accessibilityRole="button">
                   <Text fontSize={13} fontWeight="700" color="white">Save</Text>
                 </Pressable>
               </>
             ) : (
               <>
-                <Pressable onPress={handleShare} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: 12, paddingVertical: 10 }} accessibilityLabel="Share playlist" accessibilityRole="button">
+                <Pressable onPress={handleShare} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }} accessibilityLabel="Share playlist" accessibilityRole="button">
                   <Share2 size={14} color={TEXT_PRIMARY} />
                 </Pressable>
                 {token && (
                   <>
-                    <Pressable onPress={startEdit} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: 16, paddingVertical: 10 }} accessibilityLabel="Edit playlist" accessibilityRole="button">
+                    <Pressable onPress={startEdit} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm }} accessibilityLabel="Edit playlist" accessibilityRole="button">
                       <Text fontSize={13} fontWeight="500" color={TEXT_PRIMARY}>Edit</Text>
                     </Pressable>
-                    <Pressable onPress={deletePlaylist} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: 12, paddingVertical: 10 }} accessibilityLabel="Delete playlist" accessibilityRole="button">
+                    <Pressable onPress={deletePlaylist} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }} accessibilityLabel="Delete playlist" accessibilityRole="button">
                       <Trash2 size={14} color="#ef4444" />
                     </Pressable>
                   </>
                 )}
                   <Pressable
                     onPress={() => { if (songs.length === 0) return; playSong(songs[0], songs, 0); }}
-                    style={{ borderRadius: 9999, backgroundColor: 'white', paddingHorizontal: 24, paddingVertical: 10 }}
+                    style={{ borderRadius: 9999, backgroundColor: 'white', paddingHorizontal: 24, paddingVertical: SPACING.sm }}
                     accessibilityLabel="Play playlist"
                     accessibilityRole="button"
                   >
@@ -278,7 +278,7 @@ export default function PlaylistDetail() {
         {editing && (
           <Pressable
             onPress={() => setShowAddSongModal(true)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 20, marginTop: 16, backgroundColor: '#242424', borderRadius: 12, padding: 14 }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginHorizontal: SPACING.xl, marginTop: SPACING.lg, backgroundColor: '#242424', borderRadius: RADIUS.md, padding: SPACING.md }}
             accessibilityLabel="Add songs to playlist"
             accessibilityRole="button"
           >
@@ -316,17 +316,17 @@ export default function PlaylistDetail() {
 
         <Modal visible={showContextMenu} transparent animationType="fade" onRequestClose={() => setShowContextMenu(false)}>
           <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setShowContextMenu(false)}>
-            <GlassCard padding={8} style={{ width: 220 }} radius={16}>
+            <GlassCard padding={SPACING.sm} style={{ width: 220 }} radius={16}>
               {contextSong && (
-                <Text fontSize={13} fontWeight="700" color={TEXT_MUTED} numberOfLines={1} style={{ paddingHorizontal: 12, paddingTop: SPACING.sm, paddingBottom: SPACING.sm }}>
+                <Text fontSize={13} fontWeight="700" color={TEXT_MUTED} numberOfLines={1} style={{ paddingHorizontal: SPACING.md, paddingTop: SPACING.sm, paddingBottom: SPACING.sm }}>
                   {contextSong.title}
                 </Text>
               )}
-              <Pressable onPress={() => handleContextAction('next')} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12 }} accessibilityLabel="Play next">
+              <Pressable onPress={() => handleContextAction('next')} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md }} accessibilityLabel="Play next">
                 <Play size={16} color={TEXT_PRIMARY} />
                 <Text fontSize={14} fontWeight="500" color={TEXT_PRIMARY}>Play Next</Text>
               </Pressable>
-              <Pressable onPress={() => handleContextAction('queue')} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 12 }} accessibilityLabel="Add to queue">
+              <Pressable onPress={() => handleContextAction('queue')} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md }} accessibilityLabel="Add to queue">
                 <ListPlus size={16} color={TEXT_PRIMARY} />
                 <Text fontSize={14} fontWeight="500" color={TEXT_PRIMARY}>Add to Queue</Text>
               </Pressable>
@@ -336,14 +336,14 @@ export default function PlaylistDetail() {
 
         <Modal visible={showAddSongModal} transparent animationType="fade" onRequestClose={() => setShowAddSongModal(false)}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-            <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%', paddingTop: 20 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 }}>
+            <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%', paddingTop: SPACING.xl }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: SPACING.xl, marginBottom: SPACING.md }}>
                 <Text fontSize={18} fontWeight="700" color={TEXT_PRIMARY}>Add songs</Text>
                 <Pressable onPress={() => setShowAddSongModal(false)} accessibilityLabel="Done adding songs" accessibilityRole="button">
                   <Text fontSize={15} color={ACCENT}>Done</Text>
                 </Pressable>
               </View>
-              <ScrollView style={{ paddingHorizontal: 20 }}>
+              <ScrollView style={{ paddingHorizontal: SPACING.xl }}>
                 {songsNotInPlaylist.length === 0 ? (
                   <Text fontSize={14} color={TEXT_MUTED} style={{ textAlign: 'center', paddingVertical: 40 }}>All songs are in this playlist</Text>
                 ) : (
@@ -351,7 +351,7 @@ export default function PlaylistDetail() {
                     <Pressable
                       key={song.id}
                       onPress={() => addSong(song.id)}
-                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: BORDER }}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: BORDER }}
                       accessibilityLabel={`Add ${song.title} by ${song.artist}`}
                       accessibilityRole="button"
                     >

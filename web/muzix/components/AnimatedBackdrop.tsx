@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View } from 'tamagui';
 import { useWindowDimensions, AccessibilityInfo } from 'react-native';
+import { BG } from '@/lib/colors';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -48,7 +49,7 @@ export function AnimatedBackdrop() {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: '#0a0a0a',
+        backgroundColor: BG,
         overflow: 'hidden',
         pointerEvents: 'none',
       }}

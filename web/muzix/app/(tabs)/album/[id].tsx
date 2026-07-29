@@ -14,25 +14,26 @@ import { useAlbum, useSongs } from '@/services/data';
 import { usePlayerStore } from '@/store/playerStore';
 import type { Song } from '@/services/types';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT } from '@/lib/colors';
+import { SPACING } from '@/lib/spacing';
 
 function AlbumSkeletonView() {
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <View style={{ paddingTop: 64, paddingBottom: 100 }}>
-        <View style={{ alignItems: 'center', paddingHorizontal: 20 }}>
+        <View style={{ alignItems: 'center', paddingHorizontal: SPACING.xl }}>
           <Skeleton width={200} height={200} borderRadius={RADIUS.xxl} />
-          <Skeleton width={160} height={24} borderRadius={6} style={{ marginTop: 20 }} />
+          <Skeleton width={160} height={24} borderRadius={6} style={{ marginTop: SPACING.xl }} />
           <Skeleton width={140} height={14} borderRadius={4} style={{ marginTop: 8 }} />
           <Skeleton width={80} height={12} borderRadius={4} style={{ marginTop: 6 }} />
         </View>
-        <GlassCard padding={16} style={{ marginHorizontal: 20, marginTop: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <GlassCard padding={SPACING.lg} style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Skeleton width={80} height={16} borderRadius={4} />
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
             <Skeleton width={100} height={36} borderRadius={9999} />
             <Skeleton width={100} height={36} borderRadius={9999} />
           </View>
         </GlassCard>
-        <View style={{ marginTop: 16 }}>
+        <View style={{ marginTop: SPACING.lg }}>
           {[0, 1, 2, 3, 4].map((i) => (
             <SongSkeleton key={i} />
           ))}
@@ -90,7 +91,7 @@ export default function AlbumDetail() {
           <ChevronLeft size={22} color={TEXT_PRIMARY} />
         </Pressable>
         <Music size={48} color={TEXT_MUTED} strokeWidth={1.5} />
-        <Text style={{ marginTop: 16 }} fontSize={15} color={TEXT_MUTED}>
+        <Text style={{ marginTop: SPACING.lg }} fontSize={15} color={TEXT_MUTED}>
           {error ?? 'Album not found'}
         </Text>
       </View>
@@ -112,7 +113,7 @@ export default function AlbumDetail() {
         contentContainerStyle={{ paddingBottom: 100, paddingTop: 64 }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ position: 'relative', alignItems: 'center', paddingHorizontal: 20 }}>
+        <View style={{ position: 'relative', alignItems: 'center', paddingHorizontal: SPACING.xl }}>
           <View style={{ position: 'relative', height: 200, width: 200 }}>
             <Artwork source={album.imageUrl ? { uri: album.imageUrl } : undefined} colors={album.colors} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} radius={RADIUS.xxl} />
             <LinearGradient
@@ -121,26 +122,26 @@ export default function AlbumDetail() {
               style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: RADIUS.xxl }}
             />
           </View>
-          <Text style={{ marginTop: 20, textAlign: 'center' }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY} numberOfLines={2}>
+          <Text style={{ marginTop: SPACING.xl, textAlign: 'center' }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY} numberOfLines={2}>
             {album.title}
           </Text>
-          <Text style={{ marginTop: 4 }} fontSize={13} fontWeight="500" color={TEXT_SECONDARY}>
+          <Text style={{ marginTop: SPACING.xs }} fontSize={13} fontWeight="500" color={TEXT_SECONDARY}>
             Album · {album.artist}
           </Text>
-          <Text style={{ marginTop: 2 }} fontSize={12} fontWeight="500" color={TEXT_MUTED}>
+          <Text style={{ marginTop: SPACING.xs }} fontSize={12} fontWeight="500" color={TEXT_MUTED}>
             {album.year} · {album.genre}
           </Text>
         </View>
 
-        <GlassCard padding={16} style={{ marginHorizontal: 20, marginTop: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <GlassCard padding={SPACING.lg} style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text fontSize={13} fontWeight="500" color={TEXT_SECONDARY}>{songs.length} songs</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable onPress={handleShare} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: 12, paddingVertical: 10 }} accessibilityLabel="Share album" accessibilityRole="button">
+            <Pressable onPress={handleShare} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }} accessibilityLabel="Share album" accessibilityRole="button">
               <Share2 size={14} color={TEXT_PRIMARY} />
             </Pressable>
             <Pressable
               onPress={handleShuffle}
-              style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: 16, paddingVertical: 10 }}
+              style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm }}
               accessibilityLabel="Shuffle album"
               accessibilityRole="button"
             >
@@ -148,7 +149,7 @@ export default function AlbumDetail() {
             </Pressable>
               <Pressable
                 onPress={() => { if (songs.length === 0) return; playSong(songs[0], songs, 0); }}
-                style={{ borderRadius: 9999, backgroundColor: 'white', paddingHorizontal: 24, paddingVertical: 10 }}
+                style={{ borderRadius: 9999, backgroundColor: 'white', paddingHorizontal: SPACING.xxl, paddingVertical: SPACING.sm }}
                 accessibilityLabel="Play album"
                 accessibilityRole="button"
                 hitSlop={8}
@@ -158,7 +159,7 @@ export default function AlbumDetail() {
           </View>
         </GlassCard>
 
-        <View style={{ marginTop: 16, paddingHorizontal: 4 }}>
+        <View style={{ marginTop: SPACING.lg, paddingHorizontal: SPACING.xs }}>
           {songs.map((song, index) => (
             <SongRow
               key={song.id}

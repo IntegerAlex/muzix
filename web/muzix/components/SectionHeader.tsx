@@ -2,10 +2,11 @@ import { Link, type Href } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { Pressable } from 'react-native';
 import { styled, Text, XStack, View } from 'tamagui';
+import { SPACING } from '@/lib/spacing';
 
 const HeaderRow = styled(XStack, {
-  mb: 12,
-  mt: 28,
+  mb: SPACING.md,
+  mt: SPACING.xxxl,
 });
 
 const Title = styled(Text, {

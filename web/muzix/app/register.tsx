@@ -6,7 +6,9 @@ import { router } from 'expo-router';
 import { useAuthStore, register as apiRegister } from '@/store/authStore';
 import { useToast } from '@/components/Toast';
 import { AnimatedBackdrop } from '@/components/AnimatedBackdrop';
-import { BG, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS, DANGER } from '@/lib/colors';
+import { BG, SURFACE, SURFACE_ELEVATED, SURFACE_ICON, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS, BORDER, DANGER } from '@/lib/colors';
+import { SPACING } from '@/lib/spacing';
+import { RADIUS } from '@/lib/sizing';
 
 interface FieldProps {
   label: string;
@@ -51,8 +53,8 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, keybo
           borderRadius: 12,
           borderWidth: 1,
           borderColor: error ? 'rgba(244,63,94,0.5)' : focused ? INPUT_BORDER_FOCUS : INPUT_BORDER,
-          paddingHorizontal: 16,
-          paddingVertical: 14,
+          paddingHorizontal: SPACING.lg,
+          paddingVertical: SPACING.md,
           fontSize: 16,
           color: TEXT_PRIMARY,
           letterSpacing: 0.2,
@@ -148,10 +150,10 @@ export default function RegisterScreen() {
 
           {/* Form */}
           <View style={{
-            backgroundColor: 'rgba(255,255,255,0.03)',
-            borderRadius: 20,
+            backgroundColor: SURFACE,
+            borderRadius: RADIUS.xl,
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.06)',
+            borderColor: BORDER,
             padding: 24,
           }}>
             <Field
@@ -191,11 +193,11 @@ export default function RegisterScreen() {
 
             {serverError ? (
               <View style={{
-                backgroundColor: 'rgba(244,63,94,0.1)',
+                backgroundColor: SURFACE_ELEVATED,
                 borderRadius: 10,
                 borderWidth: 1,
-                borderColor: 'rgba(244,63,94,0.2)',
-                paddingHorizontal: 14, paddingVertical: 10,
+                borderColor: DANGER,
+                paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm,
                 marginBottom: 16,
               }}>
                 <Text style={{ fontSize: 13, color: '#f43f5e', textAlign: 'center' }}>{serverError}</Text>
@@ -207,11 +209,10 @@ export default function RegisterScreen() {
               onPress={handleRegister}
               disabled={!canSubmit}
               style={({ pressed }) => ({
-                backgroundColor: canSubmit ? ACCENT : 'rgba(29,185,84,0.3)',
+                backgroundColor: canSubmit ? ACCENT : SURFACE_ICON,
                 borderRadius: 12,
-                paddingVertical: 15,
+                paddingVertical: SPACING.md,
                 alignItems: 'center',
-                opacity: pressed ? 0.85 : 1,
                 transform: [{ scale: pressed ? 0.98 : 1 }],
                 marginTop: 8,
               })}
@@ -233,7 +234,7 @@ export default function RegisterScreen() {
           {/* Footer link */}
           <Pressable
             onPress={() => router.push('/login')}
-            style={{ alignItems: 'center', marginTop: 24, marginBottom: 20 }}
+            style={{ alignItems: 'center', marginTop: SPACING.xxl, marginBottom: SPACING.xl }}
             accessibilityLabel="Sign in to existing account"
             accessibilityRole="button"
           >

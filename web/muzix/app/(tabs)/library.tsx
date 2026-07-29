@@ -10,7 +10,7 @@ import { useAlbums, useArtists, usePlaylists, reloadAll } from '@/services/data'
 import { AnimatedEntrance } from '@/lib/useEntrance';
 import { RADIUS } from '@/lib/sizing';
 import { SPACING } from '@/lib/spacing';
-import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT } from '@/lib/colors';
+import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, SURFACE_ELEVATED, SURFACE_ICON, BORDER } from '@/lib/colors';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 
@@ -45,7 +45,7 @@ function ErrorView({ message, onRetry }: { message: string; onRetry: () => void 
       <Text style={{ fontSize: 15, color: TEXT_MUTED, textAlign: 'center', marginBottom: SPACING.lg }}>{message}</Text>
       <Pressable
         onPress={onRetry}
-        style={{ backgroundColor: ACCENT, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 10 }}
+        style={{ backgroundColor: ACCENT, borderRadius: RADIUS.md, paddingHorizontal: SPACING.xxl, paddingVertical: SPACING.sm }}
         accessibilityLabel="Retry loading"
         accessibilityRole="button"
       >
@@ -112,8 +112,8 @@ export default function LibraryScreen() {
         </View>
 
         <Modal visible={showCreateModal} transparent animationType="fade" onRequestClose={() => setShowCreateModal(false)}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
-            <View style={{ backgroundColor: '#1a1a1a', borderRadius: RADIUS.lg, padding: SPACING.xxl, width: '100%' }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+            <View style={{ backgroundColor: SURFACE_ELEVATED, borderRadius: RADIUS.lg, padding: SPACING.xxl, width: '100%' }}>
               <Text style={{ fontSize: 18, fontWeight: '700', color: TEXT_PRIMARY, marginBottom: 16 }}>New Playlist</Text>
               <TextInput
                 value={newPlaylistName}
@@ -121,7 +121,7 @@ export default function LibraryScreen() {
                 placeholder="Playlist name"
                 placeholderTextColor={TEXT_MUTED}
                 autoFocus
-                style={{ backgroundColor: '#242424', borderRadius: 10, padding: 14, fontSize: 16, color: TEXT_PRIMARY, marginBottom: 20 }}
+                style={{ backgroundColor: SURFACE_ICON, borderRadius: RADIUS.sm, padding: SPACING.md, fontSize: 16, color: TEXT_PRIMARY, marginBottom: 20 }}
                 onSubmitEditing={handleCreatePlaylist}
               />
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: SPACING.md }}>
@@ -131,7 +131,7 @@ export default function LibraryScreen() {
                 <Pressable
                   onPress={handleCreatePlaylist}
                   disabled={!newPlaylistName.trim() || creating}
-                  style={{ backgroundColor: ACCENT, borderRadius: RADIUS.md, paddingHorizontal: SPACING.xl, paddingVertical: 10, opacity: newPlaylistName.trim() ? 1 : 0.5 }}
+                  style={{ backgroundColor: ACCENT, borderRadius: RADIUS.md, paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm, opacity: newPlaylistName.trim() ? 1 : 0.5 }}
                   accessibilityLabel="Create playlist"
                   accessibilityRole="button"
                   accessibilityState={{ disabled: !newPlaylistName.trim() || creating }}
@@ -217,7 +217,7 @@ export default function LibraryScreen() {
                   <GridItem key={al.id} index={i}>
                     <Link href={`/album/${al.id}`} asChild>
                       <Pressable accessibilityLabel={`${al.title} by ${al.artist}`} accessibilityRole="button">
-                        <Artwork colors={pickColors(i + 5, al.colors)} style={{ height: 160, width: '100%' }} radius={16} />
+                        <Artwork colors={pickColors(i + 5, al.colors)} style={{ height: 160, width: '100%' }} radius={RADIUS.lg} />
                          <Text style={{ marginTop: SPACING.md, fontSize: 14, fontWeight: '700', color: TEXT_PRIMARY }} numberOfLines={1}>
                           {al.title}
                         </Text>

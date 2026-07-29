@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Artwork } from '@/components/Artwork';
 import { PressableScale } from '@/components/PressableScale';
+import { SPACING } from '@/lib/spacing';
 import { Skeleton } from '@/components/Skeleton';
 import { usePlayerStore } from '@/store/playerStore';
 import type { Song } from '@/services/types';
@@ -28,7 +29,7 @@ export function EqualizerBar({ phase }: { phase: number }) {
 
 export function Equalizer() {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 16 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: SPACING.xs, height: 16 }}>
       {[0, 1, 2].map((i) => (
         <EqualizerBar key={i} phase={i * 0.18} />
       ))}
@@ -56,7 +57,7 @@ export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, su
   return (
     <PressableScale
       onPress={handlePress}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 16 }}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm, borderRadius: 16 }}
       accessibilityLabel={`${song.title} by ${song.artist}`}
       accessibilityRole="button"
     >

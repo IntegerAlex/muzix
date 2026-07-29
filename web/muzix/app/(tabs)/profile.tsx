@@ -10,7 +10,7 @@ import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { api } from '@/services/api';
 import type { Song } from '@/services/types';
-import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
+import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, SURFACE, SURFACE_ELEVATED, SURFACE_ICON, DANGER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
 
@@ -31,16 +31,16 @@ function StatCard({ icon: Icon, value, label, color, subtitle }: {
   return (
     <View style={{
       flex: 1,
-      backgroundColor: 'rgba(255,255,255,0.03)',
+      backgroundColor: SURFACE,
       borderRadius: RADIUS.lg,
       borderWidth: 1,
-      borderColor: `${color}15`,
+      borderColor: BORDER,
       padding: SPACING.md,
       alignItems: 'center',
     }}>
       <View style={{
         width: 36, height: 36, borderRadius: 10,
-        backgroundColor: `${color}12`,
+        backgroundColor: SURFACE_ICON,
         alignItems: 'center', justifyContent: 'center',
         marginBottom: 8,
       }}>
@@ -53,7 +53,7 @@ function StatCard({ icon: Icon, value, label, color, subtitle }: {
         {label}
       </Text>
       {subtitle && (
-        <Text style={{ fontSize: 10, color: TEXT_MUTED, marginTop: 1 }}>{subtitle}</Text>
+        <Text style={{ fontSize: 10, color: TEXT_MUTED, marginTop: SPACING.xs }}>{subtitle}</Text>
       )}
     </View>
   );
@@ -71,7 +71,7 @@ function TopSongRow({ song, index, rank }: { song: Song; index: number; rank: nu
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        paddingVertical: 10,
+        paddingVertical: SPACING.sm,
         paddingHorizontal: SPACING.lg,
         opacity: pressed ? 0.6 : 1,
       })}
@@ -173,7 +173,7 @@ function SongRow({ song }: { song: Song }) {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        paddingVertical: 10,
+        paddingVertical: SPACING.sm,
         paddingHorizontal: SPACING.lg,
         opacity: pressed ? 0.6 : 1,
       })}
@@ -295,8 +295,8 @@ export default function ProfileScreen() {
           }}>
             <View style={{
               width: 80, height: 80, borderRadius: 20,
-              backgroundColor: 'rgba(29,185,84,0.12)',
-              borderWidth: 2, borderColor: 'rgba(29,185,84,0.3)',
+              backgroundColor: SURFACE_ELEVATED,
+              borderWidth: 2, borderColor: ACCENT,
               alignItems: 'center', justifyContent: 'center',
               boxShadow: '0 4px 16px rgba(29,185,84,0.25)',
               elevation: 8,
@@ -332,7 +332,7 @@ export default function ProfileScreen() {
             }}>
               <View style={{
                 width: 28, height: 28, borderRadius: 7,
-                backgroundColor: 'rgba(29,185,84,0.1)',
+                backgroundColor: SURFACE_ICON,
                 alignItems: 'center', justifyContent: 'center',
                 marginRight: 10,
               }}>
@@ -344,7 +344,7 @@ export default function ProfileScreen() {
             </View>
             <View style={{
               marginHorizontal: SPACING.xl,
-              backgroundColor: 'rgba(255,255,255,0.02)',
+              backgroundColor: SURFACE,
               borderRadius: 16,
               borderWidth: 1,
               borderColor: BORDER,
@@ -365,7 +365,7 @@ export default function ProfileScreen() {
             }}>
               <View style={{
                 width: 28, height: 28, borderRadius: 7,
-                backgroundColor: 'rgba(245,158,11,0.1)',
+                backgroundColor: SURFACE_ICON,
                 alignItems: 'center', justifyContent: 'center',
                 marginRight: 10,
               }}>
@@ -377,7 +377,7 @@ export default function ProfileScreen() {
             </View>
             <View style={{
               marginHorizontal: SPACING.xl,
-              backgroundColor: 'rgba(255,255,255,0.02)',
+              backgroundColor: SURFACE,
               borderRadius: 16,
               borderWidth: 1,
               borderColor: BORDER,
@@ -398,7 +398,7 @@ export default function ProfileScreen() {
             }}>
               <View style={{
                 width: 28, height: 28, borderRadius: 7,
-                backgroundColor: 'rgba(236,72,153,0.1)',
+                backgroundColor: SURFACE_ICON,
                 alignItems: 'center', justifyContent: 'center',
                 marginRight: 10,
               }}>
@@ -413,7 +413,7 @@ export default function ProfileScreen() {
             </View>
             <View style={{
               marginHorizontal: SPACING.xl,
-              backgroundColor: 'rgba(255,255,255,0.02)',
+              backgroundColor: SURFACE,
               borderRadius: 16,
               borderWidth: 1,
               borderColor: BORDER,
@@ -434,19 +434,18 @@ export default function ProfileScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
-              backgroundColor: pressed ? 'rgba(244,63,94,0.12)' : 'rgba(244,63,94,0.06)',
+              backgroundColor: SURFACE_ELEVATED,
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: 'rgba(244,63,94,0.15)',
-              paddingVertical: 13,
-              opacity: pressed ? 0.8 : 1,
+              borderColor: DANGER,
+              paddingVertical: SPACING.md,
             })}
             accessibilityLabel="Sign out"
             accessibilityRole="button"
             hitSlop={8}
           >
-            <LogOut size={16} color="#f43f5e" />
-            <Text style={{ fontSize: 14, fontWeight: '600', color: '#f43f5e' }}>
+            <LogOut size={16} color={DANGER} />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: DANGER }}>
               Sign Out
             </Text>
           </Pressable>

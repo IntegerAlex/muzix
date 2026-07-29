@@ -18,6 +18,8 @@ import { Artwork } from '@/components/Artwork';
 import { GlassCard } from '@/components/GlassCard';
 import { usePlayerStore } from '@/store/playerStore';
 import { formatTime } from '@/lib/utils';
+import { SURFACE_ICON, SURFACE_ELEVATED, TEXT_PRIMARY } from '@/lib/colors';
+import { SPACING } from '@/lib/spacing';
 
 const TAB_BAR_HEIGHT = 64;
 
@@ -102,12 +104,12 @@ export function MiniPlayer() {
           zIndex: 40,
           elevation: 40,
           bottom: bottomInset + TAB_BAR_HEIGHT + 2,
-          paddingHorizontal: 12,
+          paddingHorizontal: SPACING.md,
           pointerEvents: 'box-none',
         },
       ]}
     >
-      <GlassCard style={{ paddingHorizontal: 12, paddingVertical: 10 }} intensity={50}>
+      <GlassCard style={{ paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }} intensity={50}>
         <View
           style={{
             position: 'absolute',
@@ -117,18 +119,15 @@ export function MiniPlayer() {
             height: 2,
             overflow: 'hidden',
             borderRadius: 9999,
-            backgroundColor: 'rgba(255,255,255,0.1)',
+            backgroundColor: SURFACE_ELEVATED,
           }}
         >
           <View
             style={{
               height: '100%',
               borderRadius: 9999,
-              backgroundColor: isLoading ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.7)',
+              backgroundColor: isLoading ? SURFACE_ICON : TEXT_PRIMARY,
               width: isLoading ? '100%' : `${progressPct}%`,
-              ...(isLoading && {
-                opacity: 0.5,
-              }),
             }}
           />
         </View>
@@ -161,10 +160,10 @@ export function MiniPlayer() {
               style={{
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 38,
-                height: 38,
-                borderRadius: 19,
-                backgroundColor: 'rgba(255,255,255,0.15)',
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: SURFACE_ICON,
               }}
               hitSlop={8}
               accessibilityLabel={isPlaying ? 'Pause' : 'Play'}

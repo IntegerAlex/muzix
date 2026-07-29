@@ -18,7 +18,7 @@ import config from '../tamagui.config';
 import { loadAll } from '@/services/data';
 import { ToastProvider } from '@/components/Toast';
 import { useAuthStore } from '@/store/authStore';
-import { BG, TEXT_PRIMARY, ACCENT } from '@/lib/colors';
+import { BG, TEXT_PRIMARY, ACCENT, SURFACE_ICON } from '@/lib/colors';
 
 const PUBLIC_ROUTES = ['/login', '/register'];
 
@@ -73,7 +73,7 @@ export default function RootLayout() {
     return (
       <TamaguiProvider config={config} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
         <View style={{ flex: 1, backgroundColor: BG, justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: 'rgba(29,185,84,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: SURFACE_ICON, alignItems: 'center', justifyContent: 'center' }}>
             <Skeleton width={36} height={36} borderRadius={12} />
           </View>
           <Skeleton width="60%" height={28} borderRadius={8} style={{ marginTop: 24 }} />

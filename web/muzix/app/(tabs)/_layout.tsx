@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { House, Search, Library, User } from 'lucide-react-native';
-import { TEXT_MUTED, BORDER, ACCENT } from '@/lib/colors';
+import { BG, TEXT_MUTED, BORDER, ACCENT } from '@/lib/colors';
 
 export default function TabsLayout() {
   return (
@@ -8,7 +8,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: 'rgba(11,16,32,0.85)',
+          backgroundColor: BG,
           borderTopColor: BORDER,
           borderTopWidth: 0.5,
           elevation: 0,
