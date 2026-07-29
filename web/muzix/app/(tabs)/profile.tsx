@@ -204,9 +204,9 @@ export default function ProfileScreen() {
         const likedSongIds = likesRes?.songIds ?? [];
         const likedSongsMapped = likedSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
 
-        const totalPlays = topItems.reduce((sum, item) => sum + (item.playCount ?? 0), 0);
+        const totalPlays = topItems.reduce((sum, item) => sum + Number(item.playCount ?? 0), 0);
         const avgMs = topSongsMapped.length > 0
-          ? topSongsMapped.reduce((sum, s) => sum + s.durationMs, 0) / topSongsMapped.length
+          ? topSongsMapped.reduce((sum, s) => sum + (s.durationMs || 0), 0) / topSongsMapped.length
           : 180000;
         const estimatedListeningMs = totalPlays * avgMs;
 
