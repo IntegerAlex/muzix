@@ -38,9 +38,13 @@ async function flushEvents() {
   if (EVENT_BUFFER.length === 0) return;
   const eventsToSend = EVENT_BUFFER.splice(0, EVENT_BUFFER.length);
   try {
+    const token = useAuthStore.getState().token;
     await fetch(`${process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000'}/telemetry/events`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(eventsToSend),
     });
     flushRetries = 0;
@@ -70,17 +74,25 @@ let sessionStarted = false;
 function recordSessionStart() {
   if (sessionStarted) return;
   sessionStarted = true;
+  const token = useAuthStore.getState().token;
   fetch(`${process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000'}/telemetry/session/start`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({ session_id: SESSION_ID, device_type: 'web', app_version: '1.0.0', entry_source: 'app_open' }),
   }).catch(() => {});
 }
 
 function recordSessionEnd(exitReason = 'user_close') {
+  const token = useAuthStore.getState().token;
   fetch(`${process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000'}/telemetry/session/end`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify({ session_id: SESSION_ID, exit_reason: exitReason }),
   }).catch(() => {});
   if (EVENT_BUFFER.length > 0) flushEvents();
@@ -136,6 +148,8 @@ export function PlayerBridge() {
   const playStartRef = useRef<Date | null>(null);
   const currentUrlRef = useRef<string | null>(null);
   const retryCountRef = useRef(0);
+  const bufferedTrackRef = useRef<string | null>(null);
+  const bufferedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const MAX_RETRIES = 3;
 
   useEffect(() => { recordSessionStart(); }, []);
@@ -165,11 +179,20 @@ export function PlayerBridge() {
         currentUrlRef.current = playUri;
 
         player.replace({ uri: playUri });
+        player.volume = volume;
         player.play();
         setPlaying(true);
         playStartRef.current = new Date();
         retryCountRef.current = 0;
         usePlayerStore.setState({ error: null });
+
+        bufferedTrackRef.current = current.id;
+        bufferedTimeoutRef.current = setTimeout(() => {
+          if (bufferedTrackRef.current === current.id) {
+            setLoading(null);
+            bufferedTrackRef.current = null;
+          }
+        }, 10000);
         recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: 0 });
       } catch (err) {
         if (cancelled) return;
@@ -186,15 +209,28 @@ export function PlayerBridge() {
           return;
         }
         setPlaying(false);
+        setLoading(null);
         usePlayerStore.setState({ error: 'Playback failed. Tap retry to try again.' });
-      } finally {
-        if (!cancelled) setLoading(null);
       }
     };
 
     attemptLoad();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (bufferedTimeoutRef.current) clearTimeout(bufferedTimeoutRef.current);
+      bufferedTimeoutRef.current = null;
+    };
   }, [current?.id, player, setLoading, setPlaying]);
+
+  useEffect(() => {
+    if (RNTP_OWNS_AUDIO || !current || bufferedTrackRef.current !== current.id) return;
+    if (status.currentTime > 0) {
+      if (bufferedTimeoutRef.current) clearTimeout(bufferedTimeoutRef.current);
+      bufferedTimeoutRef.current = null;
+      setLoading(null);
+      bufferedTrackRef.current = null;
+    }
+  }, [status.currentTime, current?.id]);
 
   useEffect(() => {
     if (RNTP_OWNS_AUDIO) return;
@@ -250,7 +286,7 @@ export function PlayerBridge() {
     try {
       player.volume = volume;
     } catch {}
-  }, [volume, player]);
+  }, [volume, player, current?.id]);
 
   useEffect(() => {
     if (RNTP_OWNS_AUDIO || IS_WEB || !current || !status.duration) return;

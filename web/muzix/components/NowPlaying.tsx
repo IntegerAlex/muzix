@@ -114,7 +114,7 @@ export function NowPlaying() {
 
   useEffect(() => {
     if (!current || error) return;
-    if (isPlaying) {
+    if (isPlaying && loadingId !== current.id) {
       const remainingMs = (1 - progress.value) * current.durationMs;
       if (remainingMs > 0) {
         progress.value = withTiming(1, { duration: remainingMs, easing: Easing.linear });

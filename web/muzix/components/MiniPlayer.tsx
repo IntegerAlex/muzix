@@ -75,6 +75,7 @@ export function MiniPlayer() {
 
   useEffect(() => {
     if (!current || !isPlaying) return;
+    if (loadingId === current.id) return;
     const remainingMs = (1 - progress.value) * current.durationMs;
     if (remainingMs > 0) {
       progress.value = withTiming(1, { duration: remainingMs, easing: Easing.linear });
