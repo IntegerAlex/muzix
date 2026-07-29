@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import hashlib
-import json
+import orjson
 import re
 import time
 from collections import defaultdict
@@ -11,7 +11,7 @@ from typing import Literal
 
 import jwt
 from fastapi import Depends, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel, field_validator
 
 from config import (
@@ -96,21 +96,21 @@ def rate_limit(request: Request, max_requests: int = 30, window: int = 60):
 # ---------------------------------------------------------------------------
 
 def compute_etag(data: dict | list) -> str:
-    serialized = json.dumps(data, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(serialized.encode()).hexdigest()[:32]
+    serialized = orjson.dumps(data, option=orjson.OPT_SORT_KEYS, default=str)
+    return hashlib.sha256(serialized).hexdigest()[:32]
 
 
-def make_cached_response(body: dict, request: Request) -> JSONResponse:
+def make_cached_response(body: dict, request: Request) -> ORJSONResponse:
     if_none_match = request.headers.get("If-None-Match")
     if not if_none_match:
         etag = compute_etag(body.get("data"))
-        return JSONResponse(content=body, headers={"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"})
+        return ORJSONResponse(content=body, headers={"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"})
     raw_data = body.get("data")
     etag = compute_etag(raw_data)
     cache_headers = {"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"}
     if if_none_match.strip('"') == etag:
         raise HTTPException(status_code=304, headers=cache_headers)
-    return JSONResponse(content=body, headers=cache_headers)
+    return ORJSONResponse(content=body, headers=cache_headers)
 
 
 # ---------------------------------------------------------------------------
