@@ -11,7 +11,7 @@ import { usePlayerStore } from '@/store/playerStore';
 import { getSongs, getPlaylists } from '@/services/data';
 import type { Song } from '@/services/types';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
-import { SPACING } from '@/lib/sizing';
+import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
 
 function StatCard({ icon: Icon, value, label, color, subtitle }: {
