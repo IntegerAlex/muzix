@@ -54,7 +54,7 @@
       "typedRoutes": true
     },
     "linking": {
-      "prefixes": ["muzix://"],
+      "prefixes": ["muzix://", "https://muzix.gossorg.in"],
       "config": {
         "screens": {
           "(tabs)": {
@@ -69,6 +69,7 @@
           "album": "album/:id",
           "artist": "artist/:id",
           "playlist": "playlist/:id",
+          "share": "share/:token",
           "login": "login",
           "register": "register"
         }

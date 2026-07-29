@@ -73,14 +73,30 @@ export function useSharing() {
 
       if (Platform.OS === 'web') {
         if (typeof navigator !== 'undefined' && navigator.share) {
-          await navigator.share({
-            title: content.title,
-            text: shareText,
-            url: shareUrl,
-          });
-        } else {
-          await navigator.clipboard.writeText(shareUrl);
-          alert('Share link copied to clipboard!');
+          try {
+            await navigator.share({
+              title: content.title,
+              text: shareText,
+              url: shareUrl,
+            });
+          } catch {
+            // Share cancelled or not supported — fall back to clipboard
+          }
+        }
+        if (typeof navigator !== 'undefined') {
+          try {
+            await navigator.clipboard.writeText(shareUrl);
+          } catch {
+            // Fallback: textarea trick
+            const ta = document.createElement('textarea');
+            ta.value = shareUrl;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+          }
         }
       } else {
         await Share.share({

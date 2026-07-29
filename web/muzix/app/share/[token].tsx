@@ -1,11 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
-import { View, Text, Image, Pressable, ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
+import { useEffect, useState, useCallback, Platform } from 'react';
+import { View, Text, Image, Pressable, ActivityIndicator, ScrollView, StyleSheet, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertTriangle, Music, Album, User, ListMusic } from 'lucide-react-native';
 import { BG, SURFACE, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, DANGER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+const WEB_URL = "https://muzix.gossorg.in";
 
 interface ShareData {
   share_token: string;
@@ -38,7 +39,7 @@ export default function ShareScreen() {
       } else {
         setError('This share link is invalid or has expired');
       }
-    } catch (e: any) {
+    } catch {
       setError("Can't load share preview. Check your connection.");
     } finally {
       setLoading(false);
@@ -47,19 +48,21 @@ export default function ShareScreen() {
 
   useEffect(() => { fetchShare(); }, [fetchShare]);
 
-  const handleOpenContent = () => {
+  const deepLink = data ? `muzix://album/${data.content_id}` : '';
+
+  const handleOpenInApp = useCallback(async () => {
     if (!data) return;
-    const { content_type, content_id } = data;
-    const routes: Record<string, string> = {
-      song: `/album/${content_id}`,
-      album: `/album/${content_id}`,
-      artist: `/artist/${content_id}`,
-      playlist: `/playlist/${content_id}`,
-      lyrics: `/album/${content_id}`,
-    };
-    const route = routes[content_type] || '/';
-    router.push(route);
-  };
+    const url = `muzix://album/${data.content_id}`;
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      const storeUrl = Platform.OS === 'ios'
+        ? 'https://apps.apple.com/app/muzix/id0000000000'
+        : 'https://play.google.com/store/apps/details?id=com.muzix.app';
+      await Linking.openURL(storeUrl);
+    }
+  }, [data]);
 
   if (loading) {
     return (
@@ -116,8 +119,12 @@ export default function ShareScreen() {
           </View>
         )}
 
-        <Pressable style={styles.openButton} onPress={handleOpenContent}>
+        <Pressable style={styles.openButton} onPress={handleOpenInApp}>
           <Text style={styles.openButtonText}>Open in MUZIX</Text>
+        </Pressable>
+
+        <Pressable style={styles.webButton} onPress={() => Linking.openURL(`${WEB_URL}/album/${data.content_id}`)}>
+          <Text style={styles.webButtonText}>Or continue in browser</Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -208,11 +215,21 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     width: '100%',
     alignItems: 'center',
+    marginBottom: SPACING.md,
   },
   openButtonText: {
     color: '#000',
     fontSize: 16,
     fontWeight: '700',
+  },
+  webButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  webButtonText: {
+    color: TEXT_SECONDARY,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
   loadingText: {
     color: TEXT_SECONDARY,

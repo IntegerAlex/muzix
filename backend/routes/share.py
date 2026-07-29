@@ -1,4 +1,5 @@
 """Share routes: generate share links and resolve share tokens."""
+import os
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
@@ -6,6 +7,8 @@ from helpers import success_resp, rate_limit, check_rate_limit, _client_ip, get_
 from services import share as share_svc
 
 router = APIRouter()
+
+WEB_URL = os.getenv("WEB_URL", "https://muzix.gossorg.in")
 
 
 class ShareGenerate(BaseModel):
@@ -17,7 +20,6 @@ class ShareGenerate(BaseModel):
 @router.post("/generate")
 async def generate_share(body: ShareGenerate, request: Request, user=Depends(get_current_user)):
     check_rate_limit(f"share:{user.id}", max_requests=10, window=60)
-    base_url = str(request.base_url).rstrip("/")
     lyrics = None
     if body.content_type == "lyrics" and body.selected_lyrics_lines:
         from services.songs import get_song_lyrics
@@ -30,7 +32,7 @@ async def generate_share(body: ShareGenerate, request: Request, user=Depends(get
         user_id=user.id,
         content_type=body.content_type,
         content_id=body.content_id,
-        base_url=base_url,
+        base_url=WEB_URL,
         lyrics=lyrics,
         selected_lyrics_lines=body.selected_lyrics_lines,
     )

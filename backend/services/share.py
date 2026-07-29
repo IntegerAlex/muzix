@@ -110,7 +110,7 @@ async def create_share(
 
         return {
             "share_token": share_token,
-            "share_url": f"{base_url}/api/share/{share_token}",
+            "share_url": f"{base_url}/share/{share_token}",
             "content_type": content_type,
             "content_id": content_id,
             "title": metadata["title"],
@@ -132,7 +132,7 @@ async def get_share_by_token(share_token: str) -> dict | None:
             return None
         return {
             "share_token": share.share_token,
-            "share_url": f"/api/share/{share.share_token}",
+            "share_url": f"/share/{share.share_token}",
             "content_type": share.content_type,
             "content_id": share.content_id,
             "title": share.title or "",
