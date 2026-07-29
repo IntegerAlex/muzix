@@ -179,8 +179,8 @@ export default function HomeScreen() {
       if (token) {
         setRecommendationsLoading(true);
         setRecommendationsError(null);
-        api.recommendations(20, token).then((result: any) => {
-          const items = result.data?.items ?? [];
+        api.recommendations(20, token).then((result) => {
+          const items = result.items ?? [];
           setTopPicks(items.map((item: any) => ({
             id: item.id,
             title: item.title,
@@ -232,8 +232,7 @@ export default function HomeScreen() {
       setRecommendationsError(null);
       try {
         const result = await api.recommendations(20, token);
-        const body = result as any;
-        const items = body.data?.items ?? [];
+        const items = result.items ?? [];
         setTopPicks(items.map((item: any) => ({
           id: item.id,
           title: item.title,
