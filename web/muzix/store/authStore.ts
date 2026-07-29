@@ -40,6 +40,7 @@ export const useAuthStore = create<AuthState>()(
         const expiresIn = parseJwtExpiry(token);
         set({ token, user, loading: false, tokenExpiresAt: expiresIn });
         getPlayerStore().getState().syncLikes();
+        getPlayerStore().getState().syncRecent();
       },
       logout: () => {
         safeRemoveItem('auth-storage');
@@ -55,7 +56,10 @@ export const useAuthStore = create<AuthState>()(
             useAuthStore.getState().logout();
             return;
           }
-          if (token) getPlayerStore().getState().syncLikes();
+          if (token) {
+            getPlayerStore().getState().syncLikes();
+            getPlayerStore().getState().syncRecent();
+          }
         }, 0);
       },
       isTokenExpired: () => {

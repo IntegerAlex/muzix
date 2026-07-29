@@ -64,6 +64,7 @@ interface PlayerState {
   toggleRepeat: () => void;
   toggleLike: (songId: string) => void;
   syncLikes: () => Promise<void>;
+  syncRecent: () => Promise<void>;
   addToQueue: (song: Song) => void;
   playNext: (song: Song) => void;
   removeFromQueue: (index: number) => void;
@@ -290,6 +291,23 @@ export const usePlayerStore = create<PlayerState>()(
         try {
           const { songIds } = await api.getLikes(token);
           set({ likedSongs: Object.fromEntries(songIds.map((id) => [id, true])) });
+        } catch {}
+      },
+
+      syncRecent: async () => {
+        const token = useAuthStore.getState().token;
+        if (!token) return;
+        try {
+          const res = await api.recentActivity(50, token);
+          const items: any[] = res?.items ?? [];
+          const ids = items
+            .map((item: any) => item.song_id ?? item.song?.id)
+            .filter(Boolean) as string[];
+          if (ids.length > 0) {
+            const existing = get().recentlyPlayed;
+            const merged = [...new Set([...ids, ...existing])].slice(0, 50);
+            set({ recentlyPlayed: merged });
+          }
         } catch {}
       },
 
