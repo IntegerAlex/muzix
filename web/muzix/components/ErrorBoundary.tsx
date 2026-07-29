@@ -45,6 +45,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
       return (
         <View
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
           style={{
             flex: 1,
             backgroundColor: BG,

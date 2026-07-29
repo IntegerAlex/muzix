@@ -225,7 +225,7 @@ export function NowPlaying() {
               </View>
 
               {error ? (
-                <View style={{ marginTop: 24, alignItems: 'center', gap: 12 }}>
+                <View style={{ marginTop: 24, alignItems: 'center', gap: 12 }} accessibilityRole="alert" accessibilityLiveRegion="polite">
                   <AlertCircle size={32} color="#f43f5e" />
                   <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", textAlign: "center" }}>{error}</Text>
                   <Pressable
@@ -549,7 +549,7 @@ export function NowPlaying() {
           </View>
 
           {error ? (
-            <View style={{ marginTop: 24, alignItems: 'center', gap: 12 }}>
+            <View style={{ marginTop: 24, alignItems: 'center', gap: 12 }} accessibilityRole="alert" accessibilityLiveRegion="polite">
               <AlertCircle size={32} color="#f43f5e" />
               <Text style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", textAlign: "center" }}>{error}</Text>
               <Pressable
