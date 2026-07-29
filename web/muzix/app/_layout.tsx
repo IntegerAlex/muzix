@@ -152,7 +152,7 @@ export default function RootLayout() {
                 <NowPlaying />
                 <PlayerBridge />
               </View>
-              <QueuePanel visible={showQueue} onClose={() => setShowQueue(false)} />
+              {showQueue && <QueuePanel onClose={() => setShowQueue(false)} />}
             </View>
           </ErrorBoundary>
         </ThemeProvider>

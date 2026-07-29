@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { Pressable, ScrollView, useWindowDimensions } from 'react-native';
+import { Pressable, ScrollView, useWindowDimensions, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, withSpring, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, ChevronUp, ChevronDown, ListMusic, Trash2 } from 'lucide-react-native';
@@ -87,7 +87,7 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
   }, [clearQueue]);
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={StyleSheet.absoluteFill}>
       <Pressable
         onPress={handleClose}
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}
