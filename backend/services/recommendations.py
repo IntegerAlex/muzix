@@ -117,7 +117,7 @@ async def _ensure_model() -> bool:
         if not song_ids:
             return False
 
-        song_features = await rec_repo.get_song_features()
+        song_features = await rec_repo.get_song_features(song_ids)
         _item_features_map = song_features
 
         user_ids = sorted(set(i.get("user_id") for i in interactions if i.get("user_id")))

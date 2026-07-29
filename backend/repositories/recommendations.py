@@ -106,10 +106,13 @@ async def get_all_user_interactions() -> list[dict]:
     ]
 
 
-async def get_song_features() -> dict[str, dict]:
+async def get_song_features(song_ids: list[str] | None = None) -> dict[str, dict]:
     """Get song features for content-based filtering."""
     async with SessionLocal() as session:
-        songs_result = await session.execute(select(Song))
+        if song_ids:
+            songs_result = await session.execute(select(Song).where(Song.id.in_(song_ids)))
+        else:
+            songs_result = await session.execute(select(Song))
         songs = songs_result.scalars().all()
         song_ids = [s.id for s in songs]
     

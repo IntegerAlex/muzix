@@ -11,7 +11,7 @@ async def get_user_top_picks(request: Request, limit: int = 20, user=Depends(get
     rate_limit(request, max_requests=30, window=60)
     items = await rec_svc.get_recommendations(user.id, min(limit, 50))
     meta = await rec_svc.get_model_status()
-    return success_resp(data=items, message="Recommendations retrieved", meta=meta)
+    return success_resp(data={"items": items, "meta": meta}, message="Recommendations retrieved")
 
 
 @router.get("/user/model-status")

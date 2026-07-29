@@ -174,8 +174,35 @@ export default function HomeScreen() {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     reloadAll();
-    Promise.all([reloadAlbums(), reloadPlaylists(), reloadSongs()]).finally(() => setRefreshing(false));
-  }, [reloadAlbums, reloadPlaylists, reloadSongs]);
+    Promise.all([reloadAlbums(), reloadPlaylists(), reloadSongs()]).finally(() => {
+      setRefreshing(false);
+      if (token) {
+        setRecommendationsLoading(true);
+        setRecommendationsError(null);
+        api.recommendations(20, token).then((result: any) => {
+          const items = result.data?.items ?? [];
+          setTopPicks(items.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            artist: item.artist,
+            artistId: '',
+            album: item.album,
+            albumId: '',
+            duration: '',
+            durationMs: item.duration_ms || 0,
+            track: undefined,
+            colors: item.colors || ['#6d28d9', '#db2777'],
+            lyrics: undefined,
+            imageUrl: undefined,
+            audioUrl: undefined,
+          })));
+        }).catch((err) => {
+          setRecommendationsError(String(err));
+          setTopPicks(songs.slice(0, 6));
+        }).finally(() => setRecommendationsLoading(false));
+      }
+    });
+  }, [reloadAlbums, reloadPlaylists, reloadSongs, token, songs]);
 
   const loading = albumsLoading || playlistsLoading || songsLoading;
   const error = albumsError || playlistsError || songsError;
@@ -206,7 +233,7 @@ export default function HomeScreen() {
       try {
         const result = await api.recommendations(20, token);
         const body = result as any;
-        const items = Array.isArray(body.data) ? body.data : body.data?.items ?? [];
+        const items = body.data?.items ?? [];
         setTopPicks(items.map((item: any) => ({
           id: item.id,
           title: item.title,
@@ -224,13 +251,13 @@ export default function HomeScreen() {
         })));
       } catch (err) {
         setRecommendationsError(String(err));
-        setTopPicks(recentSongs);
+        setTopPicks(songs.slice(0, 6));
       } finally {
         setRecommendationsLoading(false);
       }
     }
     loadRecommendations();
-  }, [token, recentSongs]);
+  }, [token]);
 
   return (
     <View style={{ flex: 1 }}>
