@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { ActivityIndicator, Pressable, ScrollView } from 'react-native';
 import { Interactive } from 'interactkit';
 import Slider from '@react-native-community/slider';
