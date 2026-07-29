@@ -70,6 +70,7 @@ async def migrate() -> None:
             ("artist_id", "TEXT"),
             ("album_id", "TEXT"),
             ("track", "INTEGER"),
+            ("genre", "TEXT NOT NULL DEFAULT ''"),
             ("lyrics", "TEXT"),
             ("colors", "TEXT[] NOT NULL DEFAULT '{}'"),
         ]:
@@ -78,6 +79,9 @@ async def migrate() -> None:
             )
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS songs_fts_idx ON songs USING GIN (fts);")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_songs_genre ON songs(genre);")
         )
 
         # ----- albums -----

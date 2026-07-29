@@ -191,6 +191,7 @@ def serialize_song(song: Song, base_url: str = "", brief: bool = False) -> dict:
         "artistId": song.artist_id,
         "album": song.album,
         "albumId": song.album_id,
+        "genre": song.genre,
         "duration": song.duration,
         "durationMs": song.duration_ms,
         "track": song.track,

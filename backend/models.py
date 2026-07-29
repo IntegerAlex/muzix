@@ -70,6 +70,7 @@ class Song(Base):
     duration = Column(String(16), nullable=False, default="")
     duration_ms = Column(Integer, nullable=False, default=0)
     track = Column(Integer, nullable=True)
+    genre = Column(String(128), nullable=False, default="")
     lyrics = Column(Text, nullable=True)
     r2_object_key = Column(String(1024), nullable=True)
     colors = Column(ARRAY(Text), nullable=False, server_default="{}")

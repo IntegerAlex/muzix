@@ -87,6 +87,89 @@ def fetch_artist_songs() -> list[dict]:
     artist_id = artist.api_path.split("/")[-1] if artist.api_path else "?"
     log("OK", f"Found: {artist.name} (id={artist_id})")
 
+    genre = "Pop"
+    try:
+        import requests
+        from bs4 import BeautifulSoup
+        from difflib import SequenceMatcher
+
+        def clean_tag(tag: str, artist_name: str) -> bool:
+            tag_lower = tag.lower()
+            name_lower = artist_name.lower()
+            if tag_lower == name_lower:
+                return False
+            if re.match(r"^\d{4}s?$", tag_lower):
+                return False
+            if tag_lower in name_lower.split():
+                return False
+            if tag_lower.replace(" ", "") == name_lower.replace(" ", ""):
+                return False
+            name_words = name_lower.split()
+            if all(w in tag_lower for w in name_words):
+                return False
+            if SequenceMatcher(None, tag_lower, name_lower.replace(" ", "")).ratio() > 0.8:
+                return False
+            return True
+
+        def pick_genre_from_mb(tags: list[str], artist_name: str) -> str | None:
+            for tag in tags:
+                if clean_tag(tag, artist_name):
+                    return tag
+            return None
+
+        def scrape_wikipedia_genre(artist_name: str) -> str | None:
+            slug = artist_name.replace(" ", "_")
+            url = f"https://en.wikipedia.org/wiki/{slug}"
+            try:
+                r = requests.get(url, headers={"User-Agent": "Muzix/1.0"}, timeout=10)
+                if r.status_code != 200:
+                    return None
+                soup = BeautifulSoup(r.text, "html.parser")
+                infobox = soup.find("table", class_="infobox")
+                if not infobox:
+                    return None
+                for row in infobox.find_all("tr"):
+                    th = row.find("th")
+                    if th and "genre" in th.get_text().lower():
+                        td = row.find("td")
+                        if td:
+                            genres = [a.get_text(strip=True) for a in td.find_all("a")]
+                            for g in genres:
+                                if g and clean_tag(g, artist_name):
+                                    return g
+                return None
+            except Exception:
+                return None
+
+        headers = {"User-Agent": "Muzix/1.0"}
+        r = requests.get(
+            "https://musicbrainz.org/ws/2/artist/",
+            params={"query": f"artist:{ARTIST_NAME}", "fmt": "json"},
+            headers=headers,
+            timeout=10,
+        )
+        if r.status_code == 200:
+            artists_data = r.json().get("artists", [])
+            if artists_data:
+                mbid = artists_data[0].get("id")
+                if mbid:
+                    r2 = requests.get(
+                        f"https://musicbrainz.org/ws/2/artist/{mbid}",
+                        params={"fmt": "json", "inc": "tags"},
+                        headers=headers,
+                        timeout=10,
+                    )
+                    if r2.status_code == 200:
+                        tags = [t.get("name", "") for t in r2.json().get("tags", [])]
+                        genre = pick_genre_from_mb(tags, ARTIST_NAME) or "Pop"
+
+        if genre == "Pop":
+            genre = scrape_wikipedia_genre(ARTIST_NAME) or "Pop"
+    except Exception:
+        pass
+
+    log("OK", f"Genre: {genre}")
+
     # Get song list from API (fast, no lyrics)
     log("INFO", "Fetching song list from Genius API...")
     raw_songs = []
@@ -297,7 +380,7 @@ async def insert_db(songs: list[dict]):
                 "artist": ARTIST_NAME,
                 "artist_id": ARTIST_SLUG,
                 "year": 2024,
-                "genre": "Pop",
+                "genre": genre,
                 "colors": colors,
                 "song_ids": [s["vid_id"] for s in songs],
             },
@@ -330,6 +413,7 @@ async def insert_db(songs: list[dict]):
                         "artist_id": ARTIST_SLUG,
                         "album": ARTIST_NAME,
                         "album_id": album_id,
+                        "genre": genre,
                         "duration": f"{dur_min}:{dur_sec:02d}",
                         "duration_ms": s["duration"] * 1000,
                         "lyrics": s.get("lyrics"),
