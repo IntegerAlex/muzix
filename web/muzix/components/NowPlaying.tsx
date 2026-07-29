@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { ActivityIndicator, Pressable, ScrollView } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image } from 'react-native';
 import { Interactive } from 'interactkit';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,7 +70,8 @@ export function NowPlaying() {
   const [scrubValue, setScrubValue] = useState(0);
   const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [selectedLyrics, setSelectedLyrics] = useState<string[]>([]);
-  const { imageRef, share } = useLyricsSharing();
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const { imageRef, generate, shareUri, isGenerating, shareError } = useLyricsSharing();
 
   const isLiked = current ? !!likedSongs[current.id] : false;
 
@@ -144,12 +145,15 @@ export function NowPlaying() {
 
   useEffect(() => {
     if (selectedLyrics.length > 0) {
-      const timer = setTimeout(() => {
-        share().then(() => setSelectedLyrics([]));
+      const timer = setTimeout(async () => {
+        const uri = await generate();
+        if (uri) {
+          setPreviewUri(uri);
+        }
       }, 200);
       return () => clearTimeout(timer);
     }
-  }, [selectedLyrics, share]);
+  }, [selectedLyrics, generate]);
 
   const handleShareLyrics = useCallback(
     (selectedTexts: string[]) => {
@@ -438,6 +442,103 @@ export function NowPlaying() {
           imageUrl={current.imageUrl}
           colors={current.colors}
         />
+      )}
+      {isGenerating && (
+        <View style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 100,
+        }}>
+          <ActivityIndicator size="large" color="white" />
+          <Text style={{ marginTop: 16, fontSize: 16, color: 'white' }}>Generating share image...</Text>
+        </View>
+      )}
+      {previewUri && (
+        <Modal
+          visible={true}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setPreviewUri(null)}
+        >
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.7)',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+            onPress={() => setPreviewUri(null)}
+            activeOpacity={1}
+          >
+            <View style={{
+              backgroundColor: '#1a1a1e',
+              borderRadius: 20,
+              padding: 24,
+              width: '90%',
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.1)',
+            }}>
+              <Text style={{ fontSize: 18, fontWeight: '600', color: 'white', marginBottom: 16 }}>
+                Share Lyrics
+              </Text>
+              <Image
+                source={{ uri: previewUri }}
+                style={{
+                  width: '100%',
+                  height: 200,
+                  borderRadius: 12,
+                  marginBottom: 16,
+                  resizeMode: 'cover',
+                }}
+              />
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#1DB954',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 24,
+                  marginBottom: 12,
+                  width: '100%',
+                  alignItems: 'center',
+                }}
+                onPress={async () => {
+                  await shareUri(previewUri);
+                  setPreviewUri(null);
+                  setSelectedLyrics([]);
+                }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '600', color: 'white' }}>
+                  Share via...
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 24,
+                  width: '100%',
+                  alignItems: 'center',
+                }}
+                onPress={() => {
+                  setPreviewUri(null);
+                  setSelectedLyrics([]);
+                }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '500', color: 'rgba(255,255,255,0.7)' }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
       )}
     </View>
   );

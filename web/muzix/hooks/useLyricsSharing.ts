@@ -6,10 +6,11 @@ import * as Sharing from 'expo-sharing';
 export function useLyricsSharing() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
   const imageRef = useRef<View>(null);
 
-  const share = useCallback(async () => {
-    if (!imageRef.current) return;
+  const generate = useCallback(async (): Promise<string | null> => {
+    if (!imageRef.current) return null;
     setIsGenerating(true);
     setShareError(null);
     try {
@@ -18,32 +19,41 @@ export function useLyricsSharing() {
         quality: 1,
         result: Platform.OS === 'web' ? 'data-uri' : 'tmpfile',
       });
-
-      if (Platform.OS === 'web') {
-        const blob = await (await fetch(uri)).blob();
-        const file = new File([blob], 'lyrics.png', { type: 'image/png' });
-        if (navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file] });
-        } else {
-          const a = document.createElement('a');
-          a.href = uri;
-          a.download = 'lyrics.png';
-          a.click();
-        }
-      } else if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'image/png',
-          dialogTitle: 'Share lyrics',
-        });
-      } else {
-        setShareError('Sharing is not available on this device');
-      }
+      return uri;
     } catch {
-      setShareError('Failed to share lyrics');
+      setShareError('Failed to generate image');
+      return null;
     } finally {
       setIsGenerating(false);
     }
   }, []);
 
-  return { imageRef, share, isGenerating, shareError };
+  const shareUri = useCallback(async (uri: string) => {
+    if (Platform.OS === 'web') {
+      const blob = await (await fetch(uri)).blob();
+      const file = new File([blob], 'lyrics.png', { type: 'image/png' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'MUZIX Lyrics' });
+      } else {
+        const a = document.createElement('a');
+        a.href = uri;
+        a.download = 'muzix-lyrics.png';
+        a.click();
+      }
+    } else if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/png',
+        dialogTitle: 'Share lyrics',
+      });
+    } else {
+      setShareError('Sharing is not available on this device');
+    }
+  }, []);
+
+  const share = useCallback(async () => {
+    const uri = await generate();
+    if (uri) await shareUri(uri);
+  }, [generate, shareUri]);
+
+  return { imageRef, generate, shareUri, share, isGenerating, shareError };
 }
