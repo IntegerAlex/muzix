@@ -50,6 +50,9 @@ interface PlayerState {
   volume: number;
   seekPosition: number | null;
   connectionStatus: 'online' | 'offline';
+  totalPlays: number;
+  totalListeningMs: number;
+  recentlyPlayed: string[];
 
   playSong: (song: Song, queue?: Song[], index?: number) => void;
   setPlaying: (v: boolean) => void;
@@ -135,6 +138,9 @@ export const usePlayerStore = create<PlayerState>()(
       seekPosition: null,
       error: null,
       connectionStatus: 'online',
+      totalPlays: 0,
+      totalListeningMs: 0,
+      recentlyPlayed: [],
 
       playSong: (song, queue, index) => {
         const nextQueue = queue ?? get().queue;
@@ -144,6 +150,8 @@ export const usePlayerStore = create<PlayerState>()(
             : nextQueue.findIndex((s) => s.id === song.id);
         const resolvedIndex = nextIndex >= 0 ? nextIndex : 0;
         const resolvedQueue = nextQueue.length ? nextQueue : [song];
+        const recent = get().recentlyPlayed;
+        const deduped = [song.id, ...recent.filter((id) => id !== song.id)].slice(0, 50);
         set({
           current: song,
           queue: resolvedQueue,
@@ -152,6 +160,9 @@ export const usePlayerStore = create<PlayerState>()(
           isPlaying: true,
           history: [],
           error: null,
+          totalPlays: get().totalPlays + 1,
+          totalListeningMs: get().totalListeningMs + song.durationMs,
+          recentlyPlayed: deduped,
         });
         patchLyrics(song);
         driveQueue(resolvedQueue, resolvedIndex);
@@ -182,7 +193,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (repeat === 'all') {
             const song = queue[0];
             if (!song) return;
-            set({ current: song, currentIndex: 0, history: [...get().history, currentIndex], error: null });
+            set({ current: song, currentIndex: 0, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + song.durationMs });
             patchLyrics(song);
             driveSkipToIndex(0);
           }
@@ -190,7 +201,7 @@ export const usePlayerStore = create<PlayerState>()(
         }
 
         const song = queue[ni];
-        set({ current: song, currentIndex: ni, history: [...get().history, currentIndex], error: null });
+        set({ current: song, currentIndex: ni, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + song.durationMs });
         patchLyrics(song);
         if (REAL) {
           try { playerService.next(); } catch (e) {
