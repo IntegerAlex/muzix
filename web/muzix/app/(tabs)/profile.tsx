@@ -186,9 +186,8 @@ export default function ProfileScreen() {
       if (!token) { setLoading(false); return; }
 
       try {
-        const [statsRes, topRes, recentRes, likesRes, allSongsRes, playlistsRes] = await Promise.all([
-          api.userStats('all', token).catch(() => null),
-          api.topSongs('all', 10, token).catch(() => null),
+        const [topRes, recentRes, likesRes, allSongsRes, playlistsRes] = await Promise.all([
+          api.topSongs('all', 50, token).catch(() => null),
           api.recentActivity(10, token).catch(() => null),
           api.getLikes(token).catch(() => null),
           api.songs(500, 0, token).catch(() => null),
@@ -200,16 +199,23 @@ export default function ProfileScreen() {
         const allSongs = (allSongsRes ?? []).map(mapSong);
         const songMap = new Map(allSongs.map((s) => [s.id, s]));
 
-        const topSongsMapped = (topRes?.items ?? []).map((item: SkipRateItem) => mapSong(item.song));
+        const topItems = (topRes?.items ?? []) as SkipRateItem[];
+        const topSongsMapped = topItems.map((item) => mapSong(item.song));
         const recentSongIds = (recentRes?.items ?? []).map((item: RecentItem) => item.songId ?? item.song?.id).filter(Boolean);
         const recentSongsMapped = recentSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
         const likedSongIds = likesRes?.songIds ?? [];
         const likedSongsMapped = likedSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
 
+        const totalPlays = topItems.reduce((sum, item) => sum + (item.playCount ?? 0), 0);
+        const avgDurationMs = allSongs.length > 0
+          ? allSongs.reduce((sum, s) => sum + (s.durationMs ?? 0), 0) / allSongs.length
+          : 180000;
+        const estimatedListeningMs = totalPlays * avgDurationMs;
+
         setStats({
-          totalPlays: statsRes?.totalPlays ?? 0,
-          totalListeningMs: statsRes?.totalListeningMs ?? 0,
-          totalListeningHours: statsRes?.totalListeningHours ?? 0,
+          totalPlays,
+          totalListeningMs: estimatedListeningMs,
+          totalListeningHours: Math.floor(estimatedListeningMs / 3600000),
           likedCount: likedSongIds.length,
           playlistCount: (playlistsRes ?? []).length,
         });
