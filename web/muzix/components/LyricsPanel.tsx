@@ -76,7 +76,7 @@ export function LyricsPanel({ lyrics, currentTime, duration, onSeek, onShare }: 
     }
     if (idx !== activeIndex) {
       setActiveIndex(idx);
-      if (!userScrolling && idx >= 0) {
+      if (!userScrolling && idx >= 0 && !shareMode) {
         const lineView = lineRefs.current.get(idx);
         if (lineView) {
           // @ts-ignore - measure is available on View
@@ -86,7 +86,7 @@ export function LyricsPanel({ lyrics, currentTime, duration, onSeek, onShare }: 
         }
       }
     }
-  }, [currentTime, lines, activeIndex, userScrolling]);
+  }, [currentTime, lines, activeIndex, userScrolling, shareMode]);
 
   const handleScrollBegin = useCallback(() => {
     setUserScrolling(true);
@@ -106,6 +106,10 @@ export function LyricsPanel({ lyrics, currentTime, duration, onSeek, onShare }: 
           if (next.has(index)) {
             next.delete(index);
           } else {
+            if (next.size >= 5) {
+              Alert.alert('Maximum lines reached', 'You can select up to 5 lines to share.');
+              return prev;
+            }
             next.add(index);
           }
           return next;
