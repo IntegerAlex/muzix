@@ -5,6 +5,7 @@ export interface Song {
   artistId: string;
   album: string;
   albumId: string;
+  genre: string;
   duration: string; // mm:ss
   durationMs: number;
   /** Track number within its album. */

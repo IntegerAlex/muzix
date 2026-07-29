@@ -1,9 +1,11 @@
+import { Platform } from 'react-native';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Song } from '@/services/types';
 import * as playerService from '@/services/playerService';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
+import { safeStorage } from '@/store/storage';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -103,7 +105,7 @@ async function patchLyrics(song: Song): Promise<void> {
 }
 
 async function driveQueue(queue: Song[], index: number) {
-  if (!REAL) return;
+  if (!REAL || Platform.OS !== 'web') return;
   try {
     await playerService.addQueue(queue, Math.max(0, index));
     await playerService.play();
@@ -113,7 +115,7 @@ async function driveQueue(queue: Song[], index: number) {
 }
 
 async function driveSkipToIndex(index: number) {
-  if (!REAL) return;
+  if (!REAL || Platform.OS !== 'web') return;
   try {
     await playerService.skipToIndex(index);
     await playerService.play();
@@ -173,7 +175,7 @@ export const usePlayerStore = create<PlayerState>()(
 
       setPlaying: (v) => {
         set({ isPlaying: v, error: null });
-        if (REAL) {
+        if (REAL && Platform.OS === 'web') {
           try {
             if (v) playerService.play();
             else playerService.pause();
@@ -205,7 +207,7 @@ export const usePlayerStore = create<PlayerState>()(
         const song = queue[ni];
         set({ current: song, currentIndex: ni, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + song.durationMs });
         patchLyrics(song);
-        if (REAL) {
+        if (REAL && Platform.OS === 'web') {
           try { playerService.next(); } catch (e) {
             console.error('playerService next failed', e);
           }
@@ -233,7 +235,7 @@ export const usePlayerStore = create<PlayerState>()(
         if (!song) return;
         set({ current: song, currentIndex: pi, error: null });
         patchLyrics(song);
-        if (REAL) {
+        if (REAL && Platform.OS === 'web') {
           try { playerService.previous(); } catch (e) {
             console.error('playerService previous failed', e);
           }
@@ -394,7 +396,7 @@ export const usePlayerStore = create<PlayerState>()(
 
       setVolume: (v) => {
         set({ volume: v });
-        if (REAL) {
+        if (REAL && Platform.OS === 'web') {
           try { playerService.setVolume(v); } catch (e) {
             console.error('playerService setVolume failed', e);
           }
@@ -403,7 +405,7 @@ export const usePlayerStore = create<PlayerState>()(
 
       setSeekPosition: (v) => {
         set({ seekPosition: v });
-        if (REAL && v != null) {
+        if (REAL && Platform.OS === 'web' && v != null) {
           const cur = get().current;
           if (cur) {
             try { playerService.seek((v * cur.durationMs) / 1000); } catch (e) {
@@ -424,6 +426,7 @@ export const usePlayerStore = create<PlayerState>()(
     }),
     {
       name: 'player-liked-songs',
+      storage: createJSONStorage(() => safeStorage),
       partialize: (state) => ({
         likedSongs: state.likedSongs,
         recentlyPlayed: state.recentlyPlayed,

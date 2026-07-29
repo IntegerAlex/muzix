@@ -9,6 +9,7 @@ import { Text, View, Animated } from 'react-native';
 import { router, usePathname } from 'expo-router';
 import { useState, useCallback, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as SplashScreen from 'expo-splash-screen';
 import { useConnectivity } from '@/hooks/useConnectivity';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -61,7 +62,7 @@ export default function RootLayout() {
 
   const { impact } = useHaptics();
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
     const handleLike = () => { impact('medium'); };
     window.addEventListener('like-song', handleLike);
     window.addEventListener('unlike-song', handleLike);
@@ -73,6 +74,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     loadAll();
+  }, []);
+
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -97,7 +102,7 @@ export default function RootLayout() {
   }, [authed, loading, pathname]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
     const handler = (e: PromiseRejectionEvent) => {
       if (e.reason?.name === 'AbortError' || String(e.reason).includes('play() request was interrupted')) {
         e.preventDefault();

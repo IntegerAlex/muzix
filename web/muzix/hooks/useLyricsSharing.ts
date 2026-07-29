@@ -1,6 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
 import { View, Platform } from 'react-native';
-import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 
 export function useLyricsSharing() {
@@ -14,6 +13,7 @@ export function useLyricsSharing() {
     setIsGenerating(true);
     setShareError(null);
     try {
+      const { captureRef } = await import('react-native-view-shot');
       const uri = await captureRef(imageRef.current, {
         format: 'png',
         quality: 1,

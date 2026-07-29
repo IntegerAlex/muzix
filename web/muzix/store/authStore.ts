@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { Platform } from 'react-native';
+import { safeStorage } from './storage';
 import { api, type AuthResponse, type User } from '@/services/api';
 
 let _playerStoreRef: (() => any) | null = null;
@@ -11,9 +13,9 @@ function getPlayerStore() {
 }
 
 function safeRemoveItem(key: string) {
-  if (typeof localStorage !== 'undefined' && localStorage?.removeItem) {
-    try { localStorage.removeItem(key); } catch {}
-  }
+  try {
+    safeStorage.removeItem(key);
+  } catch {}
 }
 
 const TOKEN_EXPIRY_BUFFER_MS = 60_000;
@@ -70,6 +72,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
+      storage: createJSONStorage(() => safeStorage),
       onRehydrateStorage: () => (state) => state?.hydrate(),
     }
   )

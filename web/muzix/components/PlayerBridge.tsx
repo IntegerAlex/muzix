@@ -8,7 +8,7 @@ import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore } from '@/store/authStore';
 
 const IS_WEB = Platform.OS === 'web';
-const RNTP_OWNS_AUDIO = !IS_WEB;
+const RNTP_OWNS_AUDIO = false;
 
 const SESSION_ID = Math.random().toString(36).substring(2, 15);
 
@@ -98,7 +98,7 @@ function recordSessionEnd(exitReason = 'user_close') {
   if (EVENT_BUFFER.length > 0) flushEvents();
 }
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener('beforeunload', () => recordSessionEnd('user_close'));
   window.addEventListener('pagehide', () => recordSessionEnd('background'));
 }
@@ -156,7 +156,7 @@ export function PlayerBridge() {
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
-      import('@/services/playerService').then(ps => ps.setupPlayer?.());
+      import('@/services/playerService').then(ps => ps.setupPlayer?.()).catch(() => {});
     }
   }, []);
 
@@ -247,7 +247,7 @@ export function PlayerBridge() {
     if (prevIsPlayingRef.current !== isPlaying) {
       if (isPlaying) {
         playStartRef.current = new Date();
-        recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: lastPlayedMsRef.current, song_duration_ms: current.durationMs, completion_percentage: current.durationMs > 0 ? Math.round((lastPlayedMsRef.current / current.durationMs) * 100) : 0 });
+        recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: 0 });
       } else {
         const now = new Date();
         const playedMs = playStartRef.current ? now.getTime() - playStartRef.current.getTime() : 0;

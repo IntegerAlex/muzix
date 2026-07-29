@@ -25,13 +25,13 @@ export function useConnectivity() {
       setConnectionStatus('offline');
     }
 
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
     }
 
     return () => {
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
       }
