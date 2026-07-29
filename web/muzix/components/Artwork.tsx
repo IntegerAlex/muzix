@@ -38,7 +38,7 @@ function areEqual(prev: ArtworkProps, next: ArtworkProps) {
 export const Artwork = memo(function Artwork({ source, colors, style, radius = 12 }: ArtworkProps) {
   const [imgError, setImgError] = useState(false);
   const borderRadius = useMemo(() => ({ borderRadius: radius }) as ImageStyle, [radius]);
-  const [c0, c1] = colors?.length === 2 ? colors : ['#1DB954', '#0b1020'];
+  const [c0, c1] = colors?.length === 2 ? colors : ['#1DB954', '#0a0a0a'];
   const gradientColors = useMemo(() => [c0, c1, mixColor(c0, c1)], [c0, c1]);
 
   if (source && !imgError) {

@@ -83,7 +83,7 @@ export default function AlbumDetail() {
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG }}>
         <Pressable
           onPress={() => router.back()}
-          style={{ position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: '#2c2c2e', alignItems: 'center', justifyContent: 'center' }}
+          style={{ position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: '#242424', alignItems: 'center', justifyContent: 'center' }}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
@@ -101,7 +101,7 @@ export default function AlbumDetail() {
     <View style={{ flex: 1, backgroundColor: BG }}>
       <Pressable
         onPress={() => router.back()}
-        style={{ position: 'absolute', top: 56, left: 16, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: '#2c2c2e', alignItems: 'center', justifyContent: 'center' }}
+        style={{ position: 'absolute', top: 56, left: 16, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: '#242424', alignItems: 'center', justifyContent: 'center' }}
         accessibilityLabel="Go back"
         accessibilityRole="button"
       >
@@ -135,12 +135,12 @@ export default function AlbumDetail() {
         <GlassCard padding={16} style={{ marginHorizontal: 20, marginTop: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text fontSize={13} fontWeight="500" color={TEXT_SECONDARY}>{songs.length} songs</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable onPress={handleShare} style={{ borderRadius: 9999, backgroundColor: '#2c2c2e', paddingHorizontal: 12, paddingVertical: 10 }} accessibilityLabel="Share album" accessibilityRole="button">
+            <Pressable onPress={handleShare} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: 12, paddingVertical: 10 }} accessibilityLabel="Share album" accessibilityRole="button">
               <Share2 size={14} color={TEXT_PRIMARY} />
             </Pressable>
             <Pressable
               onPress={handleShuffle}
-              style={{ borderRadius: 9999, backgroundColor: '#2c2c2e', paddingHorizontal: 16, paddingVertical: 10 }}
+              style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: 16, paddingVertical: 10 }}
               accessibilityLabel="Shuffle album"
               accessibilityRole="button"
             >

@@ -22,7 +22,7 @@ const FONT_FAMILY = Platform.select({
 
 export const LyricsImageGenerator = forwardRef<View, LyricsImageGeneratorProps>(
   function LyricsImageGenerator({ lines, title, artist, imageUrl, colors }, ref) {
-    const [c0, c1] = colors ?? ['#1DB954', '#0b1020'];
+    const [c0, c1] = colors ?? ['#1DB954', '#0a0a0a'];
 
     return (
       <View ref={ref} style={[styles.container, { width: W, height: H, left: -W - 100 }]} collapsable={false}>

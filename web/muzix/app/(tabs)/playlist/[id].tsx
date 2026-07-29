@@ -184,7 +184,7 @@ export default function PlaylistDetail() {
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG }}>
         <Pressable
           onPress={() => router.back()}
-          style={{ position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: '#2c2c2e', alignItems: 'center', justifyContent: 'center' }}
+          style={{ position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: '#242424', alignItems: 'center', justifyContent: 'center' }}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
@@ -202,7 +202,7 @@ export default function PlaylistDetail() {
     <View style={{ flex: 1, backgroundColor: BG }}>
       <Pressable
         onPress={() => router.back()}
-        style={{ position: 'absolute', top: 56, left: 16, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: '#2c2c2e', alignItems: 'center', justifyContent: 'center' }}
+        style={{ position: 'absolute', top: 56, left: 16, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: '#242424', alignItems: 'center', justifyContent: 'center' }}
         accessibilityLabel="Go back"
         accessibilityRole="button"
       >
@@ -232,7 +232,7 @@ export default function PlaylistDetail() {
             <TextInput
               value={editTitle}
               onChangeText={setEditTitle}
-              style={{ flex: 1, fontSize: 15, fontWeight: '600', color: TEXT_PRIMARY, backgroundColor: '#2c2c2e', borderRadius: 8, padding: 8 }}
+              style={{ flex: 1, fontSize: 15, fontWeight: '600', color: TEXT_PRIMARY, backgroundColor: '#242424', borderRadius: 8, padding: 8 }}
             />
           ) : (
             <Text fontSize={15} fontWeight="500" color={TEXT_SECONDARY}>Your playlist</Text>
@@ -249,15 +249,15 @@ export default function PlaylistDetail() {
               </>
             ) : (
               <>
-                <Pressable onPress={handleShare} style={{ borderRadius: 9999, backgroundColor: '#2c2c2e', paddingHorizontal: 12, paddingVertical: 10 }} accessibilityLabel="Share playlist" accessibilityRole="button">
+                <Pressable onPress={handleShare} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: 12, paddingVertical: 10 }} accessibilityLabel="Share playlist" accessibilityRole="button">
                   <Share2 size={14} color={TEXT_PRIMARY} />
                 </Pressable>
                 {token && (
                   <>
-                    <Pressable onPress={startEdit} style={{ borderRadius: 9999, backgroundColor: '#2c2c2e', paddingHorizontal: 16, paddingVertical: 10 }} accessibilityLabel="Edit playlist" accessibilityRole="button">
+                    <Pressable onPress={startEdit} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: 16, paddingVertical: 10 }} accessibilityLabel="Edit playlist" accessibilityRole="button">
                       <Text fontSize={13} fontWeight="500" color={TEXT_PRIMARY}>Edit</Text>
                     </Pressable>
-                    <Pressable onPress={deletePlaylist} style={{ borderRadius: 9999, backgroundColor: '#2c2c2e', paddingHorizontal: 12, paddingVertical: 10 }} accessibilityLabel="Delete playlist" accessibilityRole="button">
+                    <Pressable onPress={deletePlaylist} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: 12, paddingVertical: 10 }} accessibilityLabel="Delete playlist" accessibilityRole="button">
                       <Trash2 size={14} color="#ef4444" />
                     </Pressable>
                   </>
@@ -278,7 +278,7 @@ export default function PlaylistDetail() {
         {editing && (
           <Pressable
             onPress={() => setShowAddSongModal(true)}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 20, marginTop: 16, backgroundColor: '#2c2c2e', borderRadius: 12, padding: 14 }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 20, marginTop: 16, backgroundColor: '#242424', borderRadius: 12, padding: 14 }}
             accessibilityLabel="Add songs to playlist"
             accessibilityRole="button"
           >
@@ -336,7 +336,7 @@ export default function PlaylistDetail() {
 
         <Modal visible={showAddSongModal} transparent animationType="fade" onRequestClose={() => setShowAddSongModal(false)}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-            <View style={{ backgroundColor: '#1c1c1e', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%', paddingTop: 20 }}>
+            <View style={{ backgroundColor: '#1a1a1a', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '70%', paddingTop: 20 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 }}>
                 <Text fontSize={18} fontWeight="700" color={TEXT_PRIMARY}>Add songs</Text>
                 <Pressable onPress={() => setShowAddSongModal(false)} accessibilityLabel="Done adding songs" accessibilityRole="button">

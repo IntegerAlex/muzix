@@ -475,7 +475,7 @@ export function NowPlaying() {
             activeOpacity={1}
           >
             <View style={{
-              backgroundColor: '#1a1a1e',
+              backgroundColor: '#1a1a1a',
               borderRadius: 20,
               padding: 24,
               width: '90%',

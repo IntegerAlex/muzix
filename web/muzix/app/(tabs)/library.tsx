@@ -113,7 +113,7 @@ export default function LibraryScreen() {
 
         <Modal visible={showCreateModal} transparent animationType="fade" onRequestClose={() => setShowCreateModal(false)}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
-            <View style={{ backgroundColor: '#1c1c1e', borderRadius: RADIUS.lg, padding: SPACING.xxl, width: '100%' }}>
+            <View style={{ backgroundColor: '#1a1a1a', borderRadius: RADIUS.lg, padding: SPACING.xxl, width: '100%' }}>
               <Text style={{ fontSize: 18, fontWeight: '700', color: TEXT_PRIMARY, marginBottom: 16 }}>New Playlist</Text>
               <TextInput
                 value={newPlaylistName}
@@ -121,7 +121,7 @@ export default function LibraryScreen() {
                 placeholder="Playlist name"
                 placeholderTextColor={TEXT_MUTED}
                 autoFocus
-                style={{ backgroundColor: '#2c2c2e', borderRadius: 10, padding: 14, fontSize: 16, color: TEXT_PRIMARY, marginBottom: 20 }}
+                style={{ backgroundColor: '#242424', borderRadius: 10, padding: 14, fontSize: 16, color: TEXT_PRIMARY, marginBottom: 20 }}
                 onSubmitEditing={handleCreatePlaylist}
               />
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: SPACING.md }}>

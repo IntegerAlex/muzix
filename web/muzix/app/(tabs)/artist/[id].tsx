@@ -74,7 +74,7 @@ export default function ArtistDetail() {
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG }}>
         <Pressable
           onPress={() => router.back()}
-          style={{ position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: '#2c2c2e', alignItems: 'center', justifyContent: 'center' }}
+          style={{ position: 'absolute', top: 56, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: '#242424', alignItems: 'center', justifyContent: 'center' }}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
@@ -92,7 +92,7 @@ export default function ArtistDetail() {
     <View style={{ flex: 1, backgroundColor: BG }}>
       <Pressable
         onPress={() => router.back()}
-        style={{ position: 'absolute', top: 56, left: 16, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: '#2c2c2e', alignItems: 'center', justifyContent: 'center' }}
+        style={{ position: 'absolute', top: 56, left: 16, zIndex: 10, width: 40, height: 40, borderRadius: 20, backgroundColor: '#242424', alignItems: 'center', justifyContent: 'center' }}
         accessibilityLabel="Go back"
         accessibilityRole="button"
       >
@@ -107,7 +107,7 @@ export default function ArtistDetail() {
           </Text>
           <Pressable
             onPress={toggleFollow}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, borderRadius: 9999, backgroundColor: isFollowing ? ACCENT : '#2c2c2e', paddingHorizontal: 20, paddingVertical: 8 }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12, borderRadius: 9999, backgroundColor: isFollowing ? ACCENT : '#242424', paddingHorizontal: 20, paddingVertical: 8 }}
             accessibilityLabel={isFollowing ? 'Unfollow artist' : 'Follow artist'}
             accessibilityRole="button"
           >

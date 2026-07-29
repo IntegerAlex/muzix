@@ -19,7 +19,7 @@ import { usePlayerStore } from '@/store/playerStore';
 import * as playerService from '@/services/playerService';
 
 function makeSong(id: string, title = `Song ${id}`): any {
-  return { id, title, artist: 'Artist', artistId: 'a1', album: 'Album', albumId: 'al1', duration: '3:00', durationMs: 180000, colors: ['#1DB954', '#0b1020'] };
+  return { id, title, artist: 'Artist', artistId: 'a1', album: 'Album', albumId: 'al1', duration: '3:00', durationMs: 180000, colors: ['#1DB954', '#0a0a0a'] };
 }
 
 beforeEach(() => {

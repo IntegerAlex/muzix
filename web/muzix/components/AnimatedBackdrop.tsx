@@ -48,7 +48,7 @@ export function AnimatedBackdrop() {
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: '#0b1020',
+        backgroundColor: '#0a0a0a',
         overflow: 'hidden',
         pointerEvents: 'none',
       }}

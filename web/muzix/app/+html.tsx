@@ -21,7 +21,7 @@ export default function Root({ children }: PropsWithChildren) {
 
         {/* Add any additional <head> elements that you want globally available on web... */}
       </head>
-      <body style={{ backgroundColor: '#0b1020', margin: 0 }}>{children}</body>
+      <body style={{ backgroundColor: '#0a0a0a', margin: 0 }}>{children}</body>
     </html>
   );
 }
