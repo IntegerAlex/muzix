@@ -140,6 +140,7 @@ async def get_song_features(song_ids: list[str] | None = None) -> dict[str, dict
             "artist_name": artist.name if artist else "",
             "album_title": album.title if album else "",
             "title": song.title,
+            "duration_ms": song.duration_ms,
             "colors": song.colors,
         }
     return features

@@ -208,29 +208,17 @@ async def get_recommendations(user_id: str, limit: int = 20) -> list[dict]:
         filtered = [(sid, score) for sid, score in item_scores.items() if sid not in liked]
         filtered.sort(key=lambda x: x[1], reverse=True)
 
-        top_ids = [sid for sid, _ in filtered[: limit * 3]]
+        top_ids = [sid for sid, _ in filtered[:limit]]
         song_map = {sid: _item_features_map.get(sid, {}) for sid in top_ids}
 
-        seen_artists = set()
-        results = []
-        for sid in top_ids:
-            if len(results) >= limit:
-                break
-            song = song_map.get(sid, {})
-            artist_id = song.get("artist_id")
-            if artist_id and artist_id in seen_artists:
-                continue
-            if artist_id:
-                seen_artists.add(artist_id)
-            results.append({
-                "id": sid,
-                "title": song.get("title", "Unknown"),
-                "artist": song.get("artist_name", "Unknown"),
-                "album": song.get("album_title", "Unknown"),
-                "duration_ms": 0,
-                "colors": song.get("colors", ["#6d28d9", "#db2777"]),
-            })
-        return results
+        return [{
+            "id": sid,
+            "title": song.get("title", "Unknown"),
+            "artist": song.get("artist_name", "Unknown"),
+            "album": song.get("album_title", "Unknown"),
+            "duration_ms": song.get("duration_ms", 0),
+            "colors": song.get("colors", ["#6d28d9", "#db2777"]),
+        } for sid in top_ids for song in [song_map.get(sid, {})]]
 
     except Exception as exc:
         logger.error("Failed to generate recommendations: %s", exc, exc_info=True)
