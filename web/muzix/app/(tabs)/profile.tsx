@@ -158,10 +158,12 @@ function mapAnalyticsSong(s: AnalyticsSong): Song {
 }
 
 function formatListeningTime(ms: number): string {
-  const totalMinutes = Math.floor(ms / 60000);
-  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const totalSeconds = Math.floor(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
   const hours = Math.floor(totalMinutes / 60);
   const mins = totalMinutes % 60;
+  if (hours === 0) return `${mins}m`;
   return `${hours}h ${mins}m`;
 }
 
