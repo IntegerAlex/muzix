@@ -106,7 +106,7 @@ async def _ensure_model() -> bool:
     global _model, _user_factors, _item_factors, _user_id_map, _item_id_map, _item_features_map, _last_trained_at, _model_version_hash
 
     try:
-        interactions = await event_repo.get_top_songs("all", 1000)
+        interactions = await event_repo.get_top_songs("all", "all", 1000)
         if not interactions:
             logger.warning("No interactions available for training")
             return False
