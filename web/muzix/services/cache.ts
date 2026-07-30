@@ -204,6 +204,8 @@ export function cacheStats(): { memoryEntries: number; diskEntries: number } {
   return { memoryEntries: memCache.size, diskEntries: memCache.size };
 }
 
+const MAX_CACHED_SONGS = 50;
+
 let _db: any = null;
 
 async function getDb() {
@@ -227,6 +229,31 @@ function getAudioDir(): string {
   return `${FileSystem.documentDirectory}muzix-audio/`;
 }
 
+async function deleteFile(uri: string): Promise<void> {
+  try {
+    const FileSystem = require('expo-file-system');
+    const info = await FileSystem.getInfoAsync(uri);
+    if (info.exists) await FileSystem.deleteAsync(uri);
+  } catch {}
+}
+
+async function evictOldEntries(keepSongId: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const count: any = await db.getFirstAsync('SELECT COUNT(*) as c FROM audio_cache');
+  if (!count || count.c < MAX_CACHED_SONGS) return;
+
+  const excess = count.c - MAX_CACHED_SONGS + 5;
+  const rows: any[] = await db.getAllAsync(
+    'SELECT song_id, local_uri FROM audio_cache WHERE song_id != ? ORDER BY downloaded_at ASC LIMIT ?',
+    keepSongId, excess
+  );
+  for (const row of rows) {
+    await deleteFile(row.local_uri);
+    await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', row.song_id);
+  }
+}
+
 export async function downloadToCache(songId: string, url: string): Promise<string> {
   if (Platform.OS === 'web') return url;
   try {
@@ -242,7 +269,14 @@ export async function downloadToCache(songId: string, url: string): Promise<stri
       );
       if (row) {
         const fileCheck = await FileSystem.getInfoAsync(row.local_uri);
-        if (fileCheck.exists) return row.local_uri;
+        if (fileCheck.exists) {
+          await db.runAsync(
+            'UPDATE audio_cache SET downloaded_at = ? WHERE song_id = ?',
+            Date.now(), songId
+          );
+          return row.local_uri;
+        }
+        await deleteFile(row.local_uri);
         await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', songId);
       }
     }
@@ -256,6 +290,7 @@ export async function downloadToCache(songId: string, url: string): Promise<stri
         'INSERT OR REPLACE INTO audio_cache (song_id, local_uri, size, downloaded_at) VALUES (?, ?, ?, ?)',
         songId, filePath, fileInfo.size ?? 0, Date.now()
       );
+      await evictOldEntries(songId);
     }
     return downloaded.uri;
   } catch {
@@ -275,11 +310,39 @@ export async function getCachedAudioPath(songId: string): Promise<string | null>
     const FileSystem = require('expo-file-system');
     const info = await FileSystem.getInfoAsync(row.local_uri);
     if (!info.exists) {
+      await deleteFile(row.local_uri);
       await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', songId);
       return null;
     }
     return row.local_uri;
   } catch {
     return null;
+  }
+}
+
+export async function removeCachedAudio(songId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const row: any = await db.getFirstAsync(
+      'SELECT local_uri FROM audio_cache WHERE song_id = ?', songId
+    );
+    if (row) {
+      await deleteFile(row.local_uri);
+      await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', songId);
+    }
+  } catch {}
+}
+
+export async function getCachedAudioSize(): Promise<number> {
+  if (Platform.OS === 'web') return 0;
+  try {
+    const db = await getDb();
+    if (!db) return 0;
+    const row: any = await db.getFirstAsync('SELECT COALESCE(SUM(size), 0) as total FROM audio_cache');
+    return row?.total ?? 0;
+  } catch {
+    return 0;
   }
 }
