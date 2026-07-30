@@ -16,14 +16,14 @@ import { useAuthStore } from '@/store/authStore';
 import { useResponsive } from '@/lib/useResponsive';
 
 const PALETTE: [string, string][] = [
-  ['#7c3aed', '#2563eb'],
-  ['#ec4899', '#06b6d4'],
-  ['#f59e0b', '#ef4444'],
-  ['#10b981', '#3b82f6'],
-  ['#f43f5e', '#8b5cf6'],
-  ['#06b6d4', '#3b82f6'],
-  ['#fb923c', '#db2777'],
-  ['#84cc16', '#06b6d4'],
+  ['#7c3aed', '#7c3aed'],
+  ['#ec4899', '#ec4899'],
+  ['#f59e0b', '#f59e0b'],
+  ['#10b981', '#10b981'],
+  ['#f43f5e', '#f43f5e'],
+  ['#06b6d4', '#06b6d4'],
+  ['#fb923c', '#fb923c'],
+  ['#84cc16', '#84cc16'],
 ];
 
 function pickColors(index: number, fallback: [string, string]): [string, string] {

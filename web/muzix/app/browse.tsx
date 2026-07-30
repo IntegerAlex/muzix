@@ -18,18 +18,18 @@ function prefetchAlbum(id: string): void {
 }
 
 const GENRES = [
-  { title: 'Pop', colors: ['#ec4899', '#a855f7'] as [string, string] },
-  { title: 'Hip-Hop', colors: ['#f59e0b', '#ef4444'] as [string, string] },
-  { title: 'Rock', colors: ['#ef4444', '#991b1b'] as [string, string] },
-  { title: 'Electronic', colors: ['#06b6d4', '#6366f1'] as [string, string] },
-  { title: 'R&B', colors: ['#8b5cf6', '#ec4899'] as [string, string] },
-  { title: 'Jazz', colors: ['#f59e0b', '#b45309'] as [string, string] },
-  { title: 'Classical', colors: ['#10b981', '#047857'] as [string, string] },
-  { title: 'Indie', colors: ['#f43f5e', '#be123c'] as [string, string] },
-  { title: 'Latin', colors: ['#fb923c', '#ea580c'] as [string, string] },
-  { title: 'Country', colors: ['#84cc16', '#4d7c0f'] as [string, string] },
-  { title: 'K-Pop', colors: ['#a855f7', '#7c3aed'] as [string, string] },
-  { title: 'Podcasts', colors: ['#6366f1', '#4338ca'] as [string, string] },
+  { title: 'Pop', colors: ['#ec4899', '#ec4899'] as [string, string] },
+  { title: 'Hip-Hop', colors: ['#f59e0b', '#f59e0b'] as [string, string] },
+  { title: 'Rock', colors: ['#ef4444', '#ef4444'] as [string, string] },
+  { title: 'Electronic', colors: ['#06b6d4', '#06b6d4'] as [string, string] },
+  { title: 'R&B', colors: ['#8b5cf6', '#8b5cf6'] as [string, string] },
+  { title: 'Jazz', colors: ['#d97706', '#d97706'] as [string, string] },
+  { title: 'Classical', colors: ['#10b981', '#10b981'] as [string, string] },
+  { title: 'Indie', colors: ['#f43f5e', '#f43f5e'] as [string, string] },
+  { title: 'Latin', colors: ['#fb923c', '#fb923c'] as [string, string] },
+  { title: 'Country', colors: ['#84cc16', '#84cc16'] as [string, string] },
+  { title: 'K-Pop', colors: ['#a855f7', '#a855f7'] as [string, string] },
+  { title: 'Podcasts', colors: ['#6366f1', '#6366f1'] as [string, string] },
 ];
 
 const GenreCard = memo(function GenreCard({ genre }: { genre: typeof GENRES[0] }) {
