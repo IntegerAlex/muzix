@@ -90,9 +90,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'white',
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
+    ...(Platform.OS === 'web'
+      ? { textShadow: '0 2px 8px rgba(0,0,0,0.6)' }
+      : { textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 }),
     fontFamily: FONT_FAMILY,
     letterSpacing: -0.5,
     lineHeight: 64,

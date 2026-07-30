@@ -87,7 +87,7 @@ export default function TabsLayout() {
           borderTopColor: BORDER,
           borderTopWidth: 0.5,
           elevation: 0,
-          shadowOpacity: 0,
+          boxShadow: 'none',
           paddingBottom: 8,
         },
         tabBarActiveTintColor: ACCENT,

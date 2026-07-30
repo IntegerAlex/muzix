@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { safeStorage } from './storage';
-import { api, type AuthResponse, type User } from '@/services/api';
+import { type User } from '@/services/api';
 
 let _playerStoreRef: (() => any) | null = null;
 function getPlayerStore() {
@@ -103,10 +103,4 @@ function parseJwtExpiry(token: string): number | null {
   }
 }
 
-export async function register(email: string, password: string, displayName?: string): Promise<AuthResponse> {
-  return api.register(email, password, displayName);
-}
 
-export async function login(email: string, password: string): Promise<AuthResponse> {
-  return api.login(email, password);
-}

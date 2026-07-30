@@ -15,6 +15,9 @@ const BLUR_METHOD: BlurMethod | undefined = Platform.select({
 });
 
 const GLASS_SHADOW: ViewStyle = Platform.select({
+  web: {
+    boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
+  },
   ios: {
     shadowColor: 'black',
     shadowOffset: { width: 0, height: 4 },
