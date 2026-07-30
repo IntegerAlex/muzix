@@ -11,4 +11,27 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
-# Add any project specific keep options here:
+# expo-audio (AVPlayer/AudioPlayer)
+-keep class expo.modules.audio.** { *; }
+
+# expo-file-system
+-keep class expo.modules.filesystem.** { *; }
+
+# expo-image
+-keep class expo.modules.imageloader.** { *; }
+-keep class com.bumptech.glide.** { *; }
+
+# expo-blur
+-keep class expo.modules.blur.** { *; }
+
+# expo-sharing
+-keep class expo.modules.sharing.** { *; }
+
+# @hugeicons
+-keep class com.hugeicons.** { *; }
+
+# expo-modules-core (autolinking)
+-keep class expo.modules.** { *; }
+
+# zustand
+-keep class ** implements com.facebook.react.bridge.NativeModule { *; }
