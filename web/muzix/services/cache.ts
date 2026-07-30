@@ -238,20 +238,22 @@ async function deleteFile(uri: string): Promise<void> {
 }
 
 async function evictOldEntries(keepSongId: string): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  const count: any = await db.getFirstAsync('SELECT COUNT(*) as c FROM audio_cache');
-  if (!count || count.c < MAX_CACHED_SONGS) return;
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const count: any = await db.getFirstAsync('SELECT COUNT(*) as c FROM audio_cache');
+    if (!count || count.c < MAX_CACHED_SONGS) return;
 
-  const excess = count.c - MAX_CACHED_SONGS + 5;
-  const rows: any[] = await db.getAllAsync(
-    'SELECT song_id, local_uri FROM audio_cache WHERE song_id != ? ORDER BY downloaded_at ASC LIMIT ?',
-    keepSongId, excess
-  );
-  for (const row of rows) {
-    await deleteFile(row.local_uri);
-    await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', row.song_id);
-  }
+    const excess = count.c - MAX_CACHED_SONGS + 5;
+    const rows: any[] = await db.getAllAsync(
+      'SELECT song_id, local_uri FROM audio_cache WHERE song_id != ? ORDER BY downloaded_at ASC LIMIT ?',
+      keepSongId, excess
+    );
+    for (const row of rows) {
+      await deleteFile(row.local_uri);
+      await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', row.song_id);
+    }
+  } catch {}
 }
 
 export async function downloadToCache(songId: string, url: string): Promise<string> {
