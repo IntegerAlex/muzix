@@ -1,6 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
 import { View, Platform } from 'react-native';
-import * as Sharing from 'expo-sharing';
 
 export function useLyricsSharing() {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -40,13 +39,16 @@ export function useLyricsSharing() {
         a.download = 'muzix-lyrics.png';
         a.click();
       }
-    } else if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(uri, {
-        mimeType: 'image/png',
-        dialogTitle: 'Share lyrics',
-      });
     } else {
-      setShareError('Sharing is not available on this device');
+      const Sharing = await import('expo-sharing');
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'image/png',
+          dialogTitle: 'Share lyrics',
+        });
+      } else {
+        setShareError('Sharing is not available on this device');
+      }
     }
   }, []);
 
