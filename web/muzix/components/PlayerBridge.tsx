@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/services/api';
-import { downloadToCache } from '@/services/cache';
+import { downloadToCache, getCachedAudioPath } from '@/services/cache';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore } from '@/store/authStore';
 
@@ -163,10 +163,23 @@ export function PlayerBridge() {
     const attemptLoad = async () => {
       setLoading(current.id);
       try {
-        const token = useAuthStore.getState().token;
-        const { url } = await api.stream(current.id, token ?? undefined);
-        if (cancelled) return;
-        const playUri = IS_WEB ? url : await downloadToCache(current.id, url);
+        let playUri: string;
+        if (IS_WEB) {
+          const token = useAuthStore.getState().token;
+          const { url } = await api.stream(current.id, token ?? undefined);
+          playUri = url;
+        } else {
+          const cached = await getCachedAudioPath(current.id);
+          if (cancelled) return;
+          if (cached) {
+            playUri = cached;
+          } else {
+            const token = useAuthStore.getState().token;
+            const { url } = await api.stream(current.id, token ?? undefined);
+            if (cancelled) return;
+            playUri = await downloadToCache(current.id, url);
+          }
+        }
         if (cancelled) return;
 
         if (currentUrlRef.current && IS_WEB) releasePreloaded(currentUrlRef.current);

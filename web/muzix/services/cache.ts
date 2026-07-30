@@ -219,3 +219,15 @@ export async function downloadToCache(songId: string, url: string): Promise<stri
     return url;
   }
 }
+
+export async function getCachedAudioPath(songId: string): Promise<string | null> {
+  if (Platform.OS === 'web') return null;
+  try {
+    const FileSystem = require('expo-file-system');
+    const filePath = `${FileSystem.cacheDirectory}muzix-audio/${songId}.m4a`;
+    const info = await FileSystem.getInfoAsync(filePath);
+    return info.exists ? filePath : null;
+  } catch {
+    return null;
+  }
+}
