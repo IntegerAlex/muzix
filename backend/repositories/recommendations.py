@@ -211,7 +211,7 @@ async def get_user_liked_songs(user_id: str) -> set[str]:
         return {row[0] for row in result.all()}
 
 
-async def get_popular_songs(limit: int = 20, since: datetime | None = None) -> list[dict]:
+async def get_popular_songs(limit: int = 20, since: datetime | None = None, base_url: str = "") -> list[dict]:
     """Get globally popular songs as fallback for new users."""
     if since is None:
         since = datetime(1970, 1, 1, tzinfo=timezone.utc)
@@ -244,6 +244,7 @@ async def get_popular_songs(limit: int = 20, since: datetime | None = None) -> l
             "album": songs_map[r.song_id].album if r.song_id in songs_map else "Unknown",
             "duration_ms": songs_map[r.song_id].duration_ms if r.song_id in songs_map else 0,
             "colors": songs_map[r.song_id].colors if r.song_id in songs_map else ["#6d28d9", "#db2777"],
+            "imageUrl": f"{base_url}/thumbnails/{r.song_id}.jpg",
         }
         for r in rows
         if r.song_id in songs_map

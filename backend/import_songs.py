@@ -20,10 +20,12 @@ import re
 import subprocess
 import sys
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import boto3
+import requests
 from botocore.client import Config
 from dotenv import load_dotenv
 from lyricsgenius import Genius
@@ -187,10 +189,23 @@ def fetch_artist_songs() -> list[dict]:
 
     log("OK", f"Got {len(raw_songs)} song entries")
 
-    # Fetch lyrics in parallel
-    log("INFO", f"Fetching lyrics for {len(raw_songs)} songs ({MAX_WORKERS} workers)...")
+    # Fetch lyrics from LRCLIB (sequential, rate-limited)
+    log("INFO", f"Fetching synced lyrics from LRCLIB for {len(raw_songs)} songs...")
     songs = []
     lyrics_ok = 0
+
+    _LRCLIB_LOCK = threading.Lock()
+    _LRCLIB_LAST = 0.0
+    _LRCLIB_DELAY = 0.35  # 350ms between requests
+
+    def _lrclib_wait():
+        nonlocal _LRCLIB_LAST
+        with _LRCLIB_LOCK:
+            now = time.time()
+            wait = _LRCLIB_DELAY - (now - _LRCLIB_LAST)
+            if wait > 0:
+                time.sleep(wait)
+            _LRCLIB_LAST = now
 
     def fetch_lyrics(entry: dict) -> dict | None:
         title = re.sub(r"\s*\(.*?\)\s*", "", entry.get("title", "")).strip()
@@ -198,16 +213,65 @@ def fetch_artist_songs() -> list[dict]:
             return None
         sid = entry.get("id")
         url = entry.get("url", "")
-        lyrics = ""
         image_url = entry.get("song_art_image_url", "") or ""
-        if url:
+        artist = ARTIST_NAME
+        album = entry.get("album", artist) or artist
+        duration = entry.get("duration", 0)
+
+        headers = {"User-Agent": "Muzix/1.0 (https://github.com/akshatm123/muzix)"}
+        lyrics = ""
+
+        # Try /api/get (exact signature)
+        _lrclib_wait()
+        try:
+            params = {
+                "artist_name": artist,
+                "track_name": title,
+                "album_name": album,
+                "duration": str(duration),
+            }
+            r = requests.get(
+                "https://lrclib.net/api/get",
+                params=params, headers=headers, timeout=15,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                lyrics = data.get("syncedLyrics") or data.get("plainLyrics") or ""
+            elif r.status_code == 429:
+                retry = int(r.headers.get("Retry-After", 5))
+                log("WARN", f"LRCLIB rate-limited, sleeping {retry}s")
+                time.sleep(retry)
+                r2 = requests.get(
+                    "https://lrclib.net/api/get",
+                    params=params, headers=headers, timeout=15,
+                )
+                if r2.status_code == 200:
+                    data = r2.json()
+                    lyrics = data.get("syncedLyrics") or data.get("plainLyrics") or ""
+        except Exception:
+            pass
+
+        # Fallback to /api/search
+        if not lyrics:
+            _lrclib_wait()
             try:
-                g = Genius(token)
-                g.verbose = False
-                g.remove_section_headers = True
-                lyrics = g.lyrics(song_url=url) or ""
+                params = {"q": f"{artist} {title}"}
+                r = requests.get(
+                    "https://lrclib.net/api/search",
+                    params=params, headers=headers, timeout=10,
+                )
+                if r.status_code == 200:
+                    results = r.json()
+                    for res in results:
+                        if res.get("syncedLyrics"):
+                            lyrics = res["syncedLyrics"]
+                            break
+                    else:
+                        if results:
+                            lyrics = results[0].get("plainLyrics") or ""
             except Exception:
                 pass
+
         return {
             "title": title,
             "genius_title": entry.get("title", ""),
@@ -217,18 +281,14 @@ def fetch_artist_songs() -> list[dict]:
             "genius_url": url,
         }
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {pool.submit(fetch_lyrics, entry): entry for entry in raw_songs}
-        done = 0
-        for f in as_completed(futures):
-            done += 1
-            result = f.result()
-            if result:
-                songs.append(result)
-                if result["lyrics"]:
-                    lyrics_ok += 1
-            if done % 20 == 0 or done == len(raw_songs):
-                log("INFO", f"  Lyrics: {done}/{len(raw_songs)} (ok={lyrics_ok})")
+    for entry in raw_songs:
+        result = fetch_lyrics(entry)
+        if result:
+            songs.append(result)
+            if result["lyrics"]:
+                lyrics_ok += 1
+        if len(songs) % 10 == 0 or len(songs) == len(raw_songs):
+            log("INFO", f"  Lyrics: {len(songs)}/{len(raw_songs)} (ok={lyrics_ok})")
 
     log("OK", f"Lyrics fetched for {lyrics_ok}/{len(songs)} songs")
     return songs

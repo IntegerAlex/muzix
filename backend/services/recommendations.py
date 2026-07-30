@@ -107,12 +107,12 @@ def _compute_version_hash() -> str:
         return datetime.now(timezone.utc).isoformat()
 
 
-async def _get_cached_popular(limit: int) -> list[dict]:
+async def _get_cached_popular(limit: int, base_url: str = "") -> list[dict]:
     global _popular_cache
     now = time.time()
     if _popular_cache is not None and (now - _popular_cache[0]) < _POPULAR_CACHE_TTL:
         return _popular_cache[1][:limit]
-    result = await rec_repo.get_popular_songs(limit)
+    result = await rec_repo.get_popular_songs(limit, base_url=base_url)
     _popular_cache = (now, result)
     return result
 
@@ -200,13 +200,13 @@ def _content_score(song_id: str, user_data: dict) -> float:
     return score
 
 
-async def get_recommendations(user_id: str, limit: int = 20) -> list[dict]:
+async def get_recommendations(user_id: str, limit: int = 20, base_url: str = "") -> list[dict]:
     global _model, _user_factors, _item_factors, _user_id_map, _item_id_map, _training_lock, _training_task
 
     if _model is None or _user_factors is None or _item_factors is None:
         if not _training_lock.locked():
             _training_task = asyncio.create_task(_ensure_model())
-        return await _get_cached_popular(limit)
+        return await _get_cached_popular(limit, base_url=base_url)
 
     try:
         user_data = await rec_repo.get_user_features(user_id)
@@ -214,7 +214,7 @@ async def get_recommendations(user_id: str, limit: int = 20) -> list[dict]:
 
         user_idx = _user_id_map.get(user_id)
         if user_idx is None or user_idx >= _user_factors.shape[0]:
-            return await _get_cached_popular(limit)
+            return await _get_cached_popular(limit, base_url=base_url)
 
         user_vector = _user_factors[user_idx]
         scores = _item_factors @ user_vector
@@ -236,11 +236,12 @@ async def get_recommendations(user_id: str, limit: int = 20) -> list[dict]:
             "album": song.get("album_title", "Unknown"),
             "duration_ms": song.get("duration_ms", 0),
             "colors": song.get("colors", ["#6d28d9", "#db2777"]),
+            "imageUrl": f"{base_url}/thumbnails/{sid}.jpg",
         } for sid in top_ids for song in [song_map.get(sid, {})]]
 
     except Exception as exc:
         logger.error("Failed to generate recommendations: %s", exc, exc_info=True)
-        return await _get_cached_popular(limit)
+        return await _get_cached_popular(limit, base_url=base_url)
 
 
 async def get_model_status() -> dict[str, Any]:

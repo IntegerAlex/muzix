@@ -164,7 +164,7 @@ async def get_stats(user_id: str, period: str, since: datetime | None = None) ->
         }
 
 
-async def get_recent_activity(user_id: str, limit: int) -> list[dict]:
+async def get_recent_activity(user_id: str, limit: int, base_url: str = "") -> list[dict]:
     async with SessionLocal() as session:
         stmt = select(ListeningEvent).where(
             ListeningEvent.user_id == user_id,
@@ -181,6 +181,7 @@ async def get_recent_activity(user_id: str, limit: int) -> list[dict]:
                 songs_map[s.id] = {
                     "id": s.id, "title": s.title, "artist": s.artist,
                     "album": s.album, "colors": s.colors,
+                    "imageUrl": f"{base_url}/thumbnails/{s.id}.jpg",
                 }
 
         items = [

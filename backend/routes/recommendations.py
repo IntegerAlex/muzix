@@ -9,7 +9,8 @@ router = APIRouter(prefix="/recommendations")
 @router.get("/user/top-picks")
 async def get_user_top_picks(request: Request, limit: int = 20, user=Depends(get_current_user)):
     rate_limit(request, max_requests=30, window=60)
-    items = await rec_svc.get_recommendations(user.id, min(limit, 50))
+    base = str(request.base_url).rstrip("/")
+    items = await rec_svc.get_recommendations(user.id, min(limit, 50), base)
     meta = await rec_svc.get_model_status()
     return success_resp(data={"items": items, "meta": meta}, message="Recommendations retrieved")
 
