@@ -1,9 +1,10 @@
-# Profile Page Improvements
+# Profile Page Improvements + Production Fix
 
 ## Goal
 Improve `/profile` UI/UX, rendering performance, and API performance without building a new consolidated endpoint.
 
 ## Current State
+- **PRODUCTION BLOCKER**: Backend crashes on startup with `NameError: name 'asyncio' is not defined` at `backend/main.py:23`
 - Frontend fires 3 parallel requests on mount: `topSongs('all', 50)`, `getLikes`, `playlists`
 - `topSongs` uses `period='all'` which scans every listening event since 1970
 - No ETag caching on analytics or likes endpoints
@@ -15,6 +16,9 @@ Improve `/profile` UI/UX, rendering performance, and API performance without bui
 - `key` on recently-played rows uses array index
 
 ## Changes
+
+### Critical Production Fix — `backend/main.py`
+0. **Add missing import**: Add `import asyncio` at the top of `backend/main.py` (line 1, before `import orjson`). The `lifespan` function at line 23 calls `asyncio.create_task(...)` without importing the module. This is blocking all API traffic.
 
 ### Frontend — `web/muzix/app/(tabs)/profile.tsx`
 1. **Replace spinner with skeletons**: Show `SongSkeleton` placeholders (already exists in `components/Skeleton.tsx`) during initial load.
@@ -35,6 +39,7 @@ Improve `/profile` UI/UX, rendering performance, and API performance without bui
 10. **Add composite index** on `ListeningEvent`: `Index("ix_listening_events_user_event_started", "user_id", "event_type", "started_at")`. This directly benefits `get_top_songs` which filters on all three columns.
 
 ## Validation
+- Verify backend starts without `NameError` in production logs
 - Verify profile loads in < 2s on a populated dev database
 - Confirm `topSongs` query uses the new index (check `EXPLAIN ANALYZE`)
 - Verify 304 responses work for cached analytics/likes endpoints

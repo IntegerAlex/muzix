@@ -25,7 +25,8 @@ async def get_user_stats(request: Request, period: str = "month", user=Depends(g
 async def get_recent_activity(request: Request, limit: int = 20, user=Depends(get_current_user)):
     rate_limit(request, max_requests=30, window=60)
     data = await analytics_svc.get_recent_activity(user.id, min(limit, 100))
-    return success_resp(data=data, message="Recent activity retrieved", meta={"limit": min(limit, 100)})
+    body = success_resp(data=data, message="Recent activity retrieved", meta={"limit": min(limit, 100)})
+    return make_cached_response(body, request)
 
 
 @router.get("/user/skip-rate")
