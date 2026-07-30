@@ -1,3 +1,4 @@
+import asyncio
 """
 Muzix FastAPI backend.
 
