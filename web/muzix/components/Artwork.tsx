@@ -1,6 +1,7 @@
 import { useMemo, useState, memo } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Image, type ImageStyle, type StyleProp } from 'react-native';
+import { Image, type ImageStyle } from 'expo-image';
+import type { StyleProp } from 'react-native';
 
 interface ArtworkProps {
   source?: { uri: string } | number;

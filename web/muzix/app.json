@@ -48,13 +48,17 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "linking": {
-      "prefixes": ["muzix://", "https://muzix.gossorg.in"],
+      "prefixes": [
+        "muzix://",
+        "https://muzix.gossorg.in"
+      ],
       "config": {
         "screens": {
           "(tabs)": {

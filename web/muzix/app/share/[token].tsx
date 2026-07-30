@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, Platform } from 'react';
-import { View, Text, Image, Pressable, ActivityIndicator, ScrollView, StyleSheet, Linking } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, ScrollView, StyleSheet, Linking } from 'react-native';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertTriangle, Music, Album, User, ListMusic } from '@/lib/icons';
 import { BG, SURFACE, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, DANGER } from '@/lib/colors';

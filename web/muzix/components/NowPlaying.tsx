@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Image } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity } from 'react-native';
+import { Image } from 'expo-image';
 
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
