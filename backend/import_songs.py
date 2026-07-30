@@ -361,23 +361,22 @@ async def insert_db(songs: list[dict]):
     async with engine.begin() as conn:
         await conn.execute(
             text("""
-                INSERT INTO artists (id, name, colors, album_ids)
-                VALUES (:id, :name, :colors, :album_ids)
+                INSERT INTO artists (id, name, colors)
+                VALUES (:id, :name, :colors)
                 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name
             """),
-            {"id": ARTIST_SLUG, "name": ARTIST_NAME, "colors": colors, "album_ids": []},
+            {"id": ARTIST_SLUG, "name": ARTIST_NAME, "colors": colors},
         )
 
         await conn.execute(
             text("""
-                INSERT INTO albums (id, title, artist, artist_id, year, genre, colors, song_ids)
-                VALUES (:id, :title, :artist, :artist_id, :year, :genre, :colors, :song_ids)
+                INSERT INTO albums (id, title, artist_id, year, genre, colors, song_ids)
+                VALUES (:id, :title, :artist_id, :year, :genre, :colors, :song_ids)
                 ON CONFLICT (id) DO UPDATE SET song_ids = EXCLUDED.song_ids
             """),
             {
                 "id": album_id,
                 "title": ARTIST_NAME,
-                "artist": ARTIST_NAME,
                 "artist_id": ARTIST_SLUG,
                 "year": 2024,
                 "genre": genre,
@@ -420,6 +419,15 @@ async def insert_db(songs: list[dict]):
                         "r2_object_key": f"audio/{s['vid_id']}.mp3",
                         "colors": colors,
                     },
+                )
+                # Insert into song_artists junction (primary artist, position=0)
+                await conn.execute(
+                    text("""
+                        INSERT INTO song_artists (song_id, artist_id, position)
+                        VALUES (:song_id, :artist_id, 0)
+                        ON CONFLICT (song_id, artist_id) DO NOTHING
+                    """),
+                    {"song_id": s["vid_id"], "artist_id": ARTIST_SLUG},
                 )
                 inserted += 1
             except Exception as e:

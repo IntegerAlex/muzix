@@ -225,10 +225,11 @@ def serialize_song(song: Song, base_url: str = "", brief: bool = False) -> dict:
 
 
 def serialize_album(album: Album, base_url: str = "") -> dict:
+    artist_name = album.artist_rel.name if album.artist_rel else ""
     return {
         "id": album.id,
         "title": album.title,
-        "artist": album.artist,
+        "artist": artist_name,
         "artistId": album.artist_id,
         "year": album.year,
         "genre": album.genre,
@@ -243,7 +244,7 @@ def serialize_artist(artist: Artist) -> dict:
         "id": artist.id,
         "name": artist.name,
         "colors": artist.colors or [],
-        "albumIds": artist.album_ids or [],
+        "albumIds": [a.id for a in (artist.albums or [])],
     }
 
 

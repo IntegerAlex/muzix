@@ -12,11 +12,20 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Table, Text, ARRAY, Computed, UniqueConstraint, func
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Table, Text, ARRAY, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import relationship
 
 from db import Base
+
+
+# Junction table for song <> artist many-to-many (collaborations)
+song_artists_table = Table(
+    "song_artists", Base.metadata,
+    Column("song_id", String(64), ForeignKey("songs.id", ondelete="CASCADE"), primary_key=True),
+    Column("artist_id", String(64), ForeignKey("artists.id", ondelete="CASCADE"), primary_key=True),
+    Column("position", Integer, nullable=False, default=0),
+)
 
 
 class User(Base):
@@ -74,13 +83,10 @@ class Song(Base):
     lyrics = Column(Text, nullable=True)
     r2_object_key = Column(String(1024), nullable=True)
     colors = Column(ARRAY(Text), nullable=False, server_default="{}")
-    fts = Column(
-        TSVECTOR,
-        Computed(
-            "to_tsvector('english', coalesce(title,'') || ' ' || coalesce(artist,'') || ' ' || coalesce(album,''))",
-            persisted=True,
-        ),
-    )
+    fts = Column(TSVECTOR, nullable=True)
+
+    artists = relationship("Artist", secondary=song_artists_table, backref="song_artists",
+                           order_by=song_artists_table.c.position)
 
 
 class Album(Base):
@@ -88,19 +94,14 @@ class Album(Base):
 
     id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
     title = Column(String(512), nullable=False, default="")
-    artist = Column(String(512), nullable=False, default="")
-    artist_id = Column(String(64), nullable=False, default="")
+    artist_id = Column(String(64), ForeignKey("artists.id", ondelete="SET NULL"), nullable=True, index=True)
     year = Column(Integer, nullable=False, default=0)
     genre = Column(String(128), nullable=False, default="")
     colors = Column(ARRAY(Text), nullable=False, server_default="{}")
     song_ids = Column(ARRAY(Text), nullable=False, server_default="{}")
-    fts = Column(
-        TSVECTOR,
-        Computed(
-            "to_tsvector('english', coalesce(title,'') || ' ' || coalesce(artist,''))",
-            persisted=True,
-        ),
-    )
+    fts = Column(TSVECTOR, nullable=True)
+
+    artist_rel = relationship("Artist", back_populates="albums", foreign_keys=[artist_id])
 
 
 class Artist(Base):
@@ -109,17 +110,10 @@ class Artist(Base):
     id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(512), nullable=False, default="")
     colors = Column(ARRAY(Text), nullable=False, server_default="{}")
-    album_ids = Column(ARRAY(Text), nullable=False, server_default="{}")
-    fts = Column(
-        TSVECTOR,
-        Computed(
-            "to_tsvector('english', coalesce(name,''))",
-            persisted=True,
-        ),
-    )
+    fts = Column(TSVECTOR, nullable=True)
 
-    # Relationships
     songs = relationship("Song", backref="artist_rel", foreign_keys="Song.artist_id")
+    albums = relationship("Album", back_populates="artist_rel", foreign_keys="Album.artist_id")
 
 
 # Association table for playlist songs (defined before Playlist for clarity)

@@ -56,12 +56,6 @@ async def migrate() -> None:
                     r2_object_key TEXT,
                     colors TEXT[] NOT NULL DEFAULT '{}',
                     fts TSVECTOR
-                        GENERATED ALWAYS AS (
-                            to_tsvector('english',
-                                coalesce(title,'') || ' ' ||
-                                coalesce(artist,'') || ' ' ||
-                                coalesce(album,''))
-                        ) STORED
                 );
                 """
             )
@@ -77,6 +71,20 @@ async def migrate() -> None:
             await conn.execute(
                 text(f"ALTER TABLE songs ADD COLUMN IF NOT EXISTS {col} {ddl};")
             )
+        # Convert computed fts to plain TSVECTOR if it still exists as computed
+        await conn.execute(text("""
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_attribute
+                    WHERE attrelid = 'songs'::regclass AND attname = 'fts'
+                    AND attgenerated = 's'
+                ) THEN
+                    DROP INDEX IF EXISTS songs_fts_idx;
+                    ALTER TABLE songs DROP COLUMN fts;
+                    ALTER TABLE songs ADD COLUMN fts TSVECTOR;
+                END IF;
+            END $$;
+        """))
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS songs_fts_idx ON songs USING GIN (fts);")
         )
@@ -104,17 +112,29 @@ async def migrate() -> None:
                     colors TEXT[] NOT NULL DEFAULT '{}',
                     song_ids TEXT[] NOT NULL DEFAULT '{}',
                     fts TSVECTOR
-                        GENERATED ALWAYS AS (
-                            to_tsvector('english',
-                                coalesce(title,'') || ' ' || coalesce(artist,''))
-                        ) STORED
                 );
                 """
             )
         )
+        # Convert computed fts to plain TSVECTOR first (must precede DROP artist)
+        await conn.execute(text("""
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_attribute
+                    WHERE attrelid = 'albums'::regclass AND attname = 'fts'
+                    AND attgenerated = 's'
+                ) THEN
+                    DROP INDEX IF EXISTS albums_fts_idx;
+                    ALTER TABLE albums DROP COLUMN fts;
+                    ALTER TABLE albums ADD COLUMN fts TSVECTOR;
+                END IF;
+            END $$;
+        """))
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS albums_fts_idx ON albums USING GIN (fts);")
         )
+        # Drop denormalized artist column (safe now that fts is plain TSVECTOR)
+        await conn.execute(text("ALTER TABLE albums DROP COLUMN IF EXISTS artist;"))
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id);")
         )
@@ -127,18 +147,126 @@ async def migrate() -> None:
                     id TEXT PRIMARY KEY,
                     name TEXT NOT NULL DEFAULT '',
                     colors TEXT[] NOT NULL DEFAULT '{}',
-                    album_ids TEXT[] NOT NULL DEFAULT '{}',
                     fts TSVECTOR
-                        GENERATED ALWAYS AS (
-                            to_tsvector('english', coalesce(name,''))
-                        ) STORED
                 );
                 """
             )
         )
+        # Drop denormalized album_ids column if it still exists
+        await conn.execute(text("ALTER TABLE artists DROP COLUMN IF EXISTS album_ids;"))
+        # Convert computed fts to plain TSVECTOR if still computed
+        await conn.execute(text("""
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_attribute
+                    WHERE attrelid = 'artists'::regclass AND attname = 'fts'
+                    AND attgenerated = 's'
+                ) THEN
+                    DROP INDEX IF EXISTS artists_fts_idx;
+                    ALTER TABLE artists DROP COLUMN fts;
+                    ALTER TABLE artists ADD COLUMN fts TSVECTOR;
+                END IF;
+            END $$;
+        """))
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS artists_fts_idx ON artists USING GIN (fts);")
         )
+        # Add FK constraint on album.artist_id if not present
+        await conn.execute(text("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'albums_artist_id_fkey'
+                ) THEN
+                    ALTER TABLE albums ADD CONSTRAINT albums_artist_id_fkey
+                        FOREIGN KEY (artist_id) REFERENCES artists(id) ON DELETE SET NULL;
+                END IF;
+            END $$;
+        """))
+
+        # ----- song_artists (many-to-many junction) -----
+        await conn.execute(
+            text("""
+                CREATE TABLE IF NOT EXISTS song_artists (
+                    song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+                    artist_id TEXT NOT NULL REFERENCES artists(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (song_id, artist_id)
+                );
+            """)
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_song_artists_artist ON song_artists(artist_id);")
+        )
+
+        # ----- FTS trigger functions -----
+        # Drop old triggers/functions first (idempotent)
+        await conn.execute(text("DROP TRIGGER IF EXISTS trg_song_fts ON songs;"))
+        await conn.execute(text("DROP TRIGGER IF EXISTS trg_album_fts ON albums;"))
+        await conn.execute(text("DROP TRIGGER IF EXISTS trg_artist_fts ON artists;"))
+        await conn.execute(text("DROP FUNCTION IF EXISTS update_song_fts();"))
+        await conn.execute(text("DROP FUNCTION IF EXISTS update_album_fts();"))
+        await conn.execute(text("DROP FUNCTION IF EXISTS update_artist_fts();"))
+
+        await conn.execute(text("""
+            CREATE FUNCTION update_song_fts() RETURNS trigger AS $$
+            BEGIN
+                NEW.fts := to_tsvector('english',
+                    coalesce(NEW.title, '') || ' ' ||
+                    coalesce(NEW.artist, '') || ' ' ||
+                    coalesce(NEW.album, '')
+                );
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        """))
+        await conn.execute(text("""
+            CREATE FUNCTION update_album_fts() RETURNS trigger AS $$
+            DECLARE
+                artist_name TEXT;
+            BEGIN
+                SELECT COALESCE(name, '') INTO artist_name FROM artists WHERE id = NEW.artist_id;
+                NEW.fts := to_tsvector('english',
+                    coalesce(NEW.title, '') || ' ' || artist_name
+                );
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        """))
+        await conn.execute(text("""
+            CREATE FUNCTION update_artist_fts() RETURNS trigger AS $$
+            BEGIN
+                NEW.fts := to_tsvector('english', coalesce(NEW.name, ''));
+                RETURN NEW;
+            END;
+            $$ LANGUAGE plpgsql;
+        """))
+
+        # Attach triggers
+        await conn.execute(text("""
+            CREATE TRIGGER trg_song_fts
+            BEFORE INSERT OR UPDATE OF title, artist, album ON songs
+            FOR EACH ROW EXECUTE FUNCTION update_song_fts();
+        """))
+        await conn.execute(text("""
+            CREATE TRIGGER trg_album_fts
+            BEFORE INSERT OR UPDATE OF title, artist_id ON albums
+            FOR EACH ROW EXECUTE FUNCTION update_album_fts();
+        """))
+        await conn.execute(text("""
+            CREATE TRIGGER trg_artist_fts
+            BEFORE INSERT OR UPDATE OF name ON artists
+            FOR EACH ROW EXECUTE FUNCTION update_artist_fts();
+        """))
+
+        # Backfill fts for existing rows
+        await conn.execute(text("UPDATE songs SET fts = to_tsvector('english', coalesce(title,'') || ' ' || coalesce(artist,'') || ' ' || coalesce(album,''));"))
+        await conn.execute(text("""
+            UPDATE albums a SET fts = to_tsvector('english',
+                coalesce(a.title, '') || ' ' || coalesce(ar.name, '')
+            ) FROM artists ar WHERE ar.id = a.artist_id;
+        """))
+        await conn.execute(text("UPDATE artists SET fts = to_tsvector('english', coalesce(name,''));"))
 
         # ----- playlists -----
         await conn.execute(
