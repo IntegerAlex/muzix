@@ -1,6 +1,6 @@
 """Analytics routes: user listening stats and history."""
 from fastapi import APIRouter, Depends, Query, Request
-from helpers import success_resp, rate_limit, get_current_user
+from helpers import success_resp, rate_limit, make_cached_response, get_current_user
 from services import analytics as analytics_svc
 
 router = APIRouter(prefix="/analytics")
@@ -10,7 +10,8 @@ router = APIRouter(prefix="/analytics")
 async def get_user_top_songs(request: Request, period: str = "month", limit: int = 50, user=Depends(get_current_user)):
     rate_limit(request, max_requests=30, window=60)
     data = await analytics_svc.get_top_songs(user.id, period, limit)
-    return success_resp(data=data, message="Top songs retrieved")
+    body = success_resp(data=data, message="Top songs retrieved")
+    return make_cached_response(body, request)
 
 
 @router.get("/user/stats")

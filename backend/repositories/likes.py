@@ -8,9 +8,9 @@ from models import UserLike
 async def get_user_likes(user_id: str) -> list[str]:
     async with SessionLocal() as session:
         result = await session.execute(
-            select(UserLike).where(UserLike.user_id == user_id)
+            select(UserLike.song_id).where(UserLike.user_id == user_id)
         )
-        return [like.song_id for like in result.scalars().all()]
+        return result.scalars().all()
 
 
 async def add_like(user_id: str, song_id: str) -> bool:

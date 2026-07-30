@@ -1,6 +1,6 @@
 """Like routes: like/unlike songs, get likes."""
-from fastapi import APIRouter, Depends
-from helpers import success_resp, get_current_user
+from fastapi import APIRouter, Depends, Request
+from helpers import success_resp, make_cached_response, get_current_user
 from services import likes as like_svc
 
 router = APIRouter()
@@ -19,6 +19,7 @@ async def unlike_song(song_id: str, user=Depends(get_current_user)):
 
 
 @router.get("/likes")
-async def get_likes(user=Depends(get_current_user)):
+async def get_likes(request: Request, user=Depends(get_current_user)):
     data = await like_svc.get_likes(user.id)
-    return success_resp(data=data, message="Likes retrieved")
+    body = success_resp(data=data, message="Likes retrieved")
+    return make_cached_response(body, request)

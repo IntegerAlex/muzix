@@ -184,6 +184,7 @@ class ListeningEvent(Base):
     # Indexes for common queries
     __table_args__ = (
         Index("ix_listening_events_user_started", "user_id", "started_at"),
+        Index("ix_listening_events_user_event_started", "user_id", "event_type", "started_at"),
         Index("ix_listening_events_song_started", "song_id", "started_at"),
         Index("ix_listening_events_session", "session_id", "started_at"),
     )

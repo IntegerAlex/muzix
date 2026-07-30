@@ -1,9 +1,10 @@
 import { Pressable, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, Text } from 'tamagui';
 import { router } from 'expo-router';
 import { LogOut, Music, Heart, ListMusic, Play, Clock } from '@/lib/icons';
 import { Artwork } from '@/components/Artwork';
+import { SongSkeleton } from '@/components/Skeleton';
 import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { api } from '@/services/api';
@@ -95,10 +96,9 @@ function ProfileSection({ icon: Icon, title, color, count, children }: {
   );
 }
 
-function TopSongRow({ song, index, rank }: { song: Song; index: number; rank: number }) {
+const TopSongRow = memo(function TopSongRow({ song, index, rank }: { song: Song; index: number; rank: number }) {
   const playSong = usePlayerStore((s) => s.playSong);
   const current = usePlayerStore((s) => s.current);
-  const isPlaying = current?.id === song.id;
 
   return (
     <Pressable
@@ -110,6 +110,8 @@ function TopSongRow({ song, index, rank }: { song: Song; index: number; rank: nu
         paddingVertical: SPACING.sm,
         paddingHorizontal: SPACING.lg,
         opacity: pressed ? 0.6 : 1,
+        borderLeftWidth: current?.id === song.id ? 2 : 0,
+        borderLeftColor: ACCENT,
       })}
       accessibilityLabel={`Play ${song.title} by ${song.artist}`}
       accessibilityRole="button"
@@ -133,12 +135,11 @@ function TopSongRow({ song, index, rank }: { song: Song; index: number; rank: nu
       </View>
     </Pressable>
   );
-}
+});
 
-function SongRow({ song }: { song: Song }) {
+const SongRow = memo(function SongRow({ song }: { song: Song }) {
   const playSong = usePlayerStore((s) => s.playSong);
   const current = usePlayerStore((s) => s.current);
-  const isPlaying = current?.id === song.id;
 
   return (
     <Pressable
@@ -150,6 +151,8 @@ function SongRow({ song }: { song: Song }) {
         paddingVertical: SPACING.sm,
         paddingHorizontal: SPACING.lg,
         opacity: pressed ? 0.6 : 1,
+        borderLeftWidth: current?.id === song.id ? 2 : 0,
+        borderLeftColor: ACCENT,
       })}
       accessibilityLabel={`Play ${song.title} by ${song.artist}`}
       accessibilityRole="button"
@@ -165,7 +168,7 @@ function SongRow({ song }: { song: Song }) {
       </View>
     </Pressable>
   );
-}
+});
 
 function toColors(raw: string[]): [string, string] {
   return [raw?.[0] ?? '#6d28d9', raw?.[1] ?? '#db2777'];
@@ -203,6 +206,20 @@ function formatListeningTime(ms: number): string {
   return `${hours}h ${mins}m`;
 }
 
+function SkeletonSection({ count = 3 }: { count?: number }) {
+  return (
+    <View style={{
+      marginHorizontal: SPACING.xl, marginTop: SPACING.lg,
+      backgroundColor: SURFACE, borderRadius: RADIUS.lg,
+      borderWidth: 1, borderColor: BORDER, overflow: 'hidden',
+    }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <SongSkeleton key={i} />
+      ))}
+    </View>
+  );
+}
+
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
@@ -218,7 +235,7 @@ export default function ProfileScreen() {
     if (!token) { setLoading(false); return; }
     try {
       const [topRes, likesRes, playlistsRes] = await Promise.all([
-        api.topSongs('all', 50, token).catch(() => null),
+        api.topSongs('month', 50, token).catch(() => null),
         api.getLikes(token).catch(() => null),
         api.playlists(token).catch(() => null),
       ]);
@@ -271,13 +288,14 @@ export default function ProfileScreen() {
 
   const initials = (user?.displayName ?? user?.email ?? 'U').slice(0, 1).toUpperCase();
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={ACCENT} />
-      </View>
-    );
-  }
+  const derivedData = useMemo(() => {
+    if (!stats) return null;
+    return {
+      recentSlice: recentSongs.slice(0, 5),
+      topSlice: topSongs.slice(0, 8),
+      likedSlice: likedList.slice(0, 5),
+    };
+  }, [stats, recentSongs, topSongs, likedList]);
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -312,34 +330,44 @@ export default function ProfileScreen() {
         </View>
 
         <View style={{ flexDirection: 'row', marginHorizontal: SPACING.xl, gap: SPACING.sm, marginTop: SPACING.lg }}>
-          <StatCard icon={Play} value={stats?.totalPlays ?? 0} label="Played" color={ACCENT} />
-          <StatCard icon={Clock} value={formatListeningTime(stats?.totalListeningMs ?? 0)} label="Listened" color="#8b5cf6" />
-          <StatCard icon={Heart} value={stats?.likedCount ?? 0} label="Liked" color="#ec4899" />
-          <StatCard icon={ListMusic} value={stats?.playlistCount ?? 0} label="Playlists" color="#f59e0b" />
+          <StatCard icon={Play} value={stats?.totalPlays ?? '-'} label="Played" color={ACCENT} />
+          <StatCard icon={Clock} value={stats ? formatListeningTime(stats.totalListeningMs) : '-'} label="Listened" color="#8b5cf6" />
+          <StatCard icon={Heart} value={stats?.likedCount ?? '-'} label="Liked" color="#ec4899" />
+          <StatCard icon={ListMusic} value={stats?.playlistCount ?? '-'} label="Playlists" color="#f59e0b" />
         </View>
 
-        {recentSongs.length > 0 && (
-          <ProfileSection icon={Clock} title="Recently Played" color={ACCENT}>
-            {recentSongs.slice(0, 5).map((song, i) => (
-              <TopSongRow key={`${song.id}-${i}`} song={song} index={i} rank={i + 1} />
-            ))}
-          </ProfileSection>
-        )}
+        {loading ? (
+          <>
+            <SkeletonSection count={3} />
+            <SkeletonSection count={5} />
+            <SkeletonSection count={3} />
+          </>
+        ) : (
+          <>
+            {derivedData?.recentSlice.length > 0 && (
+              <ProfileSection icon={Clock} title="Recently Played" color={ACCENT}>
+                {derivedData.recentSlice.map((song) => (
+                  <TopSongRow key={song.id} song={song} index={0} rank={1} />
+                ))}
+              </ProfileSection>
+            )}
 
-        {topSongs.length > 0 && (
-          <ProfileSection icon={Music} title="Top Songs" color="#f59e0b">
-            {topSongs.slice(0, 8).map((song, i) => (
-              <TopSongRow key={song.id} song={song} index={i} rank={i + 1} />
-            ))}
-          </ProfileSection>
-        )}
+            {derivedData?.topSlice.length > 0 && (
+              <ProfileSection icon={Music} title="Top Songs" color="#f59e0b">
+                {derivedData.topSlice.map((song, i) => (
+                  <TopSongRow key={song.id} song={song} index={i} rank={i + 1} />
+                ))}
+              </ProfileSection>
+            )}
 
-        {likedList.length > 0 && (
-          <ProfileSection icon={Heart} title="Liked Songs" color="#ec4899" count={likedList.length}>
-            {likedList.slice(0, 5).map((song, i) => (
-              <SongRow key={song.id} song={song} />
-            ))}
-          </ProfileSection>
+            {derivedData?.likedSlice.length > 0 && (
+              <ProfileSection icon={Heart} title="Liked Songs" color="#ec4899" count={likedList.length}>
+                {derivedData.likedSlice.map((song) => (
+                  <SongRow key={song.id} song={song} />
+                ))}
+              </ProfileSection>
+            )}
+          </>
         )}
 
         <View style={{ marginTop: SPACING.xxl, paddingHorizontal: SPACING.xl }}>
