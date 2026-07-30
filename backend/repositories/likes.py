@@ -1,8 +1,11 @@
 """Like repository: database operations for user likes."""
+import logging
 import uuid
 from sqlalchemy import select
 from db import SessionLocal
 from models import UserLike
+
+logger = logging.getLogger("muzix.likes")
 
 
 async def get_user_likes(user_id: str) -> list[str]:
@@ -21,8 +24,9 @@ async def add_like(user_id: str, song_id: str) -> bool:
             session.add(like)
             await session.commit()
             return True
-        except Exception:
+        except Exception as exc:
             await session.rollback()
+            logger.error("Failed to add like: %s", exc, exc_info=True)
             return False
 
 

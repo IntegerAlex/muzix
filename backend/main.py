@@ -6,11 +6,14 @@ Run locally:
     uv run python migrate.py
     uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 """
+import logging
 import orjson
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from fastapi.exceptions import HTTPException
+
+logger = logging.getLogger("muzix")
 
 from config import AUDIO_DIR, THUMB_DIR
 from middleware import SecurityMiddleware
@@ -55,6 +58,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
     body = {"status": "exception", "data": [], "message": "Internal server error", "meta": {}}
     return Response(content=orjson.dumps(body), media_type="application/json", status_code=500)
 

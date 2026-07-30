@@ -55,8 +55,10 @@ def _compute_weight(event_type: str, completion_pct: int, duration_ms: int, song
     return 0.3
 
 
-async def get_all_user_interactions() -> list[dict]:
+async def get_all_user_interactions(since: datetime | None = None) -> list[dict]:
     """Get aggregated (user_id, song_id, weight) across all users. Aggregated at SQL level."""
+    if since is None:
+        since = datetime(1970, 1, 1, tzinfo=timezone.utc)
     async with SessionLocal() as session:
         stmt = select(
             ListeningEvent.user_id,
@@ -78,6 +80,7 @@ async def get_all_user_interactions() -> list[dict]:
         ).where(
             ListeningEvent.user_id.is_not(None),
             ListeningEvent.song_id.is_not(None),
+            ListeningEvent.started_at >= since,
         ).group_by(
             ListeningEvent.user_id,
             ListeningEvent.song_id,

@@ -110,5 +110,4 @@ async def get_share_by_token(share_token: str) -> dict | None:
             "selected_lyrics_lines": share.selected_lyrics_lines,
             "created_at": share.created_at.isoformat(),
             "expires_at": share.expires_at.isoformat(),
-            "user_id": share.user_id,
         }

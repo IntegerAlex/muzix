@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -93,7 +94,7 @@ async def main() -> None:
     print("[3/4] Inserting metadata into PostgreSQL ...")
     async with SessionLocal() as session:
         song = Song(
-            id=vid_id,
+            id=str(uuid.uuid4()),
             title=tags["title"],
             artist=tags["artist"],
             album=tags["album"],
