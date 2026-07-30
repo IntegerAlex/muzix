@@ -55,7 +55,7 @@ async def refresh(raw_token: str) -> dict:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     # Token already revoked — possible theft (double-use)
-    if record.is_revoked == "1":
+    if record.is_revoked:
         await refresh_token_repo.revoke_family(record.family_id)
         raise HTTPException(status_code=401, detail="Refresh token has been revoked. Please login again.")
 

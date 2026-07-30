@@ -17,13 +17,14 @@ function handleAuthError() {
   const { token } = useAuthStore.getState();
   if (token) {
     useAuthStore.getState().logout();
-    if (typeof window !== 'undefined') {
-      // TODO: This is a web-only hard redirect. On native, use router integration
-      // (e.g., inject a router callback) instead of window.location.href.
-      // The api module is a plain module without React context access, so router
-      // injection would require passing a callback via the api config or a
-      // separate navigation service.
-      window.location.href = '/login';
+    try {
+      // Lazy import to avoid circular dependency at module load time
+      const { router } = require('expo-router');
+      router.replace('/login');
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     }
   }
   setTimeout(() => { _authErrorHandled = false; }, 5000);

@@ -16,6 +16,7 @@ import { RADIUS } from '@/lib/sizing';
 import { BG, SURFACE, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
 import { useResponsive } from '@/lib/useResponsive';
 import { SPACING } from '@/lib/spacing';
+import type { Song } from '@/services/types';
 
 const RECENT_KEY = 'muzix_recent_searches';
 const MAX_RECENT = 8;
@@ -37,6 +38,171 @@ function persistRecent(terms: string[]): void {
   } catch {}
 }
 
+// ---------------------------------------------------------------------------
+// Shared sub-components
+// ---------------------------------------------------------------------------
+
+function SearchInput({ query, setQuery }: { query: string; setQuery: (q: string) => void }) {
+  return (
+    <TextInput
+      value={query}
+      onChangeText={setQuery}
+      placeholder="Songs, artists, albums…"
+      placeholderTextColor={TEXT_MUTED}
+      autoCorrect={false}
+      spellCheck={false}
+      textContentType="none"
+      style={{
+        marginTop: SPACING.lg,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: BORDER,
+        backgroundColor: CARD_BG,
+        paddingHorizontal: 16,
+        paddingVertical: SPACING.md,
+        fontSize: 15,
+        color: TEXT_PRIMARY,
+      }}
+      accessibilityLabel="Search"
+      accessibilityHint="Search for songs, artists, and albums"
+    />
+  );
+}
+
+function LoadingState() {
+  return (
+    <View style={{ paddingTop: 16 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: 12 }}>
+        <ActivityIndicator size="small" color={ACCENT} />
+        <Text fontSize={13} color={TEXT_MUTED}>Searching…</Text>
+      </View>
+      {[1, 2, 3, 4, 5].map((i) => <SongSkeleton key={i} />)}
+    </View>
+  );
+}
+
+function EmptyQueryState() {
+  return (
+    <View style={{ alignItems: 'center', paddingTop: 60 }}>
+      <Search size={48} color={TEXT_MUTED} strokeWidth={1.5} />
+      <Text style={{ marginTop: 16, textAlign: 'center' }} fontSize={15} color={TEXT_MUTED}>
+        What do you want to listen to?
+      </Text>
+    </View>
+  );
+}
+
+function NoResultsState({ query }: { query: string }) {
+  return (
+    <View style={{ alignItems: 'center', paddingTop: 60 }}>
+      <Search size={48} color={TEXT_MUTED} strokeWidth={1.5} />
+      <Text style={{ marginTop: SPACING.md, textAlign: 'center', fontWeight: '500' }} fontSize={15} color={TEXT_SECONDARY}>
+        No results for &quot;{query.trim()}&quot;
+      </Text>
+      <Text style={{ marginTop: SPACING.sm, textAlign: 'center' }} fontSize={13} color={TEXT_MUTED}>
+        Try different keywords or check the spelling
+      </Text>
+    </View>
+  );
+}
+
+function RecentSearches({ terms, onSelect, onClear }: { terms: string[]; onSelect: (t: string) => void; onClear: () => void }) {
+  if (terms.length === 0) return null;
+  return (
+    <View style={{ marginTop: SPACING.xxl }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md, marginTop: SPACING.xxxl }}>
+        <Text fontSize={20} fontWeight="700" color={TEXT_PRIMARY}>Recent</Text>
+        <Pressable onPress={onClear} accessibilityLabel="Clear recent searches" accessibilityRole="button">
+          <Text fontSize={14} fontWeight="500" color={TEXT_SECONDARY}>Clear</Text>
+        </Pressable>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm }}>
+        {terms.map((term) => (
+          <Pressable
+            key={term}
+            onPress={() => onSelect(term)}
+            style={{ paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: 16, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER }}
+            accessibilityLabel={`Search ${term}`}
+            accessibilityRole="button"
+          >
+            <Text fontSize={13} fontWeight="500" color={TEXT_PRIMARY}>{term}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function SearchResults({ results, current, onShare, isSharing, showSongs, showAlbums, showArtists }: {
+  results: { songs: Song[]; albums: { id: string; title: string; artist: string; colors: string[] }[]; artists: { id: string; name: string; colors: string[] }[] };
+  current: Song | null;
+  onShare: (song: Song) => void;
+  isSharing: boolean;
+  showSongs: boolean;
+  showAlbums: boolean;
+  showArtists: boolean;
+}) {
+  return (
+    <>
+      {showSongs && results.songs.map((songItem, i) => (
+        <AnimatedEntrance key={songItem.id} index={i}>
+          <SongRow
+            song={songItem}
+            index={i}
+            queue={results.songs}
+            isCurrent={current?.id === songItem.id}
+            onShare={onShare}
+            isSharing={isSharing}
+          />
+        </AnimatedEntrance>
+      ))}
+
+      {showAlbums && results.albums.length > 0 && <SectionHeader title="Albums" />}
+      {showAlbums && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md }}>
+          {results.albums.map((album, i) => (
+            <AnimatedEntrance key={album.id} index={i}>
+              <View style={{ width: '47%' }}>
+                <Link href={`/album/${album.id}` as Href} asChild>
+                  <Pressable accessibilityLabel={`${album.title} by ${album.artist}`} accessibilityRole="button">
+                    <Artwork colors={album.colors} style={{ height: 160, width: '100%' }} radius={RADIUS.lg} />
+                    <Text style={{ marginTop: SPACING.sm }} fontSize={13} fontWeight="700" color={TEXT_PRIMARY} numberOfLines={1}>
+                      {album.title}
+                    </Text>
+                    <Text style={{ marginTop: SPACING.xs }} fontSize={11} fontWeight="500" color={TEXT_SECONDARY} numberOfLines={1}>
+                      {album.artist}
+                    </Text>
+                  </Pressable>
+                </Link>
+              </View>
+            </AnimatedEntrance>
+          ))}
+        </View>
+      )}
+
+      {showArtists && results.artists.length > 0 && <SectionHeader title="Artists" />}
+      {showArtists && results.artists.map((artist, i) => (
+        <AnimatedEntrance key={artist.id} index={i}>
+          <Link href={`/artist/${artist.id}` as Href} asChild>
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm }}
+              accessibilityLabel={artist.name}
+              accessibilityRole="button"
+            >
+              <Artwork colors={artist.colors} style={{ height: 48, width: 48 }} radius={9999} />
+              <Text fontSize={15} fontWeight="500" color={TEXT_PRIMARY}>{artist.name}</Text>
+            </Pressable>
+          </Link>
+        </AnimatedEntrance>
+      ))}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export default function SearchScreen() {
   const responsive = useResponsive();
   const isWide = (responsive.isTablet || responsive.isDesktop) && responsive.orientation === 'landscape';
@@ -56,7 +222,7 @@ export default function SearchScreen() {
     }
   }, [shareError]);
 
-  const handleShare = useCallback(async (song: import('@/services/types').Song) => {
+  const handleShare = useCallback(async (song: Song) => {
     try {
       await share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl });
       toast('Link copied!', 'success');
@@ -85,6 +251,10 @@ export default function SearchScreen() {
     persistRecent([]);
   }, []);
 
+  const showSongs = filter === 'all' || filter === 'songs';
+  const showAlbums = filter === 'all' || filter === 'albums';
+  const showArtists = filter === 'all' || filter === 'artists';
+
   if (isWide) {
     const filterItems = [
       { key: 'all' as const, icon: Search, label: 'All' },
@@ -92,10 +262,6 @@ export default function SearchScreen() {
       { key: 'albums' as const, icon: ListMusic, label: 'Albums' },
       { key: 'artists' as const, icon: User, label: 'Artists' },
     ];
-
-    const showSongs = filter === 'all' || filter === 'songs';
-    const showAlbums = filter === 'all' || filter === 'albums';
-    const showArtists = filter === 'all' || filter === 'artists';
 
     return (
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: BG }}>
@@ -173,133 +339,26 @@ export default function SearchScreen() {
             contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: 96, paddingTop: 64 }}
           >
             <Text fontSize={28} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY}>Search</Text>
-
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Songs, artists, albums…"
-              placeholderTextColor={TEXT_MUTED}
-              autoCorrect={false}
-              spellCheck={false}
-              textContentType="none"
-              style={{
-                marginTop: SPACING.lg,
-                borderRadius: 16,
-                borderWidth: 1,
-                borderColor: BORDER,
-                backgroundColor: CARD_BG,
-                paddingHorizontal: 16,
-                paddingVertical: SPACING.md,
-                fontSize: 15,
-                color: TEXT_PRIMARY,
-              }}
-              accessibilityLabel="Search"
-            />
+            <SearchInput query={query} setQuery={setQuery} />
 
             {!hasQuery ? (
               <>
-                <View style={{ alignItems: 'center', paddingTop: 60 }}>
-                  <Search size={48} color={TEXT_MUTED} strokeWidth={1.5} />
-                  <Text style={{ marginTop: 16, textAlign: 'center' }} fontSize={15} color={TEXT_MUTED}>
-                    What do you want to listen to?
-                  </Text>
-                </View>
-                {!isWide && recentSearches.length > 0 && (
-                  <View style={{ marginTop: SPACING.xxl }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md, marginTop: SPACING.xxxl }}>
-                      <Text fontSize={20} fontWeight="700" color={TEXT_PRIMARY}>Recent</Text>
-                      <Pressable onPress={clearRecent} accessibilityLabel="Clear recent searches" accessibilityRole="button">
-                        <Text fontSize={14} fontWeight="500" color={TEXT_SECONDARY}>Clear</Text>
-                      </Pressable>
-                    </View>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm }}>
-                      {recentSearches.map((term) => (
-                        <Pressable
-                          key={term}
-                          onPress={() => handleRecentPress(term)}
-                          style={{ paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: 16, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER }}
-                          accessibilityLabel={`Search ${term}`}
-                          accessibilityRole="button"
-                        >
-                          <Text fontSize={13} fontWeight="500" color={TEXT_PRIMARY}>{term}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                )}
+                <EmptyQueryState />
               </>
             ) : loading ? (
-              <View style={{ paddingTop: 16 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: 12 }}>
-                  <ActivityIndicator size="small" color={ACCENT} />
-                  <Text fontSize={13} color={TEXT_MUTED}>Searching…</Text>
-                </View>
-                {[1, 2, 3, 4, 5].map((i) => <SongSkeleton key={i} />)}
-              </View>
+              <LoadingState />
             ) : hasResults ? (
-              <>
-                {showSongs && results.songs.map((songItem, i) => (
-                  <AnimatedEntrance key={songItem.id} index={i}>
-                    <SongRow
-                      song={songItem}
-                      index={i}
-                      queue={results.songs}
-                      isCurrent={current?.id === songItem.id}
-                      onShare={handleShare}
-                      isSharing={isSharing}
-                    />
-                  </AnimatedEntrance>
-                ))}
-
-                {showAlbums && results.albums.length > 0 && <SectionHeader title="Albums" />}
-                {showAlbums && (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md }}>
-                    {results.albums.map((album, i) => (
-                      <AnimatedEntrance key={album.id} index={i}>
-                        <View style={{ width: '47%' }}>
-                          <Link href={`/album/${album.id}` as Href} asChild>
-                            <Pressable accessibilityLabel={`${album.title} by ${album.artist}`} accessibilityRole="button">
-                              <Artwork colors={album.colors} style={{ height: 160, width: '100%' }} radius={RADIUS.lg} />
-                              <Text style={{ marginTop: SPACING.sm }} fontSize={13} fontWeight="700" color={TEXT_PRIMARY} numberOfLines={1}>
-                                {album.title}
-                              </Text>
-                              <Text style={{ marginTop: SPACING.xs }} fontSize={11} fontWeight="500" color={TEXT_SECONDARY} numberOfLines={1}>
-                                {album.artist}
-                              </Text>
-                            </Pressable>
-                          </Link>
-                        </View>
-                      </AnimatedEntrance>
-                    ))}
-                  </View>
-                )}
-
-                {showArtists && results.artists.length > 0 && <SectionHeader title="Artists" />}
-                {showArtists && results.artists.map((artist, i) => (
-                  <AnimatedEntrance key={artist.id} index={i}>
-                    <Link href={`/artist/${artist.id}` as Href} asChild>
-                      <Pressable
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm }}
-                        accessibilityLabel={artist.name}
-                        accessibilityRole="button"
-                      >
-                        <Artwork colors={artist.colors} style={{ height: 48, width: 48 }} radius={9999} />
-                        <Text fontSize={15} fontWeight="500" color={TEXT_PRIMARY}>{artist.name}</Text>
-                      </Pressable>
-                    </Link>
-                  </AnimatedEntrance>
-                ))}
-              </>
+              <SearchResults
+                results={results}
+                current={current}
+                onShare={handleShare}
+                isSharing={isSharing}
+                showSongs={showSongs}
+                showAlbums={showAlbums}
+                showArtists={showArtists}
+              />
             ) : (
-              <View style={{ alignItems: 'center', paddingTop: 60 }}>
-                <Search size={48} color={TEXT_MUTED} strokeWidth={1.5} />
-                <Text style={{ marginTop: SPACING.md, textAlign: 'center', fontWeight: '500' }} fontSize={15} color={TEXT_SECONDARY}>
-                  No results for &quot;{query.trim()}&quot;
-                </Text>
-                <Text style={{ marginTop: SPACING.sm, textAlign: 'center' }} fontSize={13} color={TEXT_MUTED}>
-                  Try different keywords or check the spelling
-                </Text>
-              </View>
+              <NoResultsState query={query} />
             )}
           </ScrollView>
         </View>
@@ -315,131 +374,27 @@ export default function SearchScreen() {
         contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: 96, paddingTop: 64 }}
       >
         <Text fontSize={28} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY}>Search</Text>
-
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Songs, artists, albums…"
-          placeholderTextColor={TEXT_MUTED}
-          autoCorrect={false}
-          spellCheck={false}
-          textContentType="none"
-          style={{
-            marginTop: SPACING.lg,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: BORDER,
-            backgroundColor: CARD_BG,
-            paddingHorizontal: 16,
-            paddingVertical: SPACING.md,
-            fontSize: 15,
-            color: TEXT_PRIMARY,
-          }}
-          accessibilityLabel="Search"
-        />
+        <SearchInput query={query} setQuery={setQuery} />
 
         {!hasQuery ? (
           <>
-            <View style={{ alignItems: 'center', paddingTop: 60 }}>
-              <Search size={48} color={TEXT_MUTED} strokeWidth={1.5} />
-              <Text style={{ marginTop: 16, textAlign: 'center' }} fontSize={15} color={TEXT_MUTED}>
-                What do you want to listen to?
-              </Text>
-            </View>
-            {recentSearches.length > 0 && (
-              <View style={{ marginTop: SPACING.xxl }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md, marginTop: SPACING.xxxl }}>
-                  <Text fontSize={20} fontWeight="700" color={TEXT_PRIMARY}>Recent</Text>
-                  <Pressable onPress={clearRecent} accessibilityLabel="Clear recent searches" accessibilityRole="button">
-                    <Text fontSize={14} fontWeight="500" color={TEXT_SECONDARY}>Clear</Text>
-                  </Pressable>
-                </View>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm }}>
-                  {recentSearches.map((term) => (
-                    <Pressable
-                      key={term}
-                      onPress={() => handleRecentPress(term)}
-                      style={{ paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderRadius: 16, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER }}
-                      accessibilityLabel={`Search ${term}`}
-                      accessibilityRole="button"
-                    >
-                      <Text fontSize={13} fontWeight="500" color={TEXT_PRIMARY}>{term}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            )}
+            <EmptyQueryState />
+            <RecentSearches terms={recentSearches} onSelect={handleRecentPress} onClear={clearRecent} />
           </>
         ) : loading ? (
-          <View style={{ paddingTop: 16 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: 12 }}>
-              <ActivityIndicator size="small" color={ACCENT} />
-              <Text fontSize={13} color={TEXT_MUTED}>Searching…</Text>
-            </View>
-            {[1, 2, 3, 4, 5].map((i) => <SongSkeleton key={i} />)}
-          </View>
-         ) : hasResults ? (
-           <>
-             {results.songs.map((songItem, i) => (
-                <AnimatedEntrance key={songItem.id} index={i}>
-                  <SongRow
-                    song={songItem}
-                    index={i}
-                    queue={results.songs}
-                   isCurrent={current?.id === songItem.id}
-                   onShare={handleShare}
-                   isSharing={isSharing}
-                  />
-               </AnimatedEntrance>
-             ))}
-
-            {results.albums.length > 0 && <SectionHeader title="Albums" />}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md }}>
-              {results.albums.map((album, i) => (
-                <AnimatedEntrance key={album.id} index={i}>
-                  <View style={{ width: '47%' }}>
-                    <Link href={`/album/${album.id}` as Href} asChild>
-                      <Pressable accessibilityLabel={`${album.title} by ${album.artist}`} accessibilityRole="button">
-                        <Artwork colors={album.colors} style={{ height: 160, width: '100%' }} radius={RADIUS.lg} />
-                        <Text style={{ marginTop: SPACING.sm }} fontSize={13} fontWeight="700" color={TEXT_PRIMARY} numberOfLines={1}>
-                          {album.title}
-                        </Text>
-                        <Text style={{ marginTop: SPACING.xs }} fontSize={11} fontWeight="500" color={TEXT_SECONDARY} numberOfLines={1}>
-                          {album.artist}
-                        </Text>
-                      </Pressable>
-                    </Link>
-                  </View>
-                </AnimatedEntrance>
-              ))}
-            </View>
-
-            {results.artists.length > 0 && <SectionHeader title="Artists" />}
-            {results.artists.map((artist, i) => (
-              <AnimatedEntrance key={artist.id} index={i}>
-                <Link href={`/artist/${artist.id}` as Href} asChild>
-                  <Pressable
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm }}
-                    accessibilityLabel={artist.name}
-                    accessibilityRole="button"
-                  >
-                    <Artwork colors={artist.colors} style={{ height: 48, width: 48 }} radius={9999} />
-                    <Text fontSize={15} fontWeight="500" color={TEXT_PRIMARY}>{artist.name}</Text>
-                  </Pressable>
-                </Link>
-              </AnimatedEntrance>
-            ))}
-          </>
+          <LoadingState />
+        ) : hasResults ? (
+          <SearchResults
+            results={results}
+            current={current}
+            onShare={handleShare}
+            isSharing={isSharing}
+            showSongs={true}
+            showAlbums={true}
+            showArtists={true}
+          />
         ) : (
-          <View style={{ alignItems: 'center', paddingTop: 60 }}>
-            <Search size={48} color={TEXT_MUTED} strokeWidth={1.5} />
-            <Text style={{ marginTop: SPACING.md, textAlign: 'center', fontWeight: '500' }} fontSize={15} color={TEXT_SECONDARY}>
-              No results for &quot;{query.trim()}&quot;
-            </Text>
-            <Text style={{ marginTop: SPACING.sm, textAlign: 'center' }} fontSize={13} color={TEXT_MUTED}>
-              Try different keywords or check the spelling
-            </Text>
-          </View>
+          <NoResultsState query={query} />
         )}
       </ScrollView>
     </View>

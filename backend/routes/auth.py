@@ -54,7 +54,8 @@ class AuthRefresh(BaseModel):
 
 
 @router.post("/refresh")
-async def refresh_token(body: AuthRefresh):
+async def refresh_token(body: AuthRefresh, request: Request):
+    check_rate_limit(f"refresh:{_client_ip(request)}", max_requests=10, window=60)
     data = await auth_svc.refresh(body.refreshToken)
     return success_resp(data=data, message="Token refreshed")
 

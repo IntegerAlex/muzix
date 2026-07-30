@@ -12,6 +12,8 @@ load_dotenv()
 JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:
     raise RuntimeError("JWT_SECRET environment variable is required")
+if len(JWT_SECRET) < 32:
+    raise RuntimeError("JWT_SECRET must be at least 32 characters")
 
 R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID")
 R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID")

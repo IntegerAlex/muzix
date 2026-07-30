@@ -64,6 +64,12 @@ async def migrate() -> None:
             text("CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);")
         )
 
+        # ----- pg_trgm for fuzzy search -----
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm;"))
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_artists_name_trgm ON artists USING gin (name gin_trgm_ops);")
+        )
+
         # ----- songs -----
         await conn.execute(
             text(

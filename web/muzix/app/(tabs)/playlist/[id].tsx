@@ -336,11 +336,11 @@ export default function PlaylistDetail() {
                 {contextSong.title}
               </Text>
             )}
-            <Pressable onPress={() => handleContextAction('next')} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md }} accessibilityLabel="Play next">
+            <Pressable onPress={() => handleContextAction('next')} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md }} accessibilityLabel="Play next" accessibilityHint="Adds this song to play after the current track">
               <Play size={16} color={TEXT_PRIMARY} />
               <Text fontSize={14} fontWeight="500" color={TEXT_PRIMARY}>Play Next</Text>
             </Pressable>
-            <Pressable onPress={() => handleContextAction('queue')} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md }} accessibilityLabel="Add to queue">
+            <Pressable onPress={() => handleContextAction('queue')} style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md }} accessibilityLabel="Add to queue" accessibilityHint="Adds this song to the end of the queue">
               <ListPlus size={16} color={TEXT_PRIMARY} />
               <Text fontSize={14} fontWeight="500" color={TEXT_PRIMARY}>Add to Queue</Text>
             </Pressable>

@@ -77,31 +77,42 @@ async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
     async with SessionLocal() as session:
         stmt = select(
             ListeningEvent.song_id,
+            Song.title.label("song_title"),
+            Song.artist.label("song_artist"),
+            Song.artist_id.label("song_artist_id"),
+            Song.album.label("song_album"),
+            Song.album_id.label("song_album_id"),
+            Song.duration_ms.label("song_duration_ms"),
+            Song.colors.label("song_colors"),
             func.count(ListeningEvent.id).label("play_count"),
             func.sum(ListeningEvent.duration_played_ms).label("total_ms"),
             func.count(func.distinct(ListeningEvent.session_id)).label("sessions"),
+        ).select_from(
+            ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True)
         ).where(
             ListeningEvent.user_id == user_id,
             ListeningEvent.event_type == "play",
             ListeningEvent.started_at >= since,
-        ).group_by(ListeningEvent.song_id).order_by(func.count(ListeningEvent.id).desc()).limit(limit)
+        ).group_by(
+            ListeningEvent.song_id, Song.title, Song.artist, Song.artist_id,
+            Song.album, Song.album_id, Song.duration_ms, Song.colors,
+        ).order_by(func.count(ListeningEvent.id).desc()).limit(limit)
 
         result = await session.execute(stmt)
         rows = result.all()
 
-        song_ids = [r.song_id for r in rows if r.song_id]
-        songs_map = {}
-        if song_ids:
-            song_result = await session.execute(select(Song).where(Song.id.in_(song_ids)))
-            for s in song_result.scalars().all():
-                songs_map[s.id] = {
-                    "id": s.id, "title": s.title, "artist": s.artist,
-                    "album": s.album, "duration_ms": s.duration_ms, "colors": s.colors,
-                }
-
         return [
             {
-                "song": songs_map.get(r.song_id, {"id": r.song_id, "title": "Unknown"}),
+                "song": {
+                    "id": r.song_id,
+                    "title": r.song_title,
+                    "artist": r.song_artist,
+                    "artistId": r.song_artist_id,
+                    "album": r.song_album,
+                    "albumId": r.song_album_id,
+                    "duration_ms": r.song_duration_ms,
+                    "colors": r.song_colors,
+                } if r.song_title else {"id": r.song_id, "title": "Unknown"},
                 "play_count": r.play_count,
                 "total_listening_ms": r.total_ms,
                 "sessions": r.sessions,
@@ -197,29 +208,38 @@ async def get_skip_rate(user_id: str, period: str, limit: int = 50) -> list[dict
     async with SessionLocal() as session:
         stmt = select(
             ListeningEvent.song_id,
+            Song.title.label("song_title"),
+            Song.artist.label("song_artist"),
+            Song.artist_id.label("song_artist_id"),
+            Song.album.label("song_album"),
+            Song.duration_ms.label("song_duration_ms"),
+            Song.colors.label("song_colors"),
             func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "play").label("play_count"),
             func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "skip").label("skip_count"),
+        ).select_from(
+            ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True)
         ).where(
             ListeningEvent.user_id == user_id,
             ListeningEvent.started_at >= since,
-        ).group_by(ListeningEvent.song_id).order_by(func.count(ListeningEvent.id).desc()).limit(limit)
+        ).group_by(
+            ListeningEvent.song_id, Song.title, Song.artist, Song.artist_id,
+            Song.album, Song.duration_ms, Song.colors,
+        ).order_by(func.count(ListeningEvent.id).desc()).limit(limit)
 
         result = await session.execute(stmt)
         rows = result.all()
 
-        song_ids = [r.song_id for r in rows if r.song_id]
-        songs_map = {}
-        if song_ids:
-            song_result = await session.execute(select(Song).where(Song.id.in_(song_ids)))
-            for s in song_result.scalars().all():
-                songs_map[s.id] = {
-                    "id": s.id, "title": s.title, "artist": s.artist,
-                    "album": s.album, "duration_ms": s.duration_ms, "colors": s.colors,
-                }
-
         return [
             {
-                "song": songs_map.get(r.song_id, {"id": r.song_id, "title": "Unknown"}),
+                "song": {
+                    "id": r.song_id,
+                    "title": r.song_title,
+                    "artist": r.song_artist,
+                    "artistId": r.song_artist_id,
+                    "album": r.song_album,
+                    "duration_ms": r.song_duration_ms,
+                    "colors": r.song_colors,
+                } if r.song_title else {"id": r.song_id, "title": "Unknown"},
                 "play_count": r.play_count,
                 "skip_count": r.skip_count,
                 "skip_rate": round(r.skip_count / (r.play_count + r.skip_count), 4) if (r.play_count + r.skip_count) > 0 else 0,
@@ -237,29 +257,38 @@ async def get_completion_rate(user_id: str, period: str, limit: int = 50) -> lis
     async with SessionLocal() as session:
         stmt = select(
             ListeningEvent.song_id,
+            Song.title.label("song_title"),
+            Song.artist.label("song_artist"),
+            Song.artist_id.label("song_artist_id"),
+            Song.album.label("song_album"),
+            Song.duration_ms.label("song_duration_ms"),
+            Song.colors.label("song_colors"),
             func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "play").label("play_count"),
             func.avg(ListeningEvent.completion_percentage).label("avg_completion"),
+        ).select_from(
+            ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True)
         ).where(
             ListeningEvent.user_id == user_id,
             ListeningEvent.started_at >= since,
-        ).group_by(ListeningEvent.song_id).order_by(func.avg(ListeningEvent.completion_percentage).desc()).limit(limit)
+        ).group_by(
+            ListeningEvent.song_id, Song.title, Song.artist, Song.artist_id,
+            Song.album, Song.duration_ms, Song.colors,
+        ).order_by(func.avg(ListeningEvent.completion_percentage).desc()).limit(limit)
 
         result = await session.execute(stmt)
         rows = result.all()
 
-        song_ids = [r.song_id for r in rows if r.song_id]
-        songs_map = {}
-        if song_ids:
-            song_result = await session.execute(select(Song).where(Song.id.in_(song_ids)))
-            for s in song_result.scalars().all():
-                songs_map[s.id] = {
-                    "id": s.id, "title": s.title, "artist": s.artist,
-                    "album": s.album, "duration_ms": s.duration_ms, "colors": s.colors,
-                }
-
         return [
             {
-                "song": songs_map.get(r.song_id, {"id": r.song_id, "title": "Unknown"}),
+                "song": {
+                    "id": r.song_id,
+                    "title": r.song_title,
+                    "artist": r.song_artist,
+                    "artistId": r.song_artist_id,
+                    "album": r.song_album,
+                    "duration_ms": r.song_duration_ms,
+                    "colors": r.song_colors,
+                } if r.song_title else {"id": r.song_id, "title": "Unknown"},
                 "play_count": r.play_count,
                 "avg_completion_percentage": round(r.avg_completion or 0, 1),
                 "completion_rate": round((r.avg_completion or 0) / 100, 4),

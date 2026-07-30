@@ -98,7 +98,7 @@ def rate_limit(request: Request, max_requests: int = 30, window: int = 60):
 # ---------------------------------------------------------------------------
 
 def compute_etag(data: dict | list) -> str:
-    serialized = orjson.dumps(data, option=orjson.OPT_SORT_KEYS, default=str)
+    serialized = orjson.dumps(data, option=orjson.OPT_SORT_KEYS)
     return hashlib.sha256(serialized).hexdigest()[:32]
 
 

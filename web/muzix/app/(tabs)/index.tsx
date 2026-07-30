@@ -311,6 +311,11 @@ export default function HomeScreen() {
     return map;
   }, [songs]);
 
+  const playedSongs = useMemo(() => {
+    const recentIds = usePlayerStore.getState().recentlyPlayed;
+    return recentIds.map((id) => songIndexMap.has(id) ? songs[songIndexMap.get(id)!] : null).filter(Boolean) as Song[];
+  }, [songs, songIndexMap]);
+
   const handleShare = useCallback(async (song: Song) => {
     try {
       await share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl });
@@ -381,29 +386,24 @@ export default function HomeScreen() {
             {songs.length > 0 && (
               <>
                 <SectionHeader title="Recently played" />
-                {(() => {
-                  const recentIds = usePlayerStore.getState().recentlyPlayed;
-                  const playedSongs = recentIds.map((id) => songIndexMap.has(id) ? songs[songIndexMap.get(id)!] : null).filter(Boolean) as Song[];
-                  if (playedSongs.length === 0) {
-                    return <View style={{ marginHorizontal: SPACING.xl }}><SectionEmpty label="No recently played songs" /></View>;
-                  }
-                  return (
-                    <View style={{ paddingHorizontal: SPACING.xl }}>
-                      {playedSongs.slice(0, 6).map((songItem, i) => (
-                        <AnimatedEntrance key={songItem.id} index={i}>
-                          <SongRow
-                            song={songItem}
-                            index={i}
-                            queue={playedSongs}
-                            isCurrent={current?.id === songItem.id}
-                            onShare={handleShare}
-                            isSharing={isSharing}
-                          />
-                        </AnimatedEntrance>
-                      ))}
-                    </View>
-                  );
-                })()}
+                {playedSongs.length === 0 ? (
+                  <View style={{ marginHorizontal: SPACING.xl }}><SectionEmpty label="No recently played songs" /></View>
+                ) : (
+                  <View style={{ paddingHorizontal: SPACING.xl }}>
+                    {playedSongs.slice(0, 6).map((songItem, i) => (
+                      <AnimatedEntrance key={songItem.id} index={i}>
+                        <SongRow
+                          song={songItem}
+                          index={i}
+                          queue={playedSongs}
+                          isCurrent={current?.id === songItem.id}
+                          onShare={handleShare}
+                          isSharing={isSharing}
+                        />
+                      </AnimatedEntrance>
+                    ))}
+                  </View>
+                )}
               </>
             )}
 

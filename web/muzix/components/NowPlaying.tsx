@@ -627,6 +627,7 @@ export function NowPlaying() {
               hitSlop={12}
               accessibilityLabel={isLiked ? 'Unlike' : 'Like'}
               accessibilityRole="button"
+              accessibilityState={{ checked: isLiked }}
             >
               <Animated.View style={likeStyle}>
                 <Heart

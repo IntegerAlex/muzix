@@ -27,7 +27,7 @@ async def revoke(token_id: str) -> None:
         await session.execute(
             update(RefreshToken)
             .where(RefreshToken.id == token_id)
-            .values(is_revoked="1")
+            .values(is_revoked=True)
         )
         await session.commit()
 
@@ -37,7 +37,7 @@ async def revoke_family(family_id: str) -> None:
         await session.execute(
             update(RefreshToken)
             .where(RefreshToken.family_id == family_id)
-            .values(is_revoked="1")
+            .values(is_revoked=True)
         )
         await session.commit()
 
@@ -48,9 +48,9 @@ async def revoke_all_for_user(user_id: str) -> None:
             update(RefreshToken)
             .where(
                 RefreshToken.user_id == user_id,
-                RefreshToken.is_revoked == "0",
+                RefreshToken.is_revoked == False,  # noqa: E712
                 RefreshToken.expires_at > datetime.now(timezone.utc),
             )
-            .values(is_revoked="1")
+            .values(is_revoked=True)
         )
         await session.commit()

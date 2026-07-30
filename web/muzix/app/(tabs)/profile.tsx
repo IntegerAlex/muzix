@@ -8,6 +8,7 @@ import { SongSkeleton } from '@/components/Skeleton';
 import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { api } from '@/services/api';
+import { getSongs } from '@/services/data';
 import type { Song } from '@/services/types';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, SURFACE, SURFACE_ELEVATED, SURFACE_ICON, DANGER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
@@ -241,7 +242,9 @@ export default function ProfileScreen() {
 
       const topItems = (topRes?.items ?? []) as AnalyticsItem[];
       const topSongsMapped = topItems.map((item) => mapAnalyticsSong(item.song));
-      const songMap = new Map(topSongsMapped.map((s) => [s.id, s]));
+
+      const allSongs = getSongs();
+      const songMap = new Map(allSongs.map((s) => [s.id, s]));
 
       const recIds = usePlayerStore.getState().recentlyPlayed;
       const recentSongsMapped = recIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];

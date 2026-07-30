@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from config import r2, R2_BUCKET
 
 MAX_THUMB_BYTES = 5 * 1024 * 1024  # 5MB limit
+STREAM_CHUNK = 64 * 1024  # 64KB chunks
 
 
 async def get_thumbnail(filename: str) -> tuple[bytes, str]:
@@ -13,9 +14,20 @@ async def get_thumbnail(filename: str) -> tuple[bytes, str]:
         content_length = obj.get("ContentLength", 0)
         if content_length and content_length > MAX_THUMB_BYTES:
             raise HTTPException(status_code=413, detail="Thumbnail too large")
-        content = await asyncio.to_thread(obj["Body"].read)
-        if len(content) > MAX_THUMB_BYTES:
-            raise HTTPException(status_code=413, detail="Thumbnail too large")
+
+        body = obj["Body"]
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = await asyncio.to_thread(body.read, STREAM_CHUNK)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_THUMB_BYTES:
+                raise HTTPException(status_code=413, detail="Thumbnail too large")
+            chunks.append(chunk)
+
+        content = b"".join(chunks)
         ct = obj.get("ContentType", "image/jpeg")
         return content, ct
     except HTTPException:

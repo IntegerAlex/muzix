@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKey, Index, Integer, String, Table, Text, ARRAY, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Table, Text, ARRAY, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import relationship
 
@@ -36,7 +36,7 @@ class RefreshToken(Base):
     token_hash = Column(String(128), nullable=False, unique=True)
     family_id = Column(String(64), nullable=False, index=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
-    is_revoked = Column(String(1), nullable=False, default="0")
+    is_revoked = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
