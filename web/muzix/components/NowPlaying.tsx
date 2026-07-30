@@ -17,7 +17,7 @@ import {
   Pause, Play, SkipBack, SkipForward, ChevronDown,
   Shuffle, Repeat, Repeat1, Heart,
   VolumeX, Volume2, AlertCircle, Maximize2, Minimize2, Share2,
-} from 'lucide-react-native';
+} from '@/lib/icons';
 import { View, Text } from 'tamagui';
 import { useShallow } from 'zustand/react/shallow';
 import { Artwork } from '@/components/Artwork';

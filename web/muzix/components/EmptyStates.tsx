@@ -1,5 +1,5 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Music, ListMusic, WifiOff } from 'lucide-react-native';
+import { Music, ListMusic, WifiOff } from '@/lib/icons';
 import { TEXT_PRIMARY, TEXT_MUTED, ACCENT } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 

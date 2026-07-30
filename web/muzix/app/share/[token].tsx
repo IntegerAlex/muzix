@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, Platform } from 'react';
 import { View, Text, Image, Pressable, ActivityIndicator, ScrollView, StyleSheet, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { AlertTriangle, Music, Album, User, ListMusic } from 'lucide-react-native';
+import { AlertTriangle, Music, Album, User, ListMusic } from '@/lib/icons';
 import { BG, SURFACE, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, DANGER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 

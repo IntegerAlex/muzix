@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
 import { ActivityIndicator, FlatList, ScrollView, Pressable, View, RefreshControl } from 'react-native';
 import { Text } from 'tamagui';
-import { Music, ChevronLeft, UserPlus, UserCheck, Share2 } from 'lucide-react-native';
+import { Music, ChevronLeft, UserPlus, UserCheck, Share2 } from '@/lib/icons';
 import { GlassCard } from '@/components/GlassCard';
 import { RADIUS } from '@/lib/sizing';
 import { SPACING } from '@/lib/spacing';

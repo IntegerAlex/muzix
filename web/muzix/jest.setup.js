@@ -76,7 +76,7 @@ jest.mock('tamagui', () => {
   };
 });
 
-jest.mock('lucide-react-native', () => {
+jest.mock('@/lib/icons', () => {
   const React = require('react');
   const Icon = (props) => React.createElement('Icon', props);
   return new Proxy({}, { get: () => Icon });

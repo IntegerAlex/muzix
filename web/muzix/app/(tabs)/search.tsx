@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { Link, type Href } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, TextInput } from 'react-native';
 import { View, Text, XStack } from 'tamagui';
-import { Search, ChevronLeft, ChevronRight, ListMusic, Music, User } from 'lucide-react-native';
+import { Search, ChevronLeft, ChevronRight, ListMusic, Music, User } from '@/lib/icons';
 import { SongRow } from '@/components/SongRow';
 import { SectionHeader } from '@/components/SectionHeader';
 import { SongSkeleton } from '@/components/Skeleton';

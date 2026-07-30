@@ -1,5 +1,5 @@
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import { House, Search, Library, User } from 'lucide-react-native';
+import { House, Search, Library, User } from '@/lib/icons';
 import { View, Pressable } from 'react-native';
 import { BG, SURFACE, SURFACE_ICON, TEXT_MUTED, BORDER, ACCENT } from '@/lib/colors';
 import { useResponsive } from '@/lib/useResponsive';

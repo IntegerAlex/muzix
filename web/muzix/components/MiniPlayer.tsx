@@ -12,7 +12,7 @@ import Animated, {
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
-import { Pause, Play, SkipBack, SkipForward, Share2 } from 'lucide-react-native';
+import { Pause, Play, SkipBack, SkipForward, Share2 } from '@/lib/icons';
 import { View, Text } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { GlassCard } from '@/components/GlassCard';

@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { Pressable, ScrollView, useWindowDimensions, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, withSpring, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, ChevronUp, ChevronDown, ListMusic, Trash2 } from 'lucide-react-native';
+import { X, ChevronUp, ChevronDown, ListMusic, Trash2 } from '@/lib/icons';
 import { View, Text } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { usePlayerStore } from '@/store/playerStore';

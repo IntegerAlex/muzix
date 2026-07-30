@@ -3,7 +3,7 @@ import { Link, type Href } from 'expo-router';
 import { Pressable, ScrollView, View, RefreshControl, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import { Play, Sun, Moon, Cloud, CloudSun, CloudMoon, CloudRain, CloudLightning, CloudSnow, CloudFog, Zap, Sparkles, Heart, Music2 } from 'lucide-react-native';
+import { Play, Sun, Moon, Cloud, CloudSun, CloudMoon, CloudRain, CloudLightning, CloudSnow, CloudFog, Zap, Sparkles, Heart, Music2 } from '@/lib/icons';
 import { Text, YStack } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { SongRow } from '@/components/SongRow';

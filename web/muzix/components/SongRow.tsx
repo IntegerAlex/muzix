@@ -8,7 +8,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { Share2 } from 'lucide-react-native';
+import { Share2 } from '@/lib/icons';
 import { Artwork } from '@/components/Artwork';
 import { PressableScale } from '@/components/PressableScale';
 import { SPACING } from '@/lib/spacing';

@@ -1,5 +1,5 @@
 import { Link, type Href } from 'expo-router';
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronRight } from '@/lib/icons';
 import { Pressable } from 'react-native';
 import { styled, Text, XStack, View } from 'tamagui';
 import { SPACING } from '@/lib/spacing';

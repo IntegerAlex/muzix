@@ -3,7 +3,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { ActivityIndicator, ScrollView, Pressable, View, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from 'tamagui';
-import { Music, ChevronLeft, Share2, Shuffle, Play } from 'lucide-react-native';
+import { Music, ChevronLeft, Share2, Shuffle, Play } from '@/lib/icons';
 
 import { GlassCard } from '@/components/GlassCard';
 import { RADIUS } from '@/lib/sizing';

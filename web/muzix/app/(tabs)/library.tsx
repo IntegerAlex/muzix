@@ -2,7 +2,7 @@ import { Pressable, ScrollView, View, RefreshControl, Modal, TextInput } from 'r
 import { Link } from 'expo-router';
 import { useState, useCallback, memo } from 'react';
 import { Text } from 'tamagui';
-import { Music, Plus, ListMusic, User } from 'lucide-react-native';
+import { Music, Plus, ListMusic, User } from '@/lib/icons';
 import { Artwork } from '@/components/Artwork';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Skeleton } from '@/components/Skeleton';

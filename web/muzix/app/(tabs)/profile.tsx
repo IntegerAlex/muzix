@@ -2,7 +2,7 @@ import { Pressable, ScrollView, ActivityIndicator, RefreshControl } from 'react-
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text } from 'tamagui';
 import { router } from 'expo-router';
-import { LogOut, Music, Heart, ListMusic, Play, Clock } from 'lucide-react-native';
+import { LogOut, Music, Heart, ListMusic, Play, Clock } from '@/lib/icons';
 import { Artwork } from '@/components/Artwork';
 import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
