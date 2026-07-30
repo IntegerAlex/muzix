@@ -5,7 +5,8 @@ import { ThemeProvider } from 'expo-router/react-navigation';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
-import { Text, View, Animated, Image } from 'react-native';
+import { Text, View, Animated } from 'react-native';
+import { Music } from '@/lib/icons';
 import { router, usePathname } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -114,11 +115,7 @@ export default function RootLayout() {
       <TamaguiProvider config={config} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
         <View style={{ flex: 1, backgroundColor: BG, justifyContent: 'center', alignItems: 'center' }}>
           <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: SURFACE_ICON, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-            <Image
-              source={require('@/assets/images/logo.png')}
-              style={{ width: 48, height: 48, borderRadius: 12 }}
-              contentFit="contain"
-            />
+            <Music size={36} color={TEXT_PRIMARY} strokeWidth={1.5} />
           </View>
           <Skeleton width="60%" height={28} borderRadius={8} style={{ marginTop: 24 }} />
           <Text style={{ color: TEXT_PRIMARY, marginTop: 12, fontSize: 14 }}>Loading music...</Text>
