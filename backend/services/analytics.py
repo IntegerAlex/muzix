@@ -23,8 +23,8 @@ async def get_stats(user_id: str, period: str) -> dict:
     }
 
 
-async def get_recent_activity(user_id: str, limit: int) -> dict:
-    items = await event_repo.get_recent_activity(user_id, limit)
+async def get_recent_activity(user_id: str, limit: int, base_url: str = "") -> dict:
+    items = await event_repo.get_recent_activity(user_id, limit, base_url)
     return {"items": items}
 
 
