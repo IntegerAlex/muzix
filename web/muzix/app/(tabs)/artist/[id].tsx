@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ActivityIndicator, FlatList, ScrollView, Pressable, View, RefreshControl } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, View, RefreshControl } from 'react-native';
 import { Text } from 'tamagui';
 import { Music, ChevronLeft, UserPlus, UserCheck, Share2 } from '@/lib/icons';
 import { GlassCard } from '@/components/GlassCard';
@@ -88,6 +88,68 @@ export default function ArtistDetail() {
     } catch {}
   }, [artist, share, toast]);
 
+  const ListHeader = useMemo(() => (
+    <>
+      <View style={{ alignItems: 'center', paddingHorizontal: SPACING.xl }}>
+        <Artwork colors={artist.colors} style={{ height: 160, width: 160 }} radius={9999} />
+        <Text style={{ marginTop: SPACING.xl, textAlign: 'center' }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY} numberOfLines={2}>
+          {artist.name}
+        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.md }}>
+          <Pressable
+            onPress={toggleFollow}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, borderRadius: 9999, backgroundColor: isFollowing ? ACCENT : '#242424', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm }}
+            accessibilityLabel={isFollowing ? 'Unfollow artist' : 'Follow artist'}
+            accessibilityRole="button"
+          >
+            {isFollowing ? (
+              <UserCheck size={14} color="white" />
+            ) : (
+              <UserPlus size={14} color={TEXT_PRIMARY} />
+            )}
+            <Text fontSize={13} fontWeight="500" color={isFollowing ? 'white' : TEXT_PRIMARY}>
+              {isFollowing ? 'Following' : 'Follow'}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={handleShare}
+            disabled={isSharing}
+            style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }}
+            accessibilityLabel="Share artist"
+            accessibilityRole="button"
+          >
+            {isSharing ? <ActivityIndicator size={16} color={TEXT_PRIMARY} /> : <Share2 size={16} color={TEXT_PRIMARY} />}
+          </Pressable>
+        </View>
+      </View>
+
+      <GlassCard padding={SPACING.lg} style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.xxl }}>
+         <Text fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={2} color={TEXT_MUTED}>
+            Popular
+         </Text>
+         {popular.length === 0 ? (
+           <View style={{ marginTop: 8, alignItems: 'center', paddingVertical: 16 }}>
+             <Music size={24} color={TEXT_MUTED} strokeWidth={1.5} />
+             <Text style={{ marginTop: 8 }} fontSize={14} color={TEXT_MUTED}>No popular songs</Text>
+           </View>
+         ) : (
+           popular.map((item, index) => (
+             <SongRow
+               key={item.id}
+               song={item}
+               index={index}
+               queue={popular}
+               isCurrent={current?.id === item.id}
+               subtitle={item.album}
+             />
+           ))
+         )}
+      </GlassCard>
+
+      <SectionHeader title="Albums" />
+    </>
+  ), [artist, isFollowing, isSharing, popular, current, toggleFollow, handleShare]);
+
   if (loading) {
     return <ArtistSkeletonView />;
   }
@@ -122,101 +184,35 @@ export default function ArtistDetail() {
         <ChevronLeft size={22} color={TEXT_PRIMARY} />
       </Pressable>
 
-      <ScrollView
-        style={{ flex: 1 }}
+      <FlatList
+        data={artistAlbums}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={{ gap: SPACING.md, paddingHorizontal: SPACING.xl }}
         contentContainerStyle={{ paddingBottom: 100, paddingTop: 64 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#1DB954" />}
-      >
-        <View style={{ alignItems: 'center', paddingHorizontal: SPACING.xl }}>
-          <Artwork colors={artist.colors} style={{ height: 160, width: 160 }} radius={9999} />
-          <Text style={{ marginTop: SPACING.xl, textAlign: 'center' }} fontSize={24} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY} numberOfLines={2}>
-            {artist.name}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.md }}>
-            <Pressable
-              onPress={toggleFollow}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, borderRadius: 9999, backgroundColor: isFollowing ? ACCENT : '#242424', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm }}
-              accessibilityLabel={isFollowing ? 'Unfollow artist' : 'Follow artist'}
-              accessibilityRole="button"
-            >
-              {isFollowing ? (
-                <UserCheck size={14} color="white" />
-              ) : (
-                <UserPlus size={14} color={TEXT_PRIMARY} />
-              )}
-              <Text fontSize={13} fontWeight="500" color={isFollowing ? 'white' : TEXT_PRIMARY}>
-                {isFollowing ? 'Following' : 'Follow'}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={handleShare}
-              disabled={isSharing}
-              style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }}
-              accessibilityLabel="Share artist"
-              accessibilityRole="button"
-            >
-              {isSharing ? <ActivityIndicator size={16} color={TEXT_PRIMARY} /> : <Share2 size={16} color={TEXT_PRIMARY} />}
-            </Pressable>
+        ListHeaderComponent={ListHeader}
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() => router.push(`/album/${item.id}`)}
+            style={{ flex: 1, marginBottom: SPACING.md }}
+            accessibilityLabel={`${item.title}, ${item.year}`}
+            accessibilityRole="button"
+          >
+            <Artwork colors={item.colors} style={{ height: 160, width: '100%' }} radius={20} />
+            <Text style={{ marginTop: SPACING.md }} fontSize={13} fontWeight="700" color={TEXT_PRIMARY} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={{ marginTop: SPACING.xs, fontSize: 11, fontWeight: '500', color: TEXT_SECONDARY }}>{item.year}</Text>
+          </Pressable>
+        )}
+        ListEmptyComponent={
+          <View style={{ flex: 1, alignItems: 'center', paddingVertical: 24, paddingHorizontal: SPACING.xl }}>
+            <Music size={32} color={TEXT_MUTED} strokeWidth={1.5} />
+            <Text style={{ marginTop: 8 }} fontSize={14} color={TEXT_MUTED}>No albums by this artist</Text>
           </View>
-        </View>
-
-        <GlassCard padding={SPACING.lg} style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.xxl }}>
-           <Text fontSize={11} fontWeight="700" textTransform="uppercase" letterSpacing={2} color={TEXT_MUTED}>
-              Popular
-           </Text>
-           {popular.length === 0 ? (
-             <View style={{ marginTop: 8, alignItems: 'center', paddingVertical: 16 }}>
-               <Music size={24} color={TEXT_MUTED} strokeWidth={1.5} />
-               <Text style={{ marginTop: 8 }} fontSize={14} color={TEXT_MUTED}>No popular songs</Text>
-             </View>
-           ) : (
-             <FlatList
-               data={popular}
-               keyExtractor={(item) => item.id}
-               initialNumToRender={20}
-               maxToRenderPerBatch={10}
-               windowSize={5}
-               removeClippedSubviews
-               scrollEnabled={false}
-               renderItem={({ item, index }) => (
-                 <SongRow
-                   song={item}
-                   index={index}
-                   queue={popular}
-                   isCurrent={current?.id === item.id}
-                   subtitle={item.album}
-                 />
-               )}
-             />
-           )}
-         </GlassCard>
-
-        <SectionHeader title="Albums" />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md, paddingHorizontal: SPACING.xl }}>
-          {artistAlbums.length === 0 ? (
-            <View style={{ width: '100%', alignItems: 'center', paddingVertical: 24 }}>
-              <Music size={32} color={TEXT_MUTED} strokeWidth={1.5} />
-              <Text style={{ marginTop: 8 }} fontSize={14} color={TEXT_MUTED}>No albums by this artist</Text>
-            </View>
-          ) : (
-            artistAlbums.map((album) => (
-              <Pressable
-                key={album.id}
-                onPress={() => router.push(`/album/${album.id}`)}
-                style={{ width: '47%' }}
-                accessibilityLabel={`${album.title}, ${album.year}`}
-                accessibilityRole="button"
-              >
-                <Artwork colors={album.colors} style={{ height: 160, width: '100%' }} radius={20} />
-                <Text style={{ marginTop: SPACING.md }} fontSize={13} fontWeight="700" color={TEXT_PRIMARY} numberOfLines={1}>
-                  {album.title}
-                </Text>
-                <Text style={{ marginTop: SPACING.xs, fontSize: 11, fontWeight: '500', color: TEXT_SECONDARY }}>{album.year}</Text>
-              </Pressable>
-            ))
-          )}
-        </View>
-      </ScrollView>
+        }
+      />
     </View>
   );
 }

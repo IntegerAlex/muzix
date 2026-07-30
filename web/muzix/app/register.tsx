@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, type TextInputAutoComplete, type TextInputTextContentType } from 'react-native';
 import { View, Text } from 'tamagui';
 import { router } from 'expo-router';
 import { useAuthStore, register as apiRegister } from '@/store/authStore';
@@ -17,7 +17,9 @@ interface FieldProps {
   secureTextEntry?: boolean;
   keyboardType?: 'email-address' | 'default';
   autoCapitalize?: 'none' | 'words' | 'sentences' | 'characters';
+  autoComplete?: TextInputAutoComplete;
   autoFocus?: boolean;
+  textContentType?: TextInputTextContentType;
   error?: string;
 }
 
@@ -44,7 +46,10 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, keybo
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
-        autoFocus={autoFocus}
+        autoComplete={autoComplete}
+        autoFocus={Platform.select({ web: autoFocus, default: false })}
+        spellCheck={false}
+        textContentType={textContentType}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         style={{
@@ -153,7 +158,9 @@ export default function RegisterScreen() {
               onChangeText={(t) => { setDisplayName(t); setErrors((p) => ({ ...p, displayName: '' })); setServerError(null); }}
               placeholder="Your name"
               autoCapitalize="words"
+              autoComplete="name"
               autoFocus
+              textContentType="name"
               error={errors.displayName}
             />
             <Field
@@ -163,6 +170,8 @@ export default function RegisterScreen() {
               placeholder="you@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoComplete="email"
+              textContentType="emailAddress"
               error={errors.email}
             />
             <Field
@@ -171,6 +180,8 @@ export default function RegisterScreen() {
               onChangeText={(t) => { setPassword(t); setErrors((p) => ({ ...p, password: '', confirm: '' })); setServerError(null); }}
               placeholder="At least 6 characters"
               secureTextEntry
+              autoComplete="newPassword"
+              textContentType="newPassword"
               error={errors.password}
             />
             <Field
@@ -179,6 +190,8 @@ export default function RegisterScreen() {
               onChangeText={(t) => { setConfirm(t); setErrors((p) => ({ ...p, confirm: '' })); setServerError(null); }}
               placeholder="Repeat your password"
               secureTextEntry
+              autoComplete="newPassword"
+              textContentType="newPassword"
               error={errors.confirm}
             />
 

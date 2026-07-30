@@ -7,6 +7,7 @@ interface ArtworkProps {
   colors?: [string, string];
   style?: StyleProp<ImageStyle>;
   radius?: number;
+  accessible?: boolean;
 }
 
 function mixColor(a: string, b: string): string {
@@ -32,10 +33,11 @@ function areEqual(prev: ArtworkProps, next: ArtworkProps) {
   const ns = next.source && typeof next.source === 'object' ? next.source.uri : next.source;
   if (ps !== ns) return false;
   if (prev.colors?.[0] !== next.colors?.[0] || prev.colors?.[1] !== next.colors?.[1]) return false;
+  if ((prev.accessible ?? false) !== (next.accessible ?? false)) return false;
   return true;
 }
 
-export const Artwork = memo(function Artwork({ source, colors, style, radius = 12 }: ArtworkProps) {
+export const Artwork = memo(function Artwork({ source, colors, style, radius = 12, accessible }: ArtworkProps) {
   const [imgError, setImgError] = useState(false);
   const borderRadius = useMemo(() => ({ borderRadius: radius }) as ImageStyle, [radius]);
   const [c0, c1] = colors?.length === 2 ? colors : ['#1DB954', '#0a0a0a'];
@@ -43,7 +45,7 @@ export const Artwork = memo(function Artwork({ source, colors, style, radius = 1
 
   if (source && !imgError) {
     return (
-      <Image source={source} style={[borderRadius, style]} onError={() => setImgError(true)} />
+      <Image source={source} style={[borderRadius, style]} onError={() => setImgError(true)} accessible={accessible ?? false} />
     );
   }
 

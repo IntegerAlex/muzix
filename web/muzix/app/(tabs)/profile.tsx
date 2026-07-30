@@ -346,8 +346,8 @@ export default function ProfileScreen() {
           <>
             {derivedData?.recentSlice.length > 0 && (
               <ProfileSection icon={Clock} title="Recently Played" color={ACCENT}>
-                {derivedData.recentSlice.map((song) => (
-                  <TopSongRow key={song.id} song={song} index={0} rank={1} />
+                {derivedData.recentSlice.map((song, i) => (
+                  <TopSongRow key={song.id} song={song} index={i} rank={i + 1} />
                 ))}
               </ProfileSection>
             )}

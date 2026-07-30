@@ -257,6 +257,8 @@ export function MiniPlayer() {
               hitSlop={8}
               disabled={isSharing}
               accessibilityLabel="Share"
+              accessibilityRole="button"
+              accessibilityHint="Share this song"
             >
               {isSharing ? <ActivityIndicator size={18} color={TEXT_MUTED} /> : <Share2 size={18} color={TEXT_MUTED} />}
             </Pressable>

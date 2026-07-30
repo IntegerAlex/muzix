@@ -18,6 +18,11 @@ function handleAuthError() {
   if (token) {
     useAuthStore.getState().logout();
     if (typeof window !== 'undefined') {
+      // TODO: This is a web-only hard redirect. On native, use router integration
+      // (e.g., inject a router callback) instead of window.location.href.
+      // The api module is a plain module without React context access, so router
+      // injection would require passing a callback via the api config or a
+      // separate navigation service.
       window.location.href = '/login';
     }
   }

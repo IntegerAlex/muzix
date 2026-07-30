@@ -130,7 +130,7 @@ export default function RootLayout() {
     <TamaguiProvider config={config} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
       <ToastProvider>
         <ThemeProvider value={NAV_THEME[(colorScheme ?? 'light') as 'light' | 'dark']}>
-          <StatusBar style="light" />
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
           <ErrorBoundary>
             <View style={{ flex: 1 }}>
               <Animated.View style={{

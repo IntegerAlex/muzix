@@ -121,8 +121,6 @@ export async function loadAll(): Promise<void> {
 
       await loadSongs();
 
-      _totalSongCount = _songs.length;
-      _hasMoreSongs = false;
       _loaded = true;
       _loadPromise = null;
       _emitVersionChange();
@@ -137,8 +135,21 @@ export async function loadAll(): Promise<void> {
 }
 
 async function loadSongs(): Promise<void> {
-  const all = await api.songs(500, 0);
-  _songs = all.map(mapSong);
+  const BATCH_SIZE = 100;
+  let offset = 0;
+  let allSongs: Song[] = [];
+
+  while (true) {
+    const batch = await api.songs(BATCH_SIZE, offset);
+    if (batch.length === 0) break;
+    allSongs = allSongs.concat(batch.map(mapSong));
+    offset += batch.length;
+    if (batch.length < BATCH_SIZE) break;
+  }
+
+  _songs = allSongs;
+  _totalSongCount = allSongs.length;
+  _hasMoreSongs = false;
 }
 
 export function reloadAll(): void {
@@ -272,7 +283,10 @@ export function useQuery<T>(fetcher: () => Promise<T>, deps: readonly unknown[],
         }
       });
 
-    return () => { cancelled = true; };
+    return () => { 
+      cancelled = true;
+      mountedRef.current = false;
+    };
   }, [...deps, tick]);
 
   return { data, loading, error, refetch };
@@ -296,7 +310,7 @@ export function useSongs(): QueryResult<Song[]> {
     const fresh = getSongs();
     setStaleData(fresh);
     return fresh;
-  }, [], staleRef.current);
+  }, [], staleData);
 
   const resolved = data.length > 0 ? data : staleData;
   return { data: resolved, loading: loading && resolved.length === 0, error, refetch };
@@ -320,7 +334,7 @@ export function useAlbums(): QueryResult<Album[]> {
     const fresh = getAlbums();
     setStaleData(fresh);
     return fresh;
-  }, [], staleRef.current);
+  }, [], staleData);
 
   const resolvedAlbums = data.length > 0 ? data : staleData;
   return { data: resolvedAlbums, loading: loading && resolvedAlbums.length === 0, error, refetch };
@@ -344,7 +358,7 @@ export function useArtists(): QueryResult<Artist[]> {
     const fresh = getArtists();
     setStaleData(fresh);
     return fresh;
-  }, [], staleRef.current);
+  }, [], staleData);
 
   const resolvedArtists = data.length > 0 ? data : staleData;
   return { data: resolvedArtists, loading: loading && resolvedArtists.length === 0, error, refetch };
@@ -368,7 +382,7 @@ export function usePlaylists(): QueryResult<Playlist[]> {
     const fresh = getPlaylists();
     setStaleData(fresh);
     return fresh;
-  }, [], staleRef.current);
+  }, [], staleData);
 
   const resolvedPlaylists = data.length > 0 ? data : staleData;
   return { data: resolvedPlaylists, loading: loading && resolvedPlaylists.length === 0, error, refetch };

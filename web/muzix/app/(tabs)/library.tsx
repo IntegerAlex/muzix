@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, View, RefreshControl, Modal, TextInput } from 'react-native';
+import { Pressable, ScrollView, View, RefreshControl, Modal, TextInput, Platform } from 'react-native';
 import { Link } from 'expo-router';
 import { useState, useCallback, memo } from 'react';
 import { Text } from 'tamagui';
@@ -207,7 +207,7 @@ export default function LibraryScreen() {
               onChangeText={setNewPlaylistName}
               placeholder="Playlist name"
               placeholderTextColor={TEXT_MUTED}
-              autoFocus
+              autoFocus={Platform.select({ web: true, default: false })}
               style={{ backgroundColor: SURFACE_ICON, borderRadius: RADIUS.sm, padding: SPACING.md, fontSize: 16, color: TEXT_PRIMARY, marginBottom: 20 }}
               onSubmitEditing={handleCreatePlaylist}
             />

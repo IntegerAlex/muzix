@@ -298,10 +298,10 @@ export function NowPlaying() {
               )}
 
               <View style={{ marginTop: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28 }}>
-                <Pressable onPress={toggleShuffle} hitSlop={12}>
+                <Pressable onPress={toggleShuffle} hitSlop={12} accessibilityLabel="Shuffle" accessibilityHint="Toggle shuffle mode" accessibilityRole="button">
                   <Shuffle size={18} color={shuffle ? '#1DB954' : 'rgba(255,255,255,0.35)'} strokeWidth={shuffle ? 2.5 : 1.8} />
                 </Pressable>
-                <Pressable onPress={previous} hitSlop={12}>
+                <Pressable onPress={previous} hitSlop={12} accessibilityLabel="Previous track" accessibilityHint="Play previous track" accessibilityRole="button">
                   <SkipBack size={26} color="white" fill="white" />
                 </Pressable>
                 <Pressable
@@ -320,7 +320,7 @@ export function NowPlaying() {
                 <Pressable onPress={next} hitSlop={12}>
                   <SkipForward size={26} color="white" fill="white" />
                 </Pressable>
-                <Pressable onPress={toggleRepeat} hitSlop={12}>
+                <Pressable onPress={toggleRepeat} hitSlop={12} accessibilityLabel="Repeat" accessibilityHint="Toggle repeat mode" accessibilityRole="button">
                   {repeat === 'one' ? (
                     <Repeat1 size={18} color="#1DB954" strokeWidth={2.5} />
                   ) : (
@@ -340,6 +340,7 @@ export function NowPlaying() {
                   maximumTrackTintColor="rgba(255,255,255,0.12)"
                   thumbTintColor="white"
                   style={{ flex: 1, height: 28 }}
+                  accessibilityLabel="Volume control"
                 />
                 <Volume2 size={14} color="rgba(255,255,255,0.35)" />
               </View>

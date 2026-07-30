@@ -66,7 +66,7 @@ export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, su
       accessibilityLabel={`${song.title} by ${song.artist}`}
       accessibilityRole="button"
     >
-      <Artwork source={song.imageUrl ? { uri: song.imageUrl } : undefined} colors={song.colors} style={{ height: 48, width: 48, borderRadius: 8 }} radius={8} />
+      <Artwork source={song.imageUrl ? { uri: song.imageUrl } : undefined} colors={song.colors} style={{ height: 48, width: 48, borderRadius: 8 }} radius={8} accessible={false} />
       <View style={{ flex: 1 }}>
         <Text
           fontSize={14}
@@ -76,7 +76,7 @@ export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, su
         >
           {song.title}
         </Text>
-        <Text fontSize={12} color="rgba(255,255,255,0.5)" numberOfLines={1}>
+        <Text fontSize={12} color={TEXT_MUTED} numberOfLines={1}>
           {subtitle ?? song.artist}
         </Text>
       </View>

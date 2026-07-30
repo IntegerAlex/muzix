@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, type TextInputAutoComplete, type TextInputTextContentType } from 'react-native';
 import { View, Text } from 'tamagui';
 import { router } from 'expo-router';
 import { useAuthStore, login as apiLogin } from '@/store/authStore';
@@ -9,7 +9,7 @@ import { BG, SURFACE, SURFACE_ICON, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_M
 import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
 
-function Field({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, autoComplete, autoFocus, icon }: {
+function Field({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, autoComplete, autoFocus, textContentType, icon }: {
   label: string;
   value: string;
   onChangeText: (t: string) => void;
@@ -17,8 +17,9 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, keybo
   secureTextEntry?: boolean;
   keyboardType?: 'email-address' | 'default';
   autoCapitalize?: 'none' | 'words' | 'sentences' | 'characters';
-  autoComplete?: string;
+  autoComplete?: TextInputAutoComplete;
   autoFocus?: boolean;
+  textContentType?: TextInputTextContentType;
   icon?: string;
 }) {
   const [focused, setFocused] = useState(false);
@@ -43,8 +44,10 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, keybo
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
-        autoComplete={autoComplete as any}
-        autoFocus={autoFocus}
+        autoComplete={autoComplete}
+        autoFocus={Platform.select({ web: autoFocus, default: false })}
+        spellCheck={false}
+        textContentType={textContentType}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         style={{
@@ -133,6 +136,7 @@ export default function LoginScreen() {
               autoCapitalize="none"
               autoComplete="email"
               autoFocus
+              textContentType="emailAddress"
             />
             <Field
               label="Password"
@@ -141,6 +145,7 @@ export default function LoginScreen() {
               placeholder="Enter your password"
               secureTextEntry
               autoComplete="password"
+              textContentType="password"
             />
 
             {error ? (

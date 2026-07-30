@@ -18,7 +18,7 @@ function EmptyState({ icon, heading, description, actionLabel, onAction }: Empty
       <Text style={styles.heading}>{heading}</Text>
       <Text style={styles.description}>{description}</Text>
       {actionLabel && onAction && (
-        <Pressable style={styles.button} onPress={onAction}>
+        <Pressable style={styles.button} onPress={onAction} accessibilityRole="button">
           <Text style={styles.buttonText}>{actionLabel}</Text>
         </Pressable>
       )}

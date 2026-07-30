@@ -181,6 +181,9 @@ export default function SearchScreen() {
               onChangeText={setQuery}
               placeholder="Songs, artists, albums…"
               placeholderTextColor={TEXT_MUTED}
+              autoCorrect={false}
+              spellCheck={false}
+              textContentType="none"
               style={{
                 marginTop: SPACING.lg,
                 borderRadius: 16,
@@ -320,6 +323,9 @@ export default function SearchScreen() {
           onChangeText={setQuery}
           placeholder="Songs, artists, albums…"
           placeholderTextColor={TEXT_MUTED}
+          autoCorrect={false}
+          spellCheck={false}
+          textContentType="none"
           style={{
             marginTop: SPACING.lg,
             borderRadius: 16,

@@ -174,6 +174,69 @@ function SectionEmpty({ label }: { label: string }) {
   );
 }
 
+const TimeWeatherMoodGrid = memo(function TimeWeatherMoodGrid({ songs, weatherData }: { songs: Song[]; weatherData: { icon: React.ComponentType<{ size: number; color: string }>; label: string; color: string; temp?: string } | null }) {
+  const recentIds = usePlayerStore.getState().recentlyPlayed;
+  const mood = useMemo(
+    () => (songs.length > 0 ? deriveMood(recentIds, songs) : { label: 'Neutral', icon: Music2, color: '#6b7280' }),
+    [songs, recentIds]
+  );
+  const w = useMemo(
+    () =>
+      weatherData || {
+        icon: (() => {
+          const h = new Date().getHours();
+          return h >= 6 && h < 18 ? Sun : Moon;
+        })(),
+        label: '...',
+        color: '#6b7280',
+      },
+    [weatherData]
+  );
+  const WeatherIcon = w.icon;
+  const MoodIcon = mood.icon;
+  const timeStr = useMemo(() => {
+    const now = new Date();
+    return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }, []);
+  const dateStr = useMemo(() => {
+    const now = new Date();
+    return now.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }, []);
+
+  return (
+    <View style={{ marginTop: SPACING.xxl, marginHorizontal: SPACING.xl }}>
+      <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+        <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }}>
+          <Text fontSize={11} fontWeight="600" color={TEXT_MUTED} textTransform="uppercase" letterSpacing={0.5}>Time</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text fontSize={28} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY}>{timeStr}</Text>
+            <Text fontSize={12} fontWeight="500" color={TEXT_SECONDARY}>{dateStr}</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }}>
+          <Text fontSize={11} fontWeight="600" color={TEXT_MUTED} textTransform="uppercase" letterSpacing={0.5}>Weather</Text>
+          <View style={{ alignItems: 'flex-end', justifyContent: 'flex-end', flex: 1 }}>
+            <WeatherIcon size={24} color={w.color} />
+            <Text style={{ marginTop: 4 }} fontSize={13} fontWeight="700" color={w.color}>
+              {w.temp ? `${w.label} ${w.temp}` : w.label}
+            </Text>
+          </View>
+        </View>
+      </View>
+      <View style={{ flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm }}>
+        <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }}>
+          <Text fontSize={11} fontWeight="600" color={TEXT_MUTED} textTransform="uppercase" letterSpacing={0.5}>Mood</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <MoodIcon size={32} color={mood.color} />
+            <Text style={{ marginTop: 4 }} fontSize={13} fontWeight="700" color={mood.color}>{mood.label}</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }} />
+      </View>
+    </View>
+  );
+});
+
 export default function HomeScreen() {
   const playSong = usePlayerStore((s) => s.playSong);
   const current = usePlayerStore((s) => s.current);
@@ -200,6 +263,8 @@ export default function HomeScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -216,7 +281,7 @@ export default function HomeScreen() {
         }
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
         if (cancelled) return;
-        const res = await fetch(`https://wttr.in/${pos.coords.latitude},${pos.coords.longitude}?format=j1`);
+        const res = await fetch(`https://wttr.in/${pos.coords.latitude},${pos.coords.longitude}?format=j1`, { signal: controller.signal });
         if (cancelled) return;
         const json = await res.json();
         const cond = json.current_condition?.[0];
@@ -250,7 +315,7 @@ export default function HomeScreen() {
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(timeoutId); };
   }, []);
 
   const onRefresh = useCallback(() => {
@@ -363,49 +428,7 @@ export default function HomeScreen() {
         ) : (
           <>
             {/* Weather/mood grid — renders immediately, no data dependency */}
-            {(() => {
-              const recentIds = usePlayerStore.getState().recentlyPlayed;
-              const mood = songs.length > 0 ? deriveMood(recentIds, songs) : { label: 'Neutral', icon: Music2, color: '#6b7280' };
-              const w = weatherData || { icon: (() => { const h = new Date().getHours(); return h >= 6 && h < 18 ? Sun : Moon; })(), label: '...', color: '#6b7280' };
-              const WeatherIcon = w.icon;
-              const MoodIcon = mood.icon;
-              const now = new Date();
-              const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              const dateStr = now.toLocaleDateString([], { month: 'short', day: 'numeric' });
-
-              return (
-                <View style={{ marginTop: SPACING.xxl, marginHorizontal: SPACING.xl }}>
-                  <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
-                    <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }}>
-                      <Text fontSize={11} fontWeight="600" color={TEXT_MUTED} textTransform="uppercase" letterSpacing={0.5}>Time</Text>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text fontSize={28} fontWeight="700" letterSpacing={-0.6} color={TEXT_PRIMARY}>{timeStr}</Text>
-                        <Text fontSize={12} fontWeight="500" color={TEXT_SECONDARY}>{dateStr}</Text>
-                      </View>
-                    </View>
-                    <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }}>
-                      <Text fontSize={11} fontWeight="600" color={TEXT_MUTED} textTransform="uppercase" letterSpacing={0.5}>Weather</Text>
-                      <View style={{ alignItems: 'flex-end', justifyContent: 'flex-end', flex: 1 }}>
-                        <WeatherIcon size={24} color={w.color} />
-                        <Text style={{ marginTop: 4 }} fontSize={13} fontWeight="700" color={w.color}>
-                          {w.temp ? `${w.label} ${w.temp}` : w.label}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.sm }}>
-                    <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }}>
-                      <Text fontSize={11} fontWeight="600" color={TEXT_MUTED} textTransform="uppercase" letterSpacing={0.5}>Mood</Text>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <MoodIcon size={32} color={mood.color} />
-                        <Text style={{ marginTop: 4 }} fontSize={13} fontWeight="700" color={mood.color}>{mood.label}</Text>
-                      </View>
-                    </View>
-                    <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }} />
-                  </View>
-                </View>
-              );
-            })()}
+            <TimeWeatherMoodGrid songs={songs} weatherData={weatherData} />
 
             {/* Recently played — only when songs are loaded */}
             {songs.length > 0 && (

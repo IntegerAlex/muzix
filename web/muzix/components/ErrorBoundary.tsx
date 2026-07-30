@@ -80,6 +80,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             Something went wrong
           </Text>
           <Text
+            selectable
             style={{
               fontSize: 14,
               color: TEXT_SECONDARY,
@@ -92,6 +93,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           </Text>
           <Pressable
             onPress={this.resetError}
+            accessibilityState={{ disabled: false }}
+            accessibilityHint="Restart the app after an error"
             style={({ pressed }) => ({
               backgroundColor: ACCENT,
               paddingHorizontal: 24,
