@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { api, type ApiSong, type ApiAlbum, type ApiArtist, type ApiPlaylist } from '@/services/api';
+import { api, type ApiSong, type ApiAlbum, type ApiArtist, type ApiPlaylist, type HomeResponse } from '@/services/api';
 import type { Song, Album, Artist, Playlist } from '@/services/types';
 import { useAuthStore } from '@/store/authStore';
 
@@ -7,8 +7,6 @@ let _songs: Song[] = [];
 let _albums: Album[] = [];
 let _artists: Artist[] = [];
 let _playlists: Playlist[] = [];
-let _loaded = false;
-let _loadPromise: Promise<void> | null = null;
 let _version = 0;
 let _totalSongCount = 0;
 let _hasMoreSongs = false;
@@ -80,82 +78,6 @@ function mapPlaylist(p: ApiPlaylist): Playlist {
     songIds: p.songIds.map(String),
     colors: toColors(p.colors),
   };
-}
-
-export async function loadAll(): Promise<void> {
-  if (_loaded) return;
-  if (_loadPromise) return _loadPromise;
-
-  _loadPromise = (async () => {
-    const { loading } = useAuthStore.getState();
-    if (loading) {
-      await new Promise<void>((resolve) => {
-        const unsub = useAuthStore.subscribe((state) => {
-          if (!state.loading) { unsub(); resolve(); }
-        });
-      });
-    }
-
-    const finalToken = useAuthStore.getState().token;
-
-    try {
-      const [albumsRaw, artistsRaw] = await Promise.all([
-        api.albums(),
-        api.artists(),
-      ]);
-
-      let playlistsRaw: ApiPlaylist[] = [];
-      if (finalToken) {
-        try {
-          playlistsRaw = await api.playlists(finalToken);
-        } catch (e) {
-          console.warn('Failed to load playlists (auth may be invalid):', e);
-        }
-      }
-
-      _albums = albumsRaw.map(mapAlbum);
-      _artists = artistsRaw.map(mapArtist);
-      _playlists = playlistsRaw.map(mapPlaylist);
-      rebuildMaps();
-      _emitVersionChange();
-
-      await loadSongs();
-
-      _loaded = true;
-      _loadPromise = null;
-      _emitVersionChange();
-    } catch (e) {
-      _loadPromise = null;
-      console.error('Failed to load data from API:', e);
-      throw e;
-    }
-  })();
-
-  return _loadPromise;
-}
-
-async function loadSongs(): Promise<void> {
-  const BATCH_SIZE = 100;
-  let offset = 0;
-  let allSongs: Song[] = [];
-
-  while (true) {
-    const batch = await api.songs(BATCH_SIZE, offset);
-    if (batch.length === 0) break;
-    allSongs = allSongs.concat(batch.map(mapSong));
-    offset += batch.length;
-    if (batch.length < BATCH_SIZE) break;
-  }
-
-  _songs = allSongs;
-  _totalSongCount = allSongs.length;
-  _hasMoreSongs = false;
-}
-
-export function reloadAll(): void {
-  _loaded = false;
-  _loadPromise = null;
-  _version = 0;
 }
 
 export function getSongs(): Song[] { return _songs; }
@@ -283,7 +205,7 @@ export function useQuery<T>(fetcher: () => Promise<T>, deps: readonly unknown[],
         }
       });
 
-    return () => { 
+    return () => {
       cancelled = true;
       mountedRef.current = false;
     };
@@ -306,7 +228,21 @@ export function useSongs(): QueryResult<Song[]> {
   }, []);
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    await loadAll();
+    const BATCH_SIZE = 100;
+    let offset = 0;
+    const all: Song[] = [];
+    while (true) {
+      const batch = await api.songs(BATCH_SIZE, offset);
+      if (batch.length === 0) break;
+      all.push(...batch.map(mapSong));
+      offset += batch.length;
+      if (batch.length < BATCH_SIZE) break;
+    }
+    _songs = all;
+    _totalSongCount = all.length;
+    _hasMoreSongs = false;
+    rebuildMaps();
+    _emitVersionChange();
     const fresh = getSongs();
     setStaleData(fresh);
     return fresh;
@@ -330,7 +266,10 @@ export function useAlbums(): QueryResult<Album[]> {
   }, []);
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    await loadAll();
+    const raw = await api.albums();
+    _albums = raw.map(mapAlbum);
+    rebuildMaps();
+    _emitVersionChange();
     const fresh = getAlbums();
     setStaleData(fresh);
     return fresh;
@@ -354,7 +293,10 @@ export function useArtists(): QueryResult<Artist[]> {
   }, []);
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    await loadAll();
+    const raw = await api.artists();
+    _artists = raw.map(mapArtist);
+    rebuildMaps();
+    _emitVersionChange();
     const fresh = getArtists();
     setStaleData(fresh);
     return fresh;
@@ -378,7 +320,12 @@ export function usePlaylists(): QueryResult<Playlist[]> {
   }, []);
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    await loadAll();
+    const token = useAuthStore.getState().token;
+    if (!token) return [];
+    const raw = await api.playlists(token);
+    _playlists = raw.map(mapPlaylist);
+    rebuildMaps();
+    _emitVersionChange();
     const fresh = getPlaylists();
     setStaleData(fresh);
     return fresh;
@@ -386,6 +333,13 @@ export function usePlaylists(): QueryResult<Playlist[]> {
 
   const resolvedPlaylists = data.length > 0 ? data : staleData;
   return { data: resolvedPlaylists, loading: loading && resolvedPlaylists.length === 0, error, refetch };
+}
+
+export function useHome(): QueryResult<HomeResponse> {
+  const token = useAuthStore((s) => s.token);
+  return useQuery(async () => {
+    return await api.home(token ?? undefined);
+  }, [token], null as unknown as HomeResponse);
 }
 
 export function useAlbum(id: string): { data: Album | undefined; loading: boolean; error: string | null; refetch: () => void } {

@@ -6,7 +6,7 @@ import { Music, Plus, ListMusic, User } from '@/lib/icons';
 import { Artwork } from '@/components/Artwork';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Skeleton } from '@/components/Skeleton';
-import { useAlbums, useArtists, usePlaylists, reloadAll } from '@/services/data';
+import { useAlbums, useArtists, usePlaylists } from '@/services/data';
 import { AnimatedEntrance } from '@/lib/useEntrance';
 import { RADIUS } from '@/lib/sizing';
 import { SPACING } from '@/lib/spacing';
@@ -69,7 +69,6 @@ export default function LibraryScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    reloadAll();
     Promise.all([reloadAlbums(), reloadArtists(), reloadPlaylists()]).finally(() => setRefreshing(false));
   }, [reloadAlbums, reloadArtists, reloadPlaylists]);
 

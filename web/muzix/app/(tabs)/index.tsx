@@ -1,107 +1,39 @@
 import { memo, useEffect, useMemo, useState, useCallback } from 'react';
-import { Link, type Href } from 'expo-router';
 import { Pressable, ScrollView, View, RefreshControl } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { Sun, Moon, Cloud, CloudSun, CloudMoon, CloudRain, CloudLightning, CloudSnow, CloudFog, Music2, Angry, Grinning, Happy as HappyIcon, Kissing, Neutral, Pensive, Relieved, Smile, Wink } from '@/lib/icons';
-import { Text, YStack } from 'tamagui';
-import { Artwork } from '@/components/Artwork';
+import { Text } from 'tamagui';
 import { SongRow } from '@/components/SongRow';
 import { SectionHeader } from '@/components/SectionHeader';
-import { Skeleton, SongSkeleton } from '@/components/Skeleton';
-import { useAlbums, usePlaylists, useSongs, reloadAll } from '@/services/data';
-import { api } from '@/services/api';
+import { SongSkeleton } from '@/components/Skeleton';
+import { useHome } from '@/services/data';
 import { useSharing } from '@/hooks/useSharing';
 import { useToast } from '@/components/Toast';
-import type { Playlist, Song } from '@/services/types';
-import { useAuthStore } from '@/store/authStore';
+import type { Song } from '@/services/types';
 import { usePlayerStore } from '@/store/playerStore';
 import { AnimatedEntrance } from '@/lib/useEntrance';
 import { CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, BG } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
 
-function prefetchPlaylist(id: string): void {
-  api.playlist(id).catch((e) => console.error('Failed to prefetch playlist:', e));
-}
-
-const GENRE_MOODS: Record<string, { label: string; icon: React.ComponentType<{ size: number; color: string }>; color: string }> = {
-  pop: { label: 'Happy', icon: HappyIcon, color: '#f59e0b' },
-  'k-pop': { label: 'Energetic', icon: Grinning, color: '#ec4899' },
-  dance: { label: 'Energetic', icon: Grinning, color: '#f97316' },
-  electronic: { label: 'Energetic', icon: Grinning, color: '#06b6d4' },
-  edm: { label: 'Energetic', icon: Grinning, color: '#3b82f6' },
-  rock: { label: 'Intense', icon: Angry, color: '#ef4444' },
-  metal: { label: 'Intense', icon: Angry, color: '#dc2626' },
-  punk: { label: 'Rebellious', icon: Angry, color: '#e11d48' },
-  jazz: { label: 'Relaxed', icon: Relieved, color: '#8b5cf6' },
-  blues: { label: 'Soulful', icon: Smile, color: '#6366f1' },
-  classical: { label: 'Calm', icon: Neutral, color: '#a855f7' },
-  'hip-hop': { label: 'Confident', icon: Smile, color: '#14b8a6' },
-  rap: { label: 'Confident', icon: Smile, color: '#10b981' },
-  rnb: { label: 'Smooth', icon: Wink, color: '#f43f5e' },
-  folk: { label: 'Gentle', icon: Smile, color: '#84cc16' },
-  country: { label: 'Easy', icon: Relieved, color: '#eab308' },
-  acoustic: { label: 'Gentle', icon: Smile, color: '#22c55e' },
-  indie: { label: 'Creative', icon: Wink, color: '#a855f7' },
-  alternative: { label: 'Thoughtful', icon: Pensive, color: '#7c3aed' },
-  ambient: { label: 'Calm', icon: Neutral, color: '#6366f1' },
-  'lo-fi': { label: 'Chill', icon: Relieved, color: '#8b5cf6' },
-  soul: { label: 'Soulful', icon: Smile, color: '#f43f5e' },
-  funk: { label: 'Groovy', icon: Grinning, color: '#f97316' },
-  reggae: { label: 'Chill', icon: Relieved, color: '#84cc16' },
-  latin: { label: 'Passionate', icon: Kissing, color: '#ef4444' },
+const MOOD_ICONS: Record<string, React.ComponentType<{ size: number; color: string }>> = {
+  Happy: HappyIcon,
+  Energetic: Grinning,
+  Intense: Angry,
+  Rebellious: Angry,
+  Relaxed: Relieved,
+  Soulful: Smile,
+  Calm: Neutral,
+  Confident: Smile,
+  Smooth: Wink,
+  Gentle: Smile,
+  Easy: Relieved,
+  Creative: Wink,
+  Thoughtful: Pensive,
+  Chill: Relieved,
+  Groovy: Grinning,
+  Passionate: Kissing,
 };
-
-function deriveMood(recentIds: string[], songs: Song[]): { label: string; icon: React.ComponentType<{ size: number; color: string }>; color: string } {
-  const genreCounts = new Map<string, number>();
-  for (const id of recentIds) {
-    const song = songs.find(s => s.id === id);
-    if (!song?.genre) continue;
-    const genres = song.genre.toLowerCase().split(/[,/&]/).map(g => g.trim());
-    for (const g of genres) {
-      genreCounts.set(g, (genreCounts.get(g) || 0) + 1);
-    }
-  }
-  if (genreCounts.size === 0) return { label: 'Neutral', icon: Music2, color: '#6b7280' };
-  const topGenre = [...genreCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-  if (topGenre === 'unknown' || topGenre === '') return { label: 'Chill', icon: Cloud, color: '#6b7280' };
-  for (const [key, mood] of Object.entries(GENRE_MOODS)) {
-    if (topGenre.includes(key)) return mood;
-  }
-  return { label: 'Neutral', icon: Music2, color: '#6b7280' };
-}
-
-const WideCard = memo(function WideCard({ playlist }: { playlist: Playlist }) {
-   return (
-    <Link href={`/playlist/${playlist.id}` as Href} asChild>
-      <Pressable
-        onLongPress={() => prefetchPlaylist(playlist.id)}
-        onHoverIn={() => prefetchPlaylist(playlist.id)}
-        style={{ width: 280, overflow: 'hidden', borderRadius: RADIUS.lg }}
-        accessibilityLabel={playlist.title}
-        accessibilityRole="button"
-      >
-        <View style={{ position: 'relative', height: 170, width: '100%' }}>
-          <Artwork colors={playlist.colors} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} radius={0} />
-          <LinearGradient
-            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.65)']}
-            locations={[0.3, 1]}
-            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-          />
-          <YStack style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: SPACING.lg, paddingBottom: SPACING.xl }}>
-            <Text fontSize={17} fontWeight="700" letterSpacing={-0.4} color={TEXT_PRIMARY} numberOfLines={1}>
-              {playlist.title}
-            </Text>
-            <Text style={{ marginTop: SPACING.xs }} fontSize={12} fontWeight="500" color={TEXT_SECONDARY}>
-              Playlist · {playlist.songIds.length} songs
-            </Text>
-          </YStack>
-        </View>
-      </Pressable>
-    </Link>
-  );
-});
 
 function ErrorView({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
@@ -127,12 +59,8 @@ function SectionEmpty({ label }: { label: string }) {
   );
 }
 
-const TimeWeatherMoodGrid = memo(function TimeWeatherMoodGrid({ songs, weatherData }: { songs: Song[]; weatherData: { icon: React.ComponentType<{ size: number; color: string }>; label: string; color: string; temp?: string } | null }) {
-  const recentIds = usePlayerStore.getState().recentlyPlayed;
-  const mood = useMemo(
-    () => (songs.length > 0 ? deriveMood(recentIds, songs) : { label: 'Neutral', icon: Music2, color: '#6b7280' }),
-    [songs, recentIds]
-  );
+const TimeWeatherMoodGrid = memo(function TimeWeatherMoodGrid({ mood, weatherData }: { mood: { label: string; color: string }; weatherData: { icon: React.ComponentType<{ size: number; color: string }>; label: string; color: string; temp?: string } | null }) {
+  const MoodIcon = MOOD_ICONS[mood.label] ?? Music2;
   const w = useMemo(
     () =>
       weatherData || {
@@ -146,7 +74,6 @@ const TimeWeatherMoodGrid = memo(function TimeWeatherMoodGrid({ songs, weatherDa
     [weatherData]
   );
   const WeatherIcon = w.icon;
-  const MoodIcon = mood.icon;
   const timeStr = useMemo(() => {
     const now = new Date();
     return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -190,12 +117,28 @@ const TimeWeatherMoodGrid = memo(function TimeWeatherMoodGrid({ songs, weatherDa
   );
 });
 
+function mapApiSongToSong(item: any): Song {
+  return {
+    id: String(item.id),
+    title: item.title ?? 'Unknown',
+    artist: item.artist ?? 'Unknown',
+    artistId: item.artistId ?? '',
+    album: item.album ?? '',
+    albumId: item.albumId ?? '',
+    genre: item.genre ?? '',
+    duration: item.duration ?? '',
+    durationMs: item.durationMs ?? item.duration_ms ?? 0,
+    track: item.track ?? undefined,
+    colors: item.colors ?? ['#6d28d9', '#db2777'],
+    lyrics: item.lyrics ?? undefined,
+    imageUrl: item.imageUrl ?? undefined,
+    audioUrl: item.audioUrl ?? undefined,
+  };
+}
+
 export default function HomeScreen() {
   const current = usePlayerStore((s) => s.current);
-  const { error: albumsError, refetch: reloadAlbums } = useAlbums();
-  const { data: playlists, loading: playlistsLoading, error: playlistsError, refetch: reloadPlaylists } = usePlaylists();
-  const { data: songs, error: songsError, refetch: reloadSongs } = useSongs();
-  const token = useAuthStore((s) => s.token);
+  const { data: homeData, loading, error, refetch: reloadHome } = useHome();
   const { share, isSharing, shareError, resetError } = useSharing();
   const { toast } = useToast();
 
@@ -207,10 +150,6 @@ export default function HomeScreen() {
   }, [shareError]);
 
   const [refreshing, setRefreshing] = useState(false);
-  const [topPicks, setTopPicks] = useState<Song[]>([]);
-  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
-  const [, setRecommendationsError] = useState<string | null>(null);
-
   const [weatherData, setWeatherData] = useState<{ icon: React.ComponentType<{ size: number; color: string }>; label: string; color: string; temp?: string } | null>(null);
 
   useEffect(() => {
@@ -272,49 +211,8 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    reloadAll();
-    Promise.all([reloadAlbums(), reloadPlaylists(), reloadSongs()]).finally(() => {
-      setRefreshing(false);
-      if (token) {
-        setRecommendationsLoading(true);
-        setRecommendationsError(null);
-        api.recommendations(20, token).then((result) => {
-          const items = result.items ?? [];
-          setTopPicks(items.map((item: any) => ({
-            id: item.id,
-            title: item.title,
-            artist: item.artist,
-            artistId: '',
-            album: item.album,
-            albumId: '',
-            duration: '',
-            durationMs: item.duration_ms || 0,
-            track: undefined,
-            colors: item.colors || ['#6d28d9', '#db2777'],
-            lyrics: undefined,
-            imageUrl: undefined,
-            audioUrl: undefined,
-          })));
-        }).catch((err) => {
-          setRecommendationsError(String(err));
-          setTopPicks(songs.slice(0, 6));
-        }).finally(() => setRecommendationsLoading(false));
-      }
-    });
-  }, [reloadAlbums, reloadPlaylists, reloadSongs, token, songs]);
-
-  const error = albumsError || playlistsError || songsError;
-
-  const songIndexMap = useMemo(() => {
-    const map = new Map<string, number>();
-    songs.forEach((s, i) => map.set(s.id, i));
-    return map;
-  }, [songs]);
-
-  const playedSongs = useMemo(() => {
-    const recentIds = usePlayerStore.getState().recentlyPlayed;
-    return recentIds.map((id) => songIndexMap.has(id) ? songs[songIndexMap.get(id)!] : null).filter(Boolean) as Song[];
-  }, [songs, songIndexMap]);
+    reloadHome().finally(() => setRefreshing(false));
+  }, [reloadHome]);
 
   const handleShare = useCallback(async (song: Song) => {
     try {
@@ -330,38 +228,19 @@ export default function HomeScreen() {
     return 'Good evening';
   })();
 
-  useEffect(() => {
-    async function loadRecommendations() {
-      if (!token) return;
-      setRecommendationsLoading(true);
-      setRecommendationsError(null);
-      try {
-        const result = await api.recommendations(20, token);
-        const items = result.items ?? [];
-        setTopPicks(items.map((item: any) => ({
-          id: item.id,
-          title: item.title,
-          artist: item.artist,
-          artistId: '',
-          album: item.album,
-          albumId: '',
-          duration: '',
-          durationMs: item.duration_ms || 0,
-          track: undefined,
-          colors: item.colors || ['#6d28d9', '#db2777'],
-          lyrics: undefined,
-          imageUrl: undefined,
-          audioUrl: undefined,
-        })));
-      } catch (err) {
-        setRecommendationsError(String(err));
-        setTopPicks(songs.slice(0, 6));
-      } finally {
-        setRecommendationsLoading(false);
-      }
-    }
-    loadRecommendations();
-  }, [token]);
+  const recentSongs = useMemo(() => {
+    if (!homeData?.recentActivity) return [];
+    return homeData.recentActivity
+      .filter((item) => item.song)
+      .map((item) => mapApiSongToSong(item.song!));
+  }, [homeData?.recentActivity]);
+
+  const topPicks = useMemo(() => {
+    if (!homeData?.topPicks) return [];
+    return homeData.topPicks.map(mapApiSongToSong);
+  }, [homeData?.topPicks]);
+
+  const mood = homeData?.mood ?? { label: 'Neutral', color: '#6b7280' };
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -375,42 +254,35 @@ export default function HomeScreen() {
           {greeting}
         </Text>
 
-        {error && !songs.length ? (
+        {error && !recentSongs.length ? (
           <ErrorView message={error} onRetry={onRefresh} />
         ) : (
           <>
-            {/* Weather/mood grid — renders immediately, no data dependency */}
-            <TimeWeatherMoodGrid songs={songs} weatherData={weatherData} />
+            <TimeWeatherMoodGrid mood={mood} weatherData={weatherData} />
 
-            {/* Recently played — only when songs are loaded */}
-            {songs.length > 0 && (
+            {recentSongs.length > 0 && (
               <>
                 <SectionHeader title="Recently played" />
-                {playedSongs.length === 0 ? (
-                  <View style={{ marginHorizontal: SPACING.xl }}><SectionEmpty label="No recently played songs" /></View>
-                ) : (
-                  <View style={{ paddingHorizontal: SPACING.xl }}>
-                    {playedSongs.slice(0, 6).map((songItem, i) => (
-                      <AnimatedEntrance key={songItem.id} index={i}>
-                        <SongRow
-                          song={songItem}
-                          index={i}
-                          queue={playedSongs}
-                          isCurrent={current?.id === songItem.id}
-                          onShare={handleShare}
-                          isSharing={isSharing}
-                        />
-                      </AnimatedEntrance>
-                    ))}
-                  </View>
-                )}
+                <View style={{ paddingHorizontal: SPACING.xl }}>
+                  {recentSongs.slice(0, 5).map((songItem, i) => (
+                    <AnimatedEntrance key={songItem.id} index={i}>
+                      <SongRow
+                        song={songItem}
+                        index={i}
+                        queue={recentSongs}
+                        isCurrent={current?.id === songItem.id}
+                        onShare={handleShare}
+                        isSharing={isSharing}
+                      />
+                    </AnimatedEntrance>
+                  ))}
+                </View>
               </>
             )}
 
-            {/* Top picks for you — shows skeleton while loading */}
             <SectionHeader title="Top picks for you" />
             <View style={{ paddingHorizontal: SPACING.xl }}>
-              {recommendationsLoading ? (
+              {loading ? (
                 <>
                   {[1, 2, 3, 4, 5].map((i) => <SongSkeleton key={i} />)}
                 </>
@@ -427,34 +299,10 @@ export default function HomeScreen() {
                     />
                   </AnimatedEntrance>
                 ))
-              ) : songs.length > 0 ? (
+              ) : (
                 <SectionEmpty label="No recommendations available" />
-              ) : null}
+              )}
             </View>
-
-            {/* Playlists — independent section */}
-            <SectionHeader title="Playlists" />
-            {playlistsLoading ? (
-              <View style={{ flexDirection: 'row', gap: SPACING.md, paddingLeft: SPACING.xl, paddingRight: SPACING.xl }}>
-                {[1, 2, 3].map((i) => <Skeleton key={i} width={280} height={170} borderRadius={RADIUS.lg} />)}
-              </View>
-            ) : playlists.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: SPACING.md, paddingLeft: SPACING.xl, paddingRight: SPACING.xl }}
-              >
-                {playlists.map((pl, i) => (
-                  <AnimatedEntrance key={pl.id} index={i}>
-                    <WideCard playlist={pl} />
-                  </AnimatedEntrance>
-                ))}
-              </ScrollView>
-            ) : (
-              <View style={{ marginHorizontal: SPACING.xl }}>
-                <SectionEmpty label="No playlists yet" />
-              </View>
-            )}
           </>
         )}
       </ScrollView>

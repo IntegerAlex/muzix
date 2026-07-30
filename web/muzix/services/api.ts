@@ -309,7 +309,34 @@ export interface BingeIndex {
   bingeIndex: number;
 }
 
+export interface HomeMood {
+  label: string;
+  color: string;
+}
+
+export interface HomeActivityItem {
+  id: string;
+  song_id: string;
+  song: { id: string; title: string; artist: string; album: string; colors: string[] } | null;
+  event_type: string;
+  started_at: string;
+  duration_played_ms: number;
+  completion_percentage: number;
+  source: string;
+}
+
+export interface HomeResponse {
+  recentActivity: HomeActivityItem[];
+  topPicks: ApiSong[];
+  mood: HomeMood;
+}
+
 export const api = {
+  home: (token?: string) => {
+    if (token) return requestAuthed<HomeResponse>('/home', token);
+    return request<HomeResponse>('/home');
+  },
+
   songs: (limit = 50, offset = 0, token?: string) => cachedFetch<ApiSong[]>(`/songs?limit=${limit}&offset=${offset}`, token),
   song: (id: string, token?: string) => cachedFetch<ApiSong>(`/songs/${id}`, token),
   albums: (token?: string) => cachedFetch<ApiAlbum[]>(`/albums`, token),

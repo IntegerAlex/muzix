@@ -22,7 +22,6 @@ import { AnimatedBackdrop } from '@/components/AnimatedBackdrop';
 import { Skeleton } from '@/components/Skeleton';
 import { TamaguiProvider } from 'tamagui';
 import config from '../tamagui.config';
-import { loadAll } from '@/services/data';
 import { ToastProvider } from '@/components/Toast';
 import { useAuthStore } from '@/store/authStore';
 import { BG, TEXT_PRIMARY, SURFACE_ICON, DANGER } from '@/lib/colors';
@@ -71,10 +70,6 @@ export default function RootLayout() {
       window.removeEventListener('unlike-song', handleLike);
     };
   }, [impact]);
-
-  useEffect(() => {
-    loadAll();
-  }, []);
 
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});

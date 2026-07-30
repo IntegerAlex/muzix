@@ -6,7 +6,7 @@ import { Text, XStack, YStack } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Skeleton } from '@/components/Skeleton';
-import { useAlbums, reloadAll } from '@/services/data';
+import { useAlbums } from '@/services/data';
 import { api } from '@/services/api';
 import type { Album } from '@/services/types';
 import { AnimatedEntrance } from '@/lib/useEntrance';
@@ -112,7 +112,6 @@ export default function BrowseScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    reloadAll();
     reload();
     setTimeout(() => setRefreshing(false), 1000);
   }, [reload]);
