@@ -38,6 +38,32 @@ async def migrate() -> None:
             )
         )
 
+        # ----- refresh_tokens -----
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS refresh_tokens (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    family_id TEXT NOT NULL,
+                    expires_at TIMESTAMPTZ NOT NULL,
+                    is_revoked TEXT NOT NULL DEFAULT '0',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family ON refresh_tokens(family_id);")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);")
+        )
+
         # ----- songs -----
         await conn.execute(
             text(

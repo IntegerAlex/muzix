@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import hashlib
+import secrets
+import uuid
 import orjson
 import re
 import time
@@ -26,7 +28,7 @@ from config import (
 )
 from crypto import hash_password, verify_password
 from db import SessionLocal
-from models import Song, Album, Artist, Playlist, User
+from models import RefreshToken, Song, Album, Artist, Playlist, User
 
 # ---------------------------------------------------------------------------
 # Standard API response
@@ -153,12 +155,21 @@ def create_token(user_id: str, expiry_delta: timedelta) -> str:
     )
 
 
-def create_refresh_token(user_id: str) -> str:
-    return jwt.encode(
-        {"sub": user_id, "exp": datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRY_DAYS), "type": "refresh"},
-        JWT_SECRET,
-        algorithm=JWT_ALGORITHM,
+async def generate_refresh_token(user_id: str, family_id: str | None = None) -> str:
+    """Generate an opaque refresh token, store hash in DB, return raw token."""
+    raw = secrets.token_hex(32)
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    record = RefreshToken(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        token_hash=token_hash,
+        family_id=family_id or str(uuid.uuid4()),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRY_DAYS),
     )
+    async with SessionLocal() as session:
+        session.add(record)
+        await session.commit()
+    return raw
 
 
 class CurrentUser:

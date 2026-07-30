@@ -28,6 +28,18 @@ song_artists_table = Table(
 )
 
 
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(128), nullable=False, unique=True)
+    family_id = Column(String(64), nullable=False, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_revoked = Column(String(1), nullable=False, default="0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class User(Base):
     __tablename__ = "users"
 
