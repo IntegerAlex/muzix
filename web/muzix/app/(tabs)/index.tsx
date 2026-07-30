@@ -3,7 +3,7 @@ import { Link, type Href } from 'expo-router';
 import { Pressable, ScrollView, View, RefreshControl, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import { Play, Sun, Moon, Cloud, CloudSun, CloudMoon, CloudRain, CloudLightning, CloudSnow, CloudFog, Zap, Sparkles, Heart, Music2 } from '@/lib/icons';
+import { Play, Sun, Moon, Cloud, CloudSun, CloudMoon, CloudRain, CloudLightning, CloudSnow, CloudFog, Zap, Sparkles, Heart, Music2, Angry, Grinning, Happy as HappyIcon, Kissing, Neutral, Pensive, Relieved, Smile, Wink } from '@/lib/icons';
 import { Text, YStack } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { SongRow } from '@/components/SongRow';
@@ -30,39 +30,32 @@ function prefetchPlaylist(id: string): void {
 }
 
 const GENRE_MOODS: Record<string, { label: string; icon: React.ComponentType<{ size: number; color: string }>; color: string }> = {
-  pop: { label: 'Happy', icon: SmileHelper, color: '#f59e0b' },
-  'k-pop': { label: 'Energetic', icon: Music2, color: '#ec4899' },
-  dance: { label: 'Energetic', icon: Zap, color: '#f97316' },
-  electronic: { label: 'Energetic', icon: Zap, color: '#06b6d4' },
-  edm: { label: 'Energetic', icon: Zap, color: '#3b82f6' },
-  rock: { label: 'Intense', icon: FlameHelper, color: '#ef4444' },
-  metal: { label: 'Intense', icon: FlameHelper, color: '#dc2626' },
-  punk: { label: 'Rebellious', icon: FlameHelper, color: '#e11d48' },
-  jazz: { label: 'Relaxed', icon: Cloud, color: '#8b5cf6' },
-  blues: { label: 'Soulful', icon: Heart, color: '#6366f1' },
-  classical: { label: 'Calm', icon: Cloud, color: '#a855f7' },
-  'hip-hop': { label: 'Confident', icon: Music2, color: '#14b8a6' },
-  rap: { label: 'Confident', icon: Music2, color: '#10b981' },
-  rnb: { label: 'Smooth', icon: Heart, color: '#f43f5e' },
-  folk: { label: 'Gentle', icon: Cloud, color: '#84cc16' },
-  country: { label: 'Easy', icon: Cloud, color: '#eab308' },
-  acoustic: { label: 'Gentle', icon: Cloud, color: '#22c55e' },
-  indie: { label: 'Creative', icon: Sparkles, color: '#a855f7' },
-  alternative: { label: 'Thoughtful', icon: Sparkles, color: '#7c3aed' },
-  ambient: { label: 'Calm', icon: Cloud, color: '#6366f1' },
-  'lo-fi': { label: 'Chill', icon: Cloud, color: '#8b5cf6' },
-  soul: { label: 'Soulful', icon: Heart, color: '#f43f5e' },
-  funk: { label: 'Groovy', icon: Zap, color: '#f97316' },
-  reggae: { label: 'Chill', icon: Cloud, color: '#84cc16' },
-  latin: { label: 'Passionate', icon: Heart, color: '#ef4444' },
+  pop: { label: 'Happy', icon: HappyIcon, color: '#f59e0b' },
+  'k-pop': { label: 'Energetic', icon: Grinning, color: '#ec4899' },
+  dance: { label: 'Energetic', icon: Grinning, color: '#f97316' },
+  electronic: { label: 'Energetic', icon: Grinning, color: '#06b6d4' },
+  edm: { label: 'Energetic', icon: Grinning, color: '#3b82f6' },
+  rock: { label: 'Intense', icon: Angry, color: '#ef4444' },
+  metal: { label: 'Intense', icon: Angry, color: '#dc2626' },
+  punk: { label: 'Rebellious', icon: Angry, color: '#e11d48' },
+  jazz: { label: 'Relaxed', icon: Relieved, color: '#8b5cf6' },
+  blues: { label: 'Soulful', icon: Smile, color: '#6366f1' },
+  classical: { label: 'Calm', icon: Neutral, color: '#a855f7' },
+  'hip-hop': { label: 'Confident', icon: Smile, color: '#14b8a6' },
+  rap: { label: 'Confident', icon: Smile, color: '#10b981' },
+  rnb: { label: 'Smooth', icon: Wink, color: '#f43f5e' },
+  folk: { label: 'Gentle', icon: Smile, color: '#84cc16' },
+  country: { label: 'Easy', icon: Relieved, color: '#eab308' },
+  acoustic: { label: 'Gentle', icon: Smile, color: '#22c55e' },
+  indie: { label: 'Creative', icon: Wink, color: '#a855f7' },
+  alternative: { label: 'Thoughtful', icon: Pensive, color: '#7c3aed' },
+  ambient: { label: 'Calm', icon: Neutral, color: '#6366f1' },
+  'lo-fi': { label: 'Chill', icon: Relieved, color: '#8b5cf6' },
+  soul: { label: 'Soulful', icon: Smile, color: '#f43f5e' },
+  funk: { label: 'Groovy', icon: Grinning, color: '#f97316' },
+  reggae: { label: 'Chill', icon: Relieved, color: '#84cc16' },
+  latin: { label: 'Passionate', icon: Kissing, color: '#ef4444' },
 };
-
-function SmileHelper({ size, color }: { size: number; color: string }) {
-  return <Text style={{ fontSize: size, color }}>😊</Text>;
-}
-function FlameHelper({ size, color }: { size: number; color: string }) {
-  return <Text style={{ fontSize: size, color }}>🔥</Text>;
-}
 
 function deriveMood(recentIds: string[], songs: Song[]): { label: string; icon: React.ComponentType<{ size: number; color: string }>; color: string } {
   const genreCounts = new Map<string, number>();

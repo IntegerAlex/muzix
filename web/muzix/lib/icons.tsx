@@ -4,6 +4,7 @@ import {
   AlertCircleIcon,
   AlertDiamondIcon,
   AlbumIcon,
+  AngryIcon,
   Cancel01Icon,
   CheckmarkCircle01Icon,
   ChevronDownIcon,
@@ -17,6 +18,14 @@ import {
   CloudRainIcon,
   CloudSnowIcon,
   Delete01Icon,
+  GrinningIcon,
+  HappyIcon,
+  KissingIcon,
+  NeutralIcon,
+  PensiveIcon,
+  Relieved01Icon,
+  SmileIcon,
+  WinkIcon,
   HeartIcon,
   House01Icon,
   LibraryIcon,
@@ -67,8 +76,17 @@ export const ChevronLeft = createIcon(ChevronLeftIcon);
 export const ChevronRight = createIcon(ChevronRightIcon);
 export const ChevronUp = createIcon(ChevronUpIcon);
 export const Clock = createIcon(Clock01Icon);
+export const Angry = createIcon(AngryIcon);
 export const Cloud = createIcon(CloudIcon);
 export const CloudFog = createIcon(CloudFogIcon);
+export const Grinning = createIcon(GrinningIcon);
+export const Happy = createIcon(HappyIcon);
+export const Kissing = createIcon(KissingIcon);
+export const Neutral = createIcon(NeutralIcon);
+export const Pensive = createIcon(PensiveIcon);
+export const Relieved = createIcon(Relieved01Icon);
+export const Smile = createIcon(SmileIcon);
+export const Wink = createIcon(WinkIcon);
 export const CloudLightning = createIcon(CloudLightningIcon);
 export const CloudMoon = createIcon(MoonCloudIcon);
 export const CloudRain = createIcon(CloudRainIcon);
