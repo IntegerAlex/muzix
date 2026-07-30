@@ -1,5 +1,5 @@
 import { type FC } from 'react';
-import { HugeiconsIcon } from '@hugeicons/react';
+import { HugeiconsIcon } from '@hugeicons/react-native';
 import {
   AlertCircleIcon,
   AlertDiamondIcon,

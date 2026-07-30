@@ -1,14 +1,3 @@
-jest.mock('@/services/playerService', () => ({
-  addQueue: jest.fn().mockResolvedValue(undefined),
-  play: jest.fn().mockResolvedValue(undefined),
-  pause: jest.fn().mockResolvedValue(undefined),
-  next: jest.fn().mockResolvedValue(undefined),
-  previous: jest.fn().mockResolvedValue(undefined),
-  skipToIndex: jest.fn().mockResolvedValue(undefined),
-  setVolume: jest.fn().mockResolvedValue(undefined),
-  seek: jest.fn().mockResolvedValue(undefined),
-}));
-
 jest.mock('@/store/authStore', () => ({
   useAuthStore: {
     getState: jest.fn().mockReturnValue({ token: null }),
@@ -16,7 +5,6 @@ jest.mock('@/store/authStore', () => ({
 }));
 
 import { usePlayerStore } from '@/store/playerStore';
-import * as playerService from '@/services/playerService';
 
 function makeSong(id: string, title = `Song ${id}`): any {
   return { id, title, artist: 'Artist', artistId: 'a1', album: 'Album', albumId: 'al1', duration: '3:00', durationMs: 180000, colors: ['#1DB954', '#0a0a0a'] };
@@ -72,14 +60,6 @@ describe('playSong', () => {
     const state = usePlayerStore.getState();
     expect(state.queue).toEqual([song]);
   });
-
-  it('calls playerService.addQueue and playerService.play', async () => {
-    const song = makeSong('1');
-    usePlayerStore.getState().playSong(song);
-    await new Promise((r) => setTimeout(r, 10));
-    expect(playerService.addQueue).toHaveBeenCalledWith([song], 0);
-    expect(playerService.play).toHaveBeenCalled();
-  });
 });
 
 describe('setPlaying', () => {
@@ -88,16 +68,6 @@ describe('setPlaying', () => {
     expect(usePlayerStore.getState().isPlaying).toBe(true);
     usePlayerStore.getState().setPlaying(false);
     expect(usePlayerStore.getState().isPlaying).toBe(false);
-  });
-
-  it('calls playerService.play when playing', () => {
-    usePlayerStore.getState().setPlaying(true);
-    expect(playerService.play).toHaveBeenCalled();
-  });
-
-  it('calls playerService.pause when pausing', () => {
-    usePlayerStore.getState().setPlaying(false);
-    expect(playerService.pause).toHaveBeenCalled();
   });
 });
 
@@ -211,20 +181,18 @@ describe('toggleRepeat', () => {
 });
 
 describe('volume', () => {
-  it('sets volume and calls playerService', () => {
+  it('sets volume', () => {
     usePlayerStore.getState().setVolume(0.5);
     expect(usePlayerStore.getState().volume).toBe(0.5);
-    expect(playerService.setVolume).toHaveBeenCalledWith(0.5);
   });
 });
 
 describe('seekPosition', () => {
-  it('sets seekPosition and calls playerService.seek', () => {
+  it('sets seekPosition', () => {
     const song = makeSong('1');
     usePlayerStore.getState().playSong(song);
     usePlayerStore.getState().setSeekPosition(0.5);
     expect(usePlayerStore.getState().seekPosition).toBe(0.5);
-    expect(playerService.seek).toHaveBeenCalled();
   });
 });
 

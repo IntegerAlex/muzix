@@ -1,6 +1,6 @@
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { House, Search, Library, User } from '@/lib/icons';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, Image } from 'react-native';
 import { BG, SURFACE, SURFACE_ICON, TEXT_MUTED, BORDER, ACCENT } from '@/lib/colors';
 import { useResponsive } from '@/lib/useResponsive';
 
@@ -31,6 +31,13 @@ export default function TabsLayout() {
             gap: 8,
           }}
         >
+          <View style={{ alignItems: 'center', marginBottom: 16 }}>
+            <Image
+              source={require('@/assets/images/logo.png')}
+              style={{ width: 32, height: 32, borderRadius: 8 }}
+              contentFit="contain"
+            />
+          </View>
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = tab.name === 'index'

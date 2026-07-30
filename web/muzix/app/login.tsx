@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, type TextInputAutoComplete, type TextInputTextContentType } from 'react-native';
+import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, type TextInputAutoComplete, type TextInputTextContentType, Image } from 'react-native';
 import { View, Text } from 'tamagui';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
@@ -105,14 +105,11 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={{ alignItems: 'center', marginBottom: SPACING.xxl }}>
-            <View style={{
-              width: 64, height: 64, borderRadius: 18,
-              backgroundColor: ACCENT,
-              alignItems: 'center', justifyContent: 'center',
-              marginBottom: SPACING.lg,
-            }}>
-              <Text style={{ fontSize: 28, fontWeight: '800', color: 'white', letterSpacing: -1 }}>M</Text>
-            </View>
+            <Image
+              source={require('@/assets/images/logo.png')}
+              style={{ width: 64, height: 64, borderRadius: 18, marginBottom: SPACING.lg }}
+              contentFit="contain"
+            />
             <Text style={{ fontSize: 24, fontWeight: '700', color: TEXT_PRIMARY, letterSpacing: -0.3 }}>
               Sign in to Muzix
             </Text>

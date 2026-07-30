@@ -1,15 +1,11 @@
-import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Song } from '@/services/types';
-import * as playerService from '@/services/playerService';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { safeStorage } from '@/store/storage';
 
 export type RepeatMode = 'off' | 'all' | 'one';
-
-const REAL = true;
 
 const QUEUE_STORAGE_KEY = 'muzix-queue';
 
@@ -104,26 +100,6 @@ async function patchLyrics(song: Song): Promise<void> {
   }
 }
 
-async function driveQueue(queue: Song[], index: number) {
-  if (!REAL || Platform.OS !== 'web') return;
-  try {
-    await playerService.addQueue(queue, Math.max(0, index));
-    await playerService.play();
-  } catch (e) {
-    console.error('playerService queue failed', e);
-  }
-}
-
-async function driveSkipToIndex(index: number) {
-  if (!REAL || Platform.OS !== 'web') return;
-  try {
-    await playerService.skipToIndex(index);
-    await playerService.play();
-  } catch (e) {
-    console.error('playerService skip failed', e);
-  }
-}
-
 export const usePlayerStore = create<PlayerState>()(
   persist(
     (set, get) => ({
@@ -169,20 +145,11 @@ export const usePlayerStore = create<PlayerState>()(
           recentlyPlayed: deduped,
         });
         patchLyrics(song);
-        driveQueue(resolvedQueue, resolvedIndex);
         saveQueue({ queue: resolvedQueue, currentIndex: resolvedIndex, shuffle: get().shuffle, repeat: get().repeat });
       },
 
       setPlaying: (v) => {
         set({ isPlaying: v, error: null });
-        if (REAL && Platform.OS === 'web') {
-          try {
-            if (v) playerService.play();
-            else playerService.pause();
-          } catch (e) {
-            console.error('playerService play/pause failed', e);
-          }
-        }
       },
 
       setLoading: (id) => set({ loadingId: id }),
@@ -207,11 +174,6 @@ export const usePlayerStore = create<PlayerState>()(
         const song = queue[ni];
         set({ current: song, currentIndex: ni, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + song.durationMs });
         patchLyrics(song);
-        if (REAL && Platform.OS === 'web') {
-          try { playerService.next(); } catch (e) {
-            console.error('playerService next failed', e);
-          }
-        }
       },
 
       previous: () => {
@@ -224,9 +186,6 @@ export const usePlayerStore = create<PlayerState>()(
           if (song) {
             set({ current: song, currentIndex: prevIndex, history: newHistory, error: null });
             patchLyrics(song);
-            try { driveSkipToIndex(prevIndex); } catch (e) {
-              console.error('playerService previous failed', e);
-            }
             return;
           }
         }
@@ -235,11 +194,6 @@ export const usePlayerStore = create<PlayerState>()(
         if (!song) return;
         set({ current: song, currentIndex: pi, error: null });
         patchLyrics(song);
-        if (REAL && Platform.OS === 'web') {
-          try { playerService.previous(); } catch (e) {
-            console.error('playerService previous failed', e);
-          }
-        }
       },
 
       toggleShuffle: () => {
@@ -254,7 +208,6 @@ export const usePlayerStore = create<PlayerState>()(
             currentIndex: 0,
             history: [],
           });
-          driveQueue(newQueue, 0);
           saveQueue({ queue: newQueue, currentIndex: 0, shuffle: true, repeat: get().repeat });
         } else {
           const newIndex = current ? originalQueue.findIndex((s) => s.id === current.id) : 0;
@@ -264,7 +217,6 @@ export const usePlayerStore = create<PlayerState>()(
             queue: originalQueue,
             currentIndex: resolvedIndex,
           });
-          driveQueue(originalQueue, resolvedIndex);
           saveQueue({ queue: originalQueue, currentIndex: resolvedIndex, shuffle: false, repeat: get().repeat });
         }
       },
@@ -346,9 +298,6 @@ export const usePlayerStore = create<PlayerState>()(
         const newCurrent = newQueue[newIndex] ?? null;
         set({ queue: newQueue, currentIndex: newIndex, current: newCurrent });
         if (newCurrent) patchLyrics(newCurrent);
-        if (index === currentIndex && newCurrent) {
-          driveQueue(newQueue, newIndex);
-        }
         saveQueue({ queue: newQueue, currentIndex: newIndex, shuffle: get().shuffle, repeat: get().repeat });
       },
 
@@ -384,7 +333,6 @@ export const usePlayerStore = create<PlayerState>()(
         const newQueue = [...before, ...shuffled];
         const newIndex = current ? 0 : 0;
         set({ queue: newQueue, currentIndex: newIndex, shuffle: true, history: [] });
-        driveQueue(newQueue, newIndex);
         saveQueue({ queue: newQueue, currentIndex: newIndex, shuffle: true, repeat: get().repeat });
       },
 
@@ -396,23 +344,10 @@ export const usePlayerStore = create<PlayerState>()(
 
       setVolume: (v) => {
         set({ volume: v });
-        if (REAL && Platform.OS === 'web') {
-          try { playerService.setVolume(v); } catch (e) {
-            console.error('playerService setVolume failed', e);
-          }
-        }
       },
 
       setSeekPosition: (v) => {
         set({ seekPosition: v });
-        if (REAL && Platform.OS === 'web' && v != null) {
-          const cur = get().current;
-          if (cur) {
-            try { playerService.seek((v * cur.durationMs) / 1000); } catch (e) {
-              console.error('playerService seek failed', e);
-            }
-          }
-        }
       },
 
       setConnectionStatus: (status) => set({ connectionStatus: status }),
@@ -421,7 +356,6 @@ export const usePlayerStore = create<PlayerState>()(
         const { current, queue, currentIndex } = get();
         if (!current) return;
         set({ error: null, loadingId: current.id });
-        driveQueue(queue, currentIndex);
       },
     }),
     {

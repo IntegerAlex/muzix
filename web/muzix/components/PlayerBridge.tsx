@@ -155,12 +155,6 @@ export function PlayerBridge() {
   useEffect(() => { recordSessionStart(); }, []);
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
-      import('@/services/playerService').then(ps => ps.setupPlayer?.()).catch(() => {});
-    }
-  }, []);
-
-  useEffect(() => {
     if (RNTP_OWNS_AUDIO) return;
     if (!current) return;
     let cancelled = false;
