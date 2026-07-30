@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, field_validator
 
 from config import MAX_EMAIL_LEN
-from helpers import success_resp, check_rate_limit, _client_ip, get_current_user
+from helpers import success_resp, check_rate_limit, _client_ip, get_current_user, get_current_user_full
 from services import auth as auth_svc
 
 router = APIRouter(prefix="/auth")
@@ -60,5 +60,5 @@ async def refresh_token(body: AuthRefresh):
 
 
 @router.get("/me")
-async def get_me(user=Depends(get_current_user)):
+async def get_me(user=Depends(get_current_user_full)):
     return success_resp(data=user.to_dict(), message="User retrieved")

@@ -756,7 +756,7 @@ export function NowPlaying() {
           </View>
 
           {upNext.length > 0 && (
-            <GlassCard style={{ marginTop: 24, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md }} intensity={30}>
+            <GlassCard variant="glass" padding={SPACING.md} intensity={30} style={{ marginTop: 24 }}>
               <Text style={{ marginBottom: 8 }} fontSize={13} fontWeight="600" color="rgba(255,255,255,0.6)">Up Next</Text>
               {upNext.map((item: Song, i) => (
                 <Pressable
@@ -792,7 +792,7 @@ export function NowPlaying() {
                 <Text fontSize={13} fontWeight="500" color="rgba(255,255,255,0.35)">{showLyrics ? 'Hide' : 'Show'}</Text>
               </Pressable>
               {showLyrics && (
-                <GlassCard style={{ marginTop: 12, paddingHorizontal: SPACING.sm, paddingVertical: SPACING.sm }} intensity={25}>
+                <GlassCard variant="glass" padding={SPACING.sm} intensity={25} style={{ marginTop: 12 }}>
                   <LyricsPanel
                     lyrics={current.lyrics}
                     currentTime={currentTimeSec}

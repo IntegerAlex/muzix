@@ -27,6 +27,7 @@ jest.mock('expo-linear-gradient', () => ({
 
 jest.mock('expo-blur', () => ({
   BlurView: 'BlurView',
+  BlurTargetView: 'BlurTargetView',
 }));
 
 jest.mock('expo-status-bar', () => ({

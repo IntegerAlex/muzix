@@ -1,6 +1,6 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
-import { FlatList, ScrollView, Pressable, View, RefreshControl } from 'react-native';
+import { ActivityIndicator, FlatList, ScrollView, Pressable, View, RefreshControl } from 'react-native';
 import { Text } from 'tamagui';
 import { Music, ChevronLeft, UserPlus, UserCheck, Share2 } from 'lucide-react-native';
 import { GlassCard } from '@/components/GlassCard';
@@ -13,6 +13,7 @@ import { Skeleton, SongSkeleton, CardSkeleton } from '@/components/Skeleton';
 import { useArtist, useAlbums, useSongs } from '@/services/data';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSharing } from '@/hooks/useSharing';
+import { useToast } from '@/components/Toast';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT } from '@/lib/colors';
 
 function ArtistSkeletonView() {
@@ -51,8 +52,13 @@ export default function ArtistDetail() {
   const { data: allSongs } = useSongs();
   const current = usePlayerStore((s) => s.current);
   const [isFollowing, setIsFollowing] = useState(false);
-  const { share } = useSharing();
+  const { share, isSharing, shareError, resetError } = useSharing();
+  const { toast } = useToast();
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (shareError) { toast(shareError, 'error'); resetError(); }
+  }, [shareError]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -73,6 +79,14 @@ export default function ArtistDetail() {
   const toggleFollow = useCallback(() => {
     setIsFollowing((prev) => !prev);
   }, []);
+
+  const handleShare = useCallback(async () => {
+    if (!artist) return;
+    try {
+      await share({ contentType: 'artist', contentId: artist.id, title: artist.name, imageUrl: artist.imageUrl });
+      toast('Link copied!', 'success');
+    } catch {}
+  }, [artist, share, toast]);
 
   if (loading) {
     return <ArtistSkeletonView />;
@@ -135,12 +149,13 @@ export default function ArtistDetail() {
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => share({ contentType: 'artist', contentId: artist.id, title: artist.name, imageUrl: artist.imageUrl })}
+              onPress={handleShare}
+              disabled={isSharing}
               style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }}
               accessibilityLabel="Share artist"
               accessibilityRole="button"
             >
-              <Share2 size={16} color={TEXT_PRIMARY} />
+              {isSharing ? <ActivityIndicator size={16} color={TEXT_PRIMARY} /> : <Share2 size={16} color={TEXT_PRIMARY} />}
             </Pressable>
           </View>
         </View>

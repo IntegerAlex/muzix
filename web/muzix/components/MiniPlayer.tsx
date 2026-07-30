@@ -42,7 +42,7 @@ export function MiniPlayer() {
   const [elapsedText, setElapsedText] = useState('0:00');
   const [progressPct, setProgressPct] = useState(0);
   const { isDesktop } = useResponsive();
-  const { share } = useSharing();
+  const { share, isSharing } = useSharing();
 
   const isLoading = current ? loadingId === current.id : false;
 
@@ -110,12 +110,11 @@ export function MiniPlayer() {
           zIndex: 40,
           elevation: 40,
           bottom: bottomInset + TAB_BAR_HEIGHT + 2,
-          paddingHorizontal: SPACING.md,
           pointerEvents: 'box-none',
         },
       ]}
     >
-      <GlassCard style={{ paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }} intensity={50}>
+      <GlassCard variant="glass" padding={SPACING.sm} intensity={50}>
         <View
           style={{
             position: 'absolute',
@@ -165,20 +164,21 @@ export function MiniPlayer() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Pressable
                 onPress={() => share({ contentType: 'song', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl })}
-                style={{ alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}
+                style={{ alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }}
                 hitSlop={8}
+                disabled={isSharing}
                 accessibilityLabel="Share"
               >
-                <Share2 size={18} color={TEXT_MUTED} />
+                {isSharing ? <ActivityIndicator size={18} color={TEXT_MUTED} /> : <Share2 size={18} color={TEXT_MUTED} />}
               </Pressable>
               <Pressable
                 onPress={() => previous()}
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   backgroundColor: SURFACE_ICON,
                 }}
                 hitSlop={8}
@@ -192,9 +192,9 @@ export function MiniPlayer() {
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   backgroundColor: SURFACE_ICON,
                 }}
                 hitSlop={8}
@@ -214,9 +214,9 @@ export function MiniPlayer() {
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   backgroundColor: SURFACE_ICON,
                 }}
                 hitSlop={8}
@@ -253,20 +253,21 @@ export function MiniPlayer() {
             </Pressable>
             <Pressable
               onPress={() => share({ contentType: 'song', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl })}
-              style={{ alignItems: 'center', justifyContent: 'center', width: 40, height: 40 }}
+              style={{ alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }}
               hitSlop={8}
+              disabled={isSharing}
               accessibilityLabel="Share"
             >
-              <Share2 size={18} color={TEXT_MUTED} />
+              {isSharing ? <ActivityIndicator size={18} color={TEXT_MUTED} /> : <Share2 size={18} color={TEXT_MUTED} />}
             </Pressable>
             <Pressable
                 onPress={() => setPlaying(!isPlaying)}
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
                   backgroundColor: SURFACE_ICON,
                 }}
                 hitSlop={8}

@@ -1,75 +1,15 @@
-"""Share service: validate content, get metadata, create share records."""
+"""Share service: validate content, get metadata, create share records — all in one DB session."""
 import secrets
 from datetime import datetime, timezone, timedelta
 
 from fastapi import HTTPException
-from sqlalchemy import select
 
 from db import SessionLocal
 from models import Song, Album, Artist, Playlist, Share
-from helpers import serialize_song, serialize_album, serialize_artist, serialize_playlist
+from helpers import serialize_song, serialize_album
+
 
 SHARE_EXPIRY_DAYS = 30
-
-CONTENT_VALIDATORS = {
-    "song": lambda id, session: session.get(Song, id),
-    "album": lambda id, session: session.get(Album, id),
-    "artist": lambda id, session: session.get(Artist, id),
-    "playlist": lambda id, session: session.get(Playlist, id),
-    "lyrics": lambda id, session: session.get(Song, id),
-}
-
-
-async def validate_content(content_type: str, content_id: str) -> bool:
-    validator = CONTENT_VALIDATORS.get(content_type)
-    if not validator:
-        raise HTTPException(status_code=422, detail=f"Invalid content type: {content_type}")
-    async with SessionLocal() as session:
-        obj = await validator(content_id, session)
-        if not obj:
-            raise HTTPException(status_code=404, detail=f"{content_type.capitalize()} not found")
-    return True
-
-
-async def get_content_metadata(content_type: str, content_id: str, base_url: str = "") -> dict:
-    async with SessionLocal() as session:
-        if content_type == "song":
-            song = await session.get(Song, content_id)
-            if not song:
-                raise HTTPException(status_code=404, detail="Song not found")
-            metadata = serialize_song(song, base_url, brief=True)
-            return {
-                "title": metadata["title"],
-                "artist": metadata["artist"],
-                "image_url": metadata["imageUrl"],
-            }
-        elif content_type == "album":
-            album = await session.get(Album, content_id)
-            if not album:
-                raise HTTPException(status_code=404, detail="Album not found")
-            meta = serialize_album(album, base_url)
-            return {"title": meta["title"], "artist": meta["artist"], "image_url": meta["imageUrl"]}
-        elif content_type == "artist":
-            artist = await session.get(Artist, content_id)
-            if not artist:
-                raise HTTPException(status_code=404, detail="Artist not found")
-            return {"title": artist.name, "artist": "", "image_url": ""}
-        elif content_type == "playlist":
-            playlist = await session.get(Playlist, content_id)
-            if not playlist:
-                raise HTTPException(status_code=404, detail="Playlist not found")
-            return {"title": playlist.title, "artist": "", "image_url": ""}
-        elif content_type == "lyrics":
-            song = await session.get(Song, content_id)
-            if not song:
-                raise HTTPException(status_code=404, detail="Song not found")
-            metadata = serialize_song(song, base_url, brief=True)
-            return {
-                "title": metadata["title"],
-                "artist": metadata["artist"],
-                "image_url": metadata["imageUrl"],
-            }
-    raise HTTPException(status_code=422, detail=f"Invalid content type: {content_type}")
 
 
 async def create_share(
@@ -77,19 +17,46 @@ async def create_share(
     content_type: str,
     content_id: str,
     base_url: str = "",
-    lyrics: list[str] | None = None,
     selected_lyrics_lines: list[int] | None = None,
 ) -> dict:
-    if content_type not in CONTENT_VALIDATORS:
-        raise HTTPException(status_code=422, detail=f"Invalid content type: {content_type}")
+    lyrics: list[str] | None = None
 
     async with SessionLocal() as session:
-        validator = CONTENT_VALIDATORS[content_type]
-        obj = await validator(content_id, session)
-        if not obj:
-            raise HTTPException(status_code=404, detail=f"{content_type.capitalize()} not found")
+        if content_type not in ("song", "album", "artist", "playlist", "lyrics"):
+            raise HTTPException(status_code=422, detail=f"Invalid content type: {content_type}")
 
-        metadata = await get_content_metadata(content_type, content_id, base_url)
+        if content_type == "song":
+            obj = await session.get(Song, content_id)
+            if not obj:
+                raise HTTPException(status_code=404, detail="Song not found")
+            meta = serialize_song(obj, base_url, brief=True)
+            metadata = {"title": meta["title"], "artist": meta["artist"], "image_url": meta["imageUrl"]}
+        elif content_type == "album":
+            obj = await session.get(Album, content_id)
+            if not obj:
+                raise HTTPException(status_code=404, detail="Album not found")
+            meta = serialize_album(obj, base_url)
+            metadata = {"title": meta["title"], "artist": meta["artist"], "image_url": meta["imageUrl"]}
+        elif content_type == "artist":
+            obj = await session.get(Artist, content_id)
+            if not obj:
+                raise HTTPException(status_code=404, detail="Artist not found")
+            metadata = {"title": obj.name, "artist": "", "image_url": ""}
+        elif content_type == "playlist":
+            obj = await session.get(Playlist, content_id)
+            if not obj:
+                raise HTTPException(status_code=404, detail="Playlist not found")
+            metadata = {"title": obj.title, "artist": "", "image_url": ""}
+        elif content_type == "lyrics":
+            obj = await session.get(Song, content_id)
+            if not obj:
+                raise HTTPException(status_code=404, detail="Song not found")
+            meta = serialize_song(obj, base_url, brief=True)
+            metadata = {"title": meta["title"], "artist": meta["artist"], "image_url": meta["imageUrl"]}
+            if selected_lyrics_lines and obj.lyrics:
+                lines = obj.lyrics.split("\n") if isinstance(obj.lyrics, str) else obj.lyrics
+                lyrics = [lines[i] for i in selected_lyrics_lines if i < len(lines)]
+
         share_token = secrets.token_urlsafe(12)
         expires_at = datetime.now(timezone.utc) + timedelta(days=SHARE_EXPIRY_DAYS)
 
@@ -122,6 +89,7 @@ async def create_share(
 
 async def get_share_by_token(share_token: str) -> dict | None:
     async with SessionLocal() as session:
+        from sqlalchemy import select
         result = await session.execute(
             select(Share).where(Share.share_token == share_token)
         )

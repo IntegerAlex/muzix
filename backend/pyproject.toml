@@ -17,6 +17,7 @@ dependencies = [
     "aiohttp>=3.10.0",
     "orjson>=3.11.9",
     "scipy>=1.14.0",
+    "intelliscrape>=2.5.0",
 ]
 
 [tool.setuptools]

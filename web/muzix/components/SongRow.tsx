@@ -1,5 +1,5 @@
 import { useCallback, useEffect, memo, useRef } from 'react';
-import { Pressable } from 'react-native';
+import { ActivityIndicator, Pressable } from 'react-native';
 import { Text, View } from 'tamagui';
 import Animated, {
   useAnimatedStyle,
@@ -47,9 +47,10 @@ interface SongRowProps {
   isCurrent: boolean;
   subtitle?: string;
   onShare?: (song: Song) => void;
+  isSharing?: boolean;
 }
 
-export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, subtitle, onShare }: SongRowProps) {
+export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, subtitle, onShare, isSharing }: SongRowProps) {
   const playSong = usePlayerStore((s) => s.playSong);
   const queueRef = useRef(queue);
   queueRef.current = queue;
@@ -81,12 +82,13 @@ export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, su
       </View>
       {onShare && (
         <Pressable
-          onPress={() => onShare(song)}
-          style={{ opacity: 0.6, padding: 4 }}
+          onPress={() => !isSharing && onShare(song)}
+          style={{ opacity: isSharing ? 0.4 : 0.6, padding: 4 }}
           hitSlop={8}
+          disabled={isSharing}
           accessibilityLabel={`Share ${song.title}`}
         >
-          <Share2 size={16} color={TEXT_MUTED} />
+          {isSharing ? <ActivityIndicator size={16} color={TEXT_MUTED} /> : <Share2 size={16} color={TEXT_MUTED} />}
         </Pressable>
       )}
       {isCurrent ? (

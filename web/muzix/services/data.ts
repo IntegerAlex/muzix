@@ -118,7 +118,6 @@ export async function loadAll(): Promise<void> {
       _playlists = playlistsRaw.map(mapPlaylist);
       rebuildMaps();
       _emitVersionChange();
-      await new Promise((r) => setTimeout(r, 0));
 
       await loadSongs();
 
@@ -138,20 +137,8 @@ export async function loadAll(): Promise<void> {
 }
 
 async function loadSongs(): Promise<void> {
-  _songs = [];
-  let offset = 0;
-  const chunkSize = 50;
-  let hasMore = true;
-
-  while (hasMore) {
-    const chunk = await api.songs(chunkSize, offset);
-    const mapped = chunk.map(mapSong);
-    _songs = _songs.concat(mapped);
-    offset += chunk.length;
-    hasMore = chunk.length === chunkSize;
-    _emitVersionChange();
-    await new Promise((r) => setTimeout(r, 0));
-  }
+  const all = await api.songs(500, 0);
+  _songs = all.map(mapSong);
 }
 
 export function reloadAll(): void {
@@ -391,10 +378,12 @@ export function useAlbum(id: string): { data: Album | undefined; loading: boolea
   const [staleData, setStaleData] = useState<Album | undefined>(() => getAlbum(id));
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    await loadAll();
-    const fresh = getAlbum(id);
-    setStaleData(fresh);
-    return fresh;
+    const cached = getAlbum(id);
+    if (cached) return cached;
+    const raw = await api.album(id);
+    const mapped = raw ? mapAlbum(raw) : undefined;
+    if (mapped) setStaleData(mapped);
+    return mapped;
   }, [id], staleData);
 
   return { data: data ?? staleData, loading, error, refetch };
@@ -404,10 +393,12 @@ export function useArtist(id: string): { data: Artist | undefined; loading: bool
   const [staleData, setStaleData] = useState<Artist | undefined>(() => getArtist(id));
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    await loadAll();
-    const fresh = getArtist(id);
-    setStaleData(fresh);
-    return fresh;
+    const cached = getArtist(id);
+    if (cached) return cached;
+    const raw = await api.artist(id);
+    const mapped = raw ? mapArtist(raw) : undefined;
+    if (mapped) setStaleData(mapped);
+    return mapped;
   }, [id], staleData);
 
   return { data: data ?? staleData, loading, error, refetch };
@@ -417,10 +408,12 @@ export function usePlaylist(id: string): { data: Playlist | undefined; loading: 
   const [staleData, setStaleData] = useState<Playlist | undefined>(() => getPlaylist(id));
 
   const { data, loading, error, refetch } = useQuery(async () => {
-    await loadAll();
-    const fresh = getPlaylist(id);
-    setStaleData(fresh);
-    return fresh;
+    const cached = getPlaylist(id);
+    if (cached) return cached;
+    const raw = await api.playlist(id);
+    const mapped = raw ? mapPlaylist(raw) : undefined;
+    if (mapped) setStaleData(mapped);
+    return mapped;
   }, [id], staleData);
 
   return { data: data ?? staleData, loading, error, refetch };

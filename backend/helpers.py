@@ -161,7 +161,17 @@ def create_refresh_token(user_id: str) -> str:
     )
 
 
-async def get_current_user(authorization: str | None = Header(None)) -> User:
+class CurrentUser:
+    """Minimal user object returned by get_current_user — no DB query."""
+
+    def __init__(self, user_id: str):
+        self.id = user_id
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "displayName": "", "email": ""}
+
+
+async def get_current_user(authorization: str | None = Header(None)) -> CurrentUser:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid token")
     token = authorization.split(" ", 1)[1]
@@ -171,8 +181,17 @@ async def get_current_user(authorization: str | None = Header(None)) -> User:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token: no subject")
+    return CurrentUser(user_id)
+
+
+async def get_current_user_full(authorization: str | None = Header(None)) -> User:
+    """Fetch full User object from DB — only for routes that need it (e.g. /auth/me)."""
+    cu = await get_current_user(authorization)
     async with SessionLocal() as session:
-        user = await session.get(User, payload.get("sub"))
+        user = await session.get(User, cu.id)
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         session.expunge(user)

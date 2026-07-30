@@ -1,6 +1,6 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
-import { FlatList, ScrollView, Pressable, View, Modal, TextInput, Alert, RefreshControl } from 'react-native';
+import { ActivityIndicator, FlatList, ScrollView, Pressable, View, Modal, TextInput, Alert, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from 'tamagui';
 import { Music, Plus, Trash2, ChevronLeft, Share2, ListPlus, Play } from 'lucide-react-native';
@@ -15,6 +15,7 @@ import { usePlaylist, useSongs } from '@/services/data';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore } from '@/store/authStore';
 import { useSharing } from '@/hooks/useSharing';
+import { useToast } from '@/components/Toast';
 import { api } from '@/services/api';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
 import type { Song } from '@/services/types';
@@ -54,7 +55,12 @@ export default function PlaylistDetail() {
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNextSong = usePlayerStore((s) => s.playNext);
   const [refreshing, setRefreshing] = useState(false);
-  const { share } = useSharing();
+  const { share, isSharing, shareError, resetError } = useSharing();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (shareError) { toast(shareError, 'error'); resetError(); }
+  }, [shareError]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -171,10 +177,13 @@ export default function PlaylistDetail() {
     setShowAddSongModal(false);
   }, []);
 
-  const handleShare = useCallback(() => {
+  const handleShare = useCallback(async () => {
     if (!playlist) return;
-    share({ contentType: 'playlist', contentId: playlist.id, title: playlist.title, imageUrl: playlist.imageUrl });
-  }, [playlist, share]);
+    try {
+      await share({ contentType: 'playlist', contentId: playlist.id, title: playlist.title, imageUrl: playlist.imageUrl });
+      toast('Link copied!', 'success');
+    } catch {}
+  }, [playlist, share, toast]);
 
   const handleContextAction = useCallback((action: 'queue' | 'next') => {
     if (!contextSong) return;
@@ -262,8 +271,8 @@ export default function PlaylistDetail() {
               </>
             ) : (
               <>
-                <Pressable onPress={handleShare} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }} accessibilityLabel="Share playlist" accessibilityRole="button">
-                  <Share2 size={14} color={TEXT_PRIMARY} />
+                <Pressable onPress={handleShare} disabled={isSharing} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }} accessibilityLabel="Share playlist" accessibilityRole="button">
+                  {isSharing ? <ActivityIndicator size={14} color={TEXT_PRIMARY} /> : <Share2 size={14} color={TEXT_PRIMARY} />}
                 </Pressable>
                 {token && (
                   <>

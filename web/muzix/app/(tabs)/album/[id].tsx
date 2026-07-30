@@ -1,6 +1,6 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useLocalSearchParams, router } from 'expo-router';
-import { ScrollView, Pressable, View, RefreshControl } from 'react-native';
+import { ActivityIndicator, ScrollView, Pressable, View, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from 'tamagui';
 import { Music, ChevronLeft, Share2, Shuffle, Play } from 'lucide-react-native';
@@ -13,6 +13,7 @@ import { Skeleton, SongSkeleton } from '@/components/Skeleton';
 import { useAlbum, useSongs } from '@/services/data';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSharing } from '@/hooks/useSharing';
+import { useToast } from '@/components/Toast';
 import type { Song } from '@/services/types';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
@@ -50,8 +51,13 @@ export default function AlbumDetail() {
   const { data: allSongs } = useSongs();
   const current = usePlayerStore((s) => s.current);
   const playSong = usePlayerStore((s) => s.playSong);
-  const { share } = useSharing();
+  const { share, isSharing, shareError, resetError } = useSharing();
+  const { toast } = useToast();
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (shareError) { toast(shareError, 'error'); resetError(); }
+  }, [shareError]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -75,10 +81,13 @@ export default function AlbumDetail() {
     playSong(shuffled[0], shuffled, 0);
   }, [songs, playSong]);
 
-  const handleShare = useCallback(() => {
+  const handleShare = useCallback(async () => {
     if (!album) return;
-    share({ contentType: 'album', contentId: album.id, title: album.title, artist: album.artist, imageUrl: album.imageUrl });
-  }, [album, share]);
+    try {
+      await share({ contentType: 'album', contentId: album.id, title: album.title, artist: album.artist, imageUrl: album.imageUrl });
+      toast('Link copied!', 'success');
+    } catch {}
+  }, [album, share, toast]);
 
   if (loading) {
     return <AlbumSkeletonView />;
@@ -142,8 +151,8 @@ export default function AlbumDetail() {
         <GlassCard padding={SPACING.lg} style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text fontSize={13} fontWeight="500" color={TEXT_SECONDARY}>{songs.length} songs</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable onPress={handleShare} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }} accessibilityLabel="Share album" accessibilityRole="button">
-              <Share2 size={14} color={TEXT_PRIMARY} />
+            <Pressable onPress={handleShare} disabled={isSharing} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }} accessibilityLabel="Share album" accessibilityRole="button">
+              {isSharing ? <ActivityIndicator size={14} color={TEXT_PRIMARY} /> : <Share2 size={14} color={TEXT_PRIMARY} />}
             </Pressable>
             <Pressable
               onPress={handleShuffle}

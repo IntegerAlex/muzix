@@ -15,10 +15,12 @@ from config import AUDIO_DIR, THUMB_DIR
 from middleware import SecurityMiddleware
 from helpers import success_resp
 from db import engine
+from services.recommendations import _ensure_model as _train_recommendation_model
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    asyncio.create_task(_train_recommendation_model())
     yield
     await engine.dispose()
 

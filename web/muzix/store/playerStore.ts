@@ -16,7 +16,7 @@ const QUEUE_STORAGE_KEY = 'muzix-queue';
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 function saveQueue(state: { queue: Song[]; currentIndex: number; shuffle: boolean; repeat: RepeatMode }) {
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
+  saveTimer = setTimeout(async () => {
     try {
       const data = {
         queue: state.queue.map(s => s.id),
@@ -24,14 +24,14 @@ function saveQueue(state: { queue: Song[]; currentIndex: number; shuffle: boolea
         shuffle: state.shuffle,
         repeat: state.repeat,
       };
-      localStorage?.setItem?.(QUEUE_STORAGE_KEY, JSON.stringify(data));
+      await safeStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(data));
     } catch {}
   }, 500);
 }
 
-function restoreQueue(): { queueIds: string[]; currentIndex: number } | null {
+async function restoreQueue(): Promise<{ queueIds: string[]; currentIndex: number } | null> {
   try {
-    const raw = localStorage?.getItem?.(QUEUE_STORAGE_KEY);
+    const raw = await safeStorage.getItem(QUEUE_STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }

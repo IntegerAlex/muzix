@@ -2,6 +2,7 @@
 import asyncio
 import hashlib
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -94,6 +95,8 @@ _last_trained_at: datetime | None = None
 _model_version_hash: str = ""
 _training_lock = False
 _training_task: Any = None
+_popular_cache: tuple[float, list[dict]] | None = None
+_POPULAR_CACHE_TTL = 60
 
 
 def _compute_version_hash() -> str:
@@ -102,6 +105,16 @@ def _compute_version_hash() -> str:
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
     except Exception:
         return datetime.now(timezone.utc).isoformat()
+
+
+async def _get_cached_popular(limit: int) -> list[dict]:
+    global _popular_cache
+    now = time.time()
+    if _popular_cache is not None and (now - _popular_cache[0]) < _POPULAR_CACHE_TTL:
+        return _popular_cache[1][:limit]
+    result = await rec_repo.get_popular_songs(limit)
+    _popular_cache = (now, result)
+    return result
 
 
 async def _ensure_model() -> bool:
@@ -188,7 +201,7 @@ async def get_recommendations(user_id: str, limit: int = 20) -> list[dict]:
         if not _training_lock:
             _training_lock = True
             _training_task = asyncio.create_task(_ensure_model())
-        return await rec_repo.get_popular_songs(limit)
+        return await _get_cached_popular(limit)
 
     try:
         user_data = await rec_repo.get_user_features(user_id)
@@ -196,7 +209,7 @@ async def get_recommendations(user_id: str, limit: int = 20) -> list[dict]:
 
         user_idx = _user_id_map.get(user_id)
         if user_idx is None or user_idx >= _user_factors.shape[0]:
-            return await rec_repo.get_popular_songs(limit)
+            return await _get_cached_popular(limit)
 
         user_vector = _user_factors[user_idx]
         scores = _item_factors @ user_vector
@@ -222,7 +235,7 @@ async def get_recommendations(user_id: str, limit: int = 20) -> list[dict]:
 
     except Exception as exc:
         logger.error("Failed to generate recommendations: %s", exc, exc_info=True)
-        return await rec_repo.get_popular_songs(limit)
+        return await _get_cached_popular(limit)
 
 
 async def get_model_status() -> dict[str, Any]:

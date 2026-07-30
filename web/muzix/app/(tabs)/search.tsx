@@ -10,6 +10,7 @@ import { useSearch } from '@/services/data';
 import type { Album, Artist } from '@/services/types';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSharing } from '@/hooks/useSharing';
+import { useToast } from '@/components/Toast';
 import { AnimatedEntrance } from '@/lib/useEntrance';
 import { Artwork } from '@/components/Artwork';
 import { RADIUS } from '@/lib/sizing';
@@ -47,7 +48,22 @@ export default function SearchScreen() {
   const [recentSearches, setRecentSearches] = useState<string[]>(loadRecent);
   const playSong = usePlayerStore((s) => s.playSong);
   const current = usePlayerStore((s) => s.current);
-  const { share } = useSharing();
+  const { share, isSharing, shareError, resetError } = useSharing();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (shareError) {
+      toast(shareError, 'error');
+      resetError();
+    }
+  }, [shareError]);
+
+  const handleShare = useCallback(async (song: import('@/services/types').Song) => {
+    try {
+      await share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl });
+      toast('Link copied!', 'success');
+    } catch {}
+  }, [share, toast]);
 
   const { data: results, loading } = useSearch(query);
   const hasQuery = query.trim().length > 0;
@@ -228,7 +244,8 @@ export default function SearchScreen() {
                       index={i}
                       queue={results.songs}
                       isCurrent={current?.id === songItem.id}
-                      onShare={(song) => share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl })}
+                      onShare={handleShare}
+                      isSharing={isSharing}
                     />
                   </AnimatedEntrance>
                 ))}
@@ -366,8 +383,9 @@ export default function SearchScreen() {
                     index={i}
                     queue={results.songs}
                    isCurrent={current?.id === songItem.id}
-                   onShare={(song) => share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl })}
-                 />
+                   onShare={handleShare}
+                   isSharing={isSharing}
+                  />
                </AnimatedEntrance>
              ))}
 

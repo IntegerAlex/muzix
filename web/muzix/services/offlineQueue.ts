@@ -1,3 +1,5 @@
+import { safeStorage } from '@/store/storage';
+
 const QUEUE_KEY = 'muzix-offline-queue';
 const MAX_QUEUE_SIZE = 50;
 
@@ -12,36 +14,23 @@ interface QueuedRequest {
 
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-function getStorage(): Storage | null {
+async function loadQueue(): Promise<QueuedRequest[]> {
   try {
-    if (typeof localStorage !== 'undefined') {
-      return localStorage;
-    }
-  } catch {}
-  return null;
-}
-
-function loadQueue(): QueuedRequest[] {
-  const storage = getStorage();
-  if (!storage) return [];
-  try {
-    const raw = storage.getItem(QUEUE_KEY);
+    const raw = await safeStorage.getItem(QUEUE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function saveQueue(queue: QueuedRequest[]) {
-  const storage = getStorage();
-  if (!storage) return;
+async function saveQueue(queue: QueuedRequest[]) {
   try {
-    storage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    await safeStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
   } catch {}
 }
 
-export function enqueueRequest(url: string, method: string, headers: Record<string, string>, body?: string): void {
-  const queue = loadQueue();
+export async function enqueueRequest(url: string, method: string, headers: Record<string, string>, body?: string): Promise<void> {
+  const queue = await loadQueue();
   if (queue.length >= MAX_QUEUE_SIZE) {
     queue.shift();
   }
@@ -53,13 +42,13 @@ export function enqueueRequest(url: string, method: string, headers: Record<stri
     body,
     timestamp: Date.now(),
   });
-  saveQueue(queue);
+  await saveQueue(queue);
 }
 
 export async function retryQueuedRequests(): Promise<void> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) return;
 
-  const queue = loadQueue();
+  const queue = await loadQueue();
   if (queue.length === 0) return;
 
   const remaining: QueuedRequest[] = [];
@@ -74,7 +63,7 @@ export async function retryQueuedRequests(): Promise<void> {
       remaining.push(req);
     }
   }
-  saveQueue(remaining);
+  await saveQueue(remaining);
 }
 
 export function startRetryLoop(intervalMs = 30_000) {
@@ -91,6 +80,7 @@ export function stopRetryLoop() {
   }
 }
 
-export function getPendingCount(): number {
-  return loadQueue().length;
+export async function getPendingCount(): Promise<number> {
+  const queue = await loadQueue();
+  return queue.length;
 }

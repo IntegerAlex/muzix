@@ -12,3 +12,5 @@ export const DANGER = '#f43f5e';
 export const INPUT_BG = 'rgba(255,255,255,0.05)';
 export const INPUT_BORDER = 'rgba(255,255,255,0.18)';
 export const INPUT_BORDER_FOCUS = 'rgba(29,185,84,0.5)';
+export const GLASS_BLUE_TINT = 'rgba(30, 80, 200, 0.10)';
+export const GLASS_ANDROID_DARK_BASE = 'rgba(0,0,0,0.25)';

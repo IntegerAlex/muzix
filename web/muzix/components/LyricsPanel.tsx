@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { ScrollView, Pressable, Text, View, Alert } from 'react-native';
 import Animated, { useSharedValue, withTiming, Easing, useAnimatedStyle } from 'react-native-reanimated';
 import { Check, Share2, X } from 'lucide-react-native';
-import { GlassCard } from '@/components/GlassCard';
 
 interface LyricLine {
   time: number; // seconds

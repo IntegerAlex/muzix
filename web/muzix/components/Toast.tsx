@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, createContext, useContext } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Platform } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 
 interface Toast {
@@ -77,7 +77,9 @@ function ToastItem({ toast }: { toast: Toast }) {
           paddingVertical: 12,
           flexDirection: 'row',
           alignItems: 'center',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          ...(Platform.OS === 'web'
+            ? { boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }
+            : { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 }),
         }}
       >
         <Text style={{ color: 'white', fontSize: 14, fontWeight: '500', flex: 1 }} numberOfLines={2}>

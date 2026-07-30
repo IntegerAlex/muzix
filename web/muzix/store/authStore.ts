@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Platform } from 'react-native';
 import { safeStorage } from './storage';
 import { api, type AuthResponse, type User } from '@/services/api';
 
@@ -78,9 +77,26 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
+function base64Decode(str: string): string {
+  if (typeof atob !== 'undefined') return atob(str);
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  let output = '';
+  str = str.replace(/=+$/, '');
+  for (let i = 0; i < str.length; i += 4) {
+    const a = chars.indexOf(str[i]);
+    const b = chars.indexOf(str[i + 1]);
+    const c = chars.indexOf(str[i + 2]);
+    const d = chars.indexOf(str[i + 3]);
+    output += String.fromCharCode((a << 2) | (b >> 4));
+    if (c !== -1) output += String.fromCharCode(((b & 15) << 4) | (c >> 2));
+    if (d !== -1) output += String.fromCharCode(((c & 3) << 6) | d);
+  }
+  return output;
+}
+
 function parseJwtExpiry(token: string): number | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(base64Decode(token.split('.')[1]));
     return payload.exp ? payload.exp * 1000 : null;
   } catch {
     return null;

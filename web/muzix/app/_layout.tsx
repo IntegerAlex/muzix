@@ -82,8 +82,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
-    const el = document.activeElement as HTMLElement | null;
-    if (el && el !== document.body) {
+    const el = document.activeElement;
+    if (el && el !== document.body && el instanceof Element) {
       const hiddenAncestor = el.closest('[aria-hidden="true"], [inert]');
       const style = hiddenAncestor as HTMLElement | null;
       if (style && getComputedStyle(style).display === 'none') {

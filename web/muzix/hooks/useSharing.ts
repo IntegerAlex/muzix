@@ -79,6 +79,7 @@ export function useSharing() {
               text: shareText,
               url: shareUrl,
             });
+            return; // Web Share succeeded, don't also copy to clipboard
           } catch {
             // Share cancelled or not supported — fall back to clipboard
           }

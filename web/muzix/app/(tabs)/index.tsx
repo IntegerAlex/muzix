@@ -12,6 +12,7 @@ import { Skeleton, SongSkeleton, CardSkeleton } from '@/components/Skeleton';
 import { useAlbums, usePlaylists, useSongs, reloadAll } from '@/services/data';
 import { api } from '@/services/api';
 import { useSharing } from '@/hooks/useSharing';
+import { useToast } from '@/components/Toast';
 import type { Album, Playlist, Song } from '@/services/types';
 import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
@@ -187,7 +188,15 @@ export default function HomeScreen() {
   const { data: playlists, loading: playlistsLoading, error: playlistsError, refetch: reloadPlaylists } = usePlaylists();
   const { data: songs, loading: songsLoading, error: songsError, refetch: reloadSongs } = useSongs();
   const token = useAuthStore((s) => s.token);
-  const { share } = useSharing();
+  const { share, isSharing, shareError, resetError } = useSharing();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (shareError) {
+      toast(shareError, 'error');
+      resetError();
+    }
+  }, [shareError]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [topPicks, setTopPicks] = useState<Song[]>([]);
@@ -284,10 +293,9 @@ export default function HomeScreen() {
     });
   }, [reloadAlbums, reloadPlaylists, reloadSongs, token, songs]);
 
-  const loading = albumsLoading || playlistsLoading || songsLoading;
   const error = albumsError || playlistsError || songsError;
 
-  const initialLoading = loading && !albums.length && !playlists.length && !songs.length;
+  const initialLoading = albumsLoading && playlistsLoading && songsLoading;
 
   const recentSongs = useMemo(() => songs.slice(0, 6), [songs]);
   const featuredAlbums = useMemo(() => albums.slice(0, 6), [albums]);
@@ -297,6 +305,13 @@ export default function HomeScreen() {
     songs.forEach((s, i) => map.set(s.id, i));
     return map;
   }, [songs]);
+
+  const handleShare = useCallback(async (song: Song) => {
+    try {
+      await share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl });
+      toast('Link copied!', 'success');
+    } catch {}
+  }, [share, toast]);
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -350,27 +365,14 @@ export default function HomeScreen() {
           {greeting}
         </Text>
 
-        {initialLoading ? (
-          <View style={{ marginTop: SPACING.xxl }}>
-            <View style={{ marginHorizontal: SPACING.xl }}>
-              <Skeleton width="100%" height={230} borderRadius={RADIUS.xl} />
-            </View>
-            <SectionHeader title="Recently played" />
-            <View style={{ flexDirection: 'row', gap: SPACING.md, paddingLeft: SPACING.xl, paddingRight: SPACING.xl }}>
-              {[1, 2, 3].map((i) => <Skeleton key={i} width={280} height={170} borderRadius={RADIUS.lg} />)}
-            </View>
-            <SectionHeader title="Top picks for you" />
-            <View style={{ paddingHorizontal: SPACING.xl }}>
-              {[1, 2, 3, 4, 5].map((i) => <SongSkeleton key={i} />)}
-            </View>
-          </View>
-        ) : error ? (
+        {error && !songs.length ? (
           <ErrorView message={error} onRetry={onRefresh} />
         ) : (
           <>
+            {/* Weather/mood grid — renders immediately, no data dependency */}
             {(() => {
               const recentIds = usePlayerStore.getState().recentlyPlayed;
-              const mood = deriveMood(recentIds, songs);
+              const mood = songs.length > 0 ? deriveMood(recentIds, songs) : { label: 'Neutral', icon: Music2, color: '#6b7280' };
               const w = weatherData || { icon: (() => { const h = new Date().getHours(); return h >= 6 && h < 18 ? Sun : Moon; })(), label: '...', color: '#6b7280' };
               const WeatherIcon = w.icon;
               const MoodIcon = mood.icon;
@@ -410,30 +412,37 @@ export default function HomeScreen() {
               );
             })()}
 
-            <SectionHeader title="Recently played" />
-            {(() => {
-              const recentIds = usePlayerStore.getState().recentlyPlayed;
-              const playedSongs = recentIds.map((id) => songIndexMap.has(id) ? songs[songIndexMap.get(id)!] : null).filter(Boolean) as Song[];
-              if (playedSongs.length === 0) {
-                return <View style={{ marginHorizontal: SPACING.xl }}><SectionEmpty label="No recently played songs" /></View>;
-              }
-              return (
-                <View style={{ paddingHorizontal: SPACING.xl }}>
-                  {playedSongs.slice(0, 6).map((songItem, i) => (
-                    <AnimatedEntrance key={songItem.id} index={i}>
-                      <SongRow
-                        song={songItem}
-                        index={i}
-                        queue={playedSongs}
-                        isCurrent={current?.id === songItem.id}
-                        onShare={(song) => share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl })}
-                      />
-                    </AnimatedEntrance>
-                  ))}
-                </View>
-              );
-            })()}
+            {/* Recently played — only when songs are loaded */}
+            {songs.length > 0 && (
+              <>
+                <SectionHeader title="Recently played" />
+                {(() => {
+                  const recentIds = usePlayerStore.getState().recentlyPlayed;
+                  const playedSongs = recentIds.map((id) => songIndexMap.has(id) ? songs[songIndexMap.get(id)!] : null).filter(Boolean) as Song[];
+                  if (playedSongs.length === 0) {
+                    return <View style={{ marginHorizontal: SPACING.xl }}><SectionEmpty label="No recently played songs" /></View>;
+                  }
+                  return (
+                    <View style={{ paddingHorizontal: SPACING.xl }}>
+                      {playedSongs.slice(0, 6).map((songItem, i) => (
+                        <AnimatedEntrance key={songItem.id} index={i}>
+                          <SongRow
+                            song={songItem}
+                            index={i}
+                            queue={playedSongs}
+                            isCurrent={current?.id === songItem.id}
+                            onShare={handleShare}
+                            isSharing={isSharing}
+                          />
+                        </AnimatedEntrance>
+                      ))}
+                    </View>
+                  );
+                })()}
+              </>
+            )}
 
+            {/* Top picks for you — shows skeleton while loading */}
             <SectionHeader title="Top picks for you" />
             <View style={{ paddingHorizontal: SPACING.xl }}>
               {recommendationsLoading ? (
@@ -448,15 +457,17 @@ export default function HomeScreen() {
                       index={i}
                       queue={topPicks}
                       isCurrent={current?.id === songItem.id}
-                      onShare={(song) => share({ contentType: 'song', contentId: song.id, title: song.title, artist: song.artist, imageUrl: song.imageUrl })}
+                      onShare={handleShare}
+                      isSharing={isSharing}
                     />
                   </AnimatedEntrance>
                 ))
-              ) : (
+              ) : songs.length > 0 ? (
                 <SectionEmpty label="No recommendations available" />
-              )}
+              ) : null}
             </View>
 
+            {/* Playlists — independent section */}
             <SectionHeader title="Playlists" />
             {playlistsLoading ? (
               <View style={{ flexDirection: 'row', gap: SPACING.md, paddingLeft: SPACING.xl, paddingRight: SPACING.xl }}>

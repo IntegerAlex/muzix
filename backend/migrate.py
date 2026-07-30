@@ -83,6 +83,12 @@ async def migrate() -> None:
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS idx_songs_genre ON songs(genre);")
         )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_songs_artist_id ON songs(artist_id);")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_songs_album_id ON songs(album_id);")
+        )
 
         # ----- albums -----
         await conn.execute(
@@ -108,6 +114,9 @@ async def migrate() -> None:
         )
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS albums_fts_idx ON albums USING GIN (fts);")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_albums_artist_id ON albums(artist_id);")
         )
 
         # ----- artists -----
