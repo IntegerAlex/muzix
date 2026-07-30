@@ -1,8 +1,7 @@
 import { cachedFetch } from '@/services/cache';
 import { isOnline } from '@/services/networkStatus';
 import { useAuthStore } from '@/store/authStore';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_URL } from '@/lib/config';
 
 const REQUEST_TIMEOUT = 10_000;
 const MAX_RETRIES = 3;

@@ -3,6 +3,8 @@ import { ScrollView, Pressable, Text, View, Alert } from 'react-native';
 import Animated, { useSharedValue, withTiming, Easing, useAnimatedStyle } from 'react-native-reanimated';
 import { Check, Share2 } from '@/lib/icons';
 
+const MAX_LYRICS_LINES = 5;
+
 interface LyricLine {
   time: number; // seconds
   text: string;
@@ -106,8 +108,8 @@ export function LyricsPanel({ lyrics, currentTime, duration, onSeek, onShare }: 
           if (next.has(index)) {
             next.delete(index);
           } else {
-            if (next.size >= 5) {
-              Alert.alert('Maximum lines reached', 'You can select up to 5 lines to share.');
+            if (next.size >= MAX_LYRICS_LINES) {
+              Alert.alert('Maximum lines reached', `You can select up to ${MAX_LYRICS_LINES} lines to share.`);
               return prev;
             }
             next.add(index);

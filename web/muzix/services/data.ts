@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, type ApiSong, type ApiAlbum, type ApiArtist, type ApiPlaylist, type HomeResponse } from '@/services/api';
-import type { Song, Album, Artist, Playlist } from '@/services/types';
+import type { Song, Album, Artist, Playlist, QueryResult } from '@/services/types';
 import { useAuthStore } from '@/store/authStore';
 
 let _songs: Song[] = [];
@@ -158,13 +158,6 @@ export async function apiStream(id: string): Promise<{ url: string }> {
   const token = useAuthStore.getState().token;
   const res = await api.stream(id, token ?? undefined);
   return { url: res.url };
-}
-
-interface QueryResult<T> {
-  data: T;
-  loading: boolean;
-  error: string | null;
-  refetch: () => void;
 }
 
 export function useQuery<T>(fetcher: () => Promise<T>, deps: readonly unknown[], initialData: T): QueryResult<T> {

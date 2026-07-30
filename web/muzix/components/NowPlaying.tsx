@@ -118,6 +118,7 @@ export function NowPlaying() {
     } else {
       pulse.value = withTiming(1, { duration: 500 });
     }
+    return () => { pulse.value = 1; };
   }, [isPlaying, pulse]);
 
   useEffect(() => {

@@ -101,6 +101,8 @@ export default function RootLayout() {
     const handler = (e: PromiseRejectionEvent) => {
       if (e.reason?.name === 'AbortError' || String(e.reason).includes('play() request was interrupted')) {
         e.preventDefault();
+      } else {
+        console.warn('[unhandledrejection]', e.reason);
       }
     };
     window.addEventListener('unhandledrejection', handler);

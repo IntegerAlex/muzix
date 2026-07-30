@@ -177,23 +177,27 @@ function toColors(raw: string[]): [string, string] {
 
 interface AnalyticsSong {
   id: string; title: string; artist: string; album: string;
-  duration_ms: number; colors: string[];
-  artist_id?: string; album_id?: string; image_url?: string;
+  duration_ms?: number; durationMs?: number;
+  colors: string[];
+  artist_id?: string; artistId?: string;
+  album_id?: string; albumId?: string;
+  image_url?: string; imageUrl?: string;
 }
 
 interface AnalyticsItem {
   song: AnalyticsSong;
-  play_count: number;
-  total_listening_ms: number;
-  sessions: number;
+  play_count?: number;
+  playCount?: number;
+  total_listening_ms?: number;
+  sessions?: number;
 }
 
 function mapAnalyticsSong(s: AnalyticsSong): Song {
   return {
     id: s.id, title: s.title, artist: s.artist,
-    artistId: s.artist_id, album: s.album, albumId: s.album_id,
-    duration: '', durationMs: s.duration_ms,
-    colors: toColors(s.colors), imageUrl: s.image_url,
+    artistId: s.artist_id ?? s.artistId ?? '', album: s.album, albumId: s.album_id ?? s.albumId ?? '',
+    duration: '', durationMs: s.duration_ms ?? s.durationMs ?? 0,
+    colors: toColors(s.colors), imageUrl: s.image_url ?? s.imageUrl,
   };
 }
 
@@ -223,6 +227,7 @@ function SkeletonSection({ count = 3 }: { count?: number }) {
 
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
+  const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
   const [stats, setStats] = useState<Stats | null>(null);
   const [topSongs, setTopSongs] = useState<Song[]>([]);
   const [recentSongs, setRecentSongs] = useState<Song[]>([]);
@@ -230,7 +235,7 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadProfile = useCallback(async () => {
+  const loadProfile = useCallback(async (recentIds: string[]) => {
     const token = useAuthStore.getState().token;
     if (!token) { setLoading(false); return; }
     try {
@@ -246,12 +251,11 @@ export default function ProfileScreen() {
       const allSongs = getSongs();
       const songMap = new Map(allSongs.map((s) => [s.id, s]));
 
-      const recIds = usePlayerStore.getState().recentlyPlayed;
-      const recentSongsMapped = recIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
+      const recentSongsMapped = recentIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
       const likedSongIds = likesRes?.songIds ?? [];
       const likedSongsMapped = likedSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
 
-      const totalPlays = topItems.reduce((sum, item) => sum + Number(item.play_count ?? 0), 0);
+      const totalPlays = topItems.reduce((sum, item) => sum + Number(item.play_count ?? item.playCount ?? 0), 0);
       const totalListeningMs = topItems.reduce((sum, item) => sum + Number(item.total_listening_ms ?? 0), 0);
 
       setStats({
@@ -270,18 +274,18 @@ export default function ProfileScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadProfile();
+    await loadProfile(recentlyPlayed);
     setRefreshing(false);
-  }, [loadProfile]);
+  }, [loadProfile, recentlyPlayed]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      await loadProfile();
+      await loadProfile(recentlyPlayed);
       if (cancelled) return;
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [loadProfile, recentlyPlayed]);
 
   const handleLogout = useCallback(() => {
     logout();

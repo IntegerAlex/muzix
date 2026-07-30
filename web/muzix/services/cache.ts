@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { safeStorage } from '@/store/storage';
+import { API_URL } from '@/lib/config';
 
 function getAuthStore() {
   return require('@/store/authStore').useAuthStore;
@@ -139,10 +140,22 @@ export async function cachedFetch<T>(path: string, token?: string, ttlMs?: numbe
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (cached?.etag) headers['If-None-Match'] = cached.etag;
 
-  const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS = [1_000, 2_000, 4_000];
 
   try {
-    const res = await fetch(`${API_URL}${path}`, { headers });
+    let res: Response | undefined;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        res = await fetch(`${API_URL}${path}`, { headers });
+        break;
+      } catch (netErr) {
+        if (attempt === MAX_RETRIES) throw netErr;
+        await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
+      }
+    }
+
+    if (!res) throw new Error('Network error');
 
     if (res.status === 304 && cached) {
       touchEntry(key);

@@ -42,3 +42,10 @@ export interface Playlist {
   songIds: string[];
   colors: [string, string];
 }
+
+export interface QueryResult<T> {
+  data: T;
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
