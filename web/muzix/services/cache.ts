@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { safeStorage } from '@/store/storage';
 
 function getAuthStore() {
   return require('@/store/authStore').useAuthStore;
@@ -203,17 +204,59 @@ export function cacheStats(): { memoryEntries: number; diskEntries: number } {
   return { memoryEntries: memCache.size, diskEntries: memCache.size };
 }
 
+let _db: any = null;
+
+async function getDb() {
+  if (_db) return _db;
+  if (Platform.OS === 'web') return null;
+  const SQLite = require('expo-sqlite');
+  _db = await SQLite.openDatabaseAsync('muzix-audio.db');
+  await _db.execAsync(`
+    CREATE TABLE IF NOT EXISTS audio_cache (
+      song_id TEXT PRIMARY KEY,
+      local_uri TEXT NOT NULL,
+      size INTEGER NOT NULL DEFAULT 0,
+      downloaded_at INTEGER NOT NULL
+    );
+  `);
+  return _db;
+}
+
+function getAudioDir(): string {
+  const FileSystem = require('expo-file-system');
+  return `${FileSystem.documentDirectory}muzix-audio/`;
+}
+
 export async function downloadToCache(songId: string, url: string): Promise<string> {
   if (Platform.OS === 'web') return url;
   try {
     const FileSystem = require('expo-file-system');
-    const cacheDir = `${FileSystem.cacheDirectory}muzix-audio/`;
-    const info = await FileSystem.getInfoAsync(cacheDir);
-    if (!info.exists) await FileSystem.makeDirectoryAsync(cacheDir, { intermediates: true });
-    const filePath = `${cacheDir}${songId}.m4a`;
-    const fileInfo = await FileSystem.getInfoAsync(filePath);
-    if (fileInfo.exists) return filePath;
+    const audioDir = getAudioDir();
+    const info = await FileSystem.getInfoAsync(audioDir);
+    if (!info.exists) await FileSystem.makeDirectoryAsync(audioDir, { intermediates: true });
+
+    const db = await getDb();
+    if (db) {
+      const row: any = await db.getFirstAsync(
+        'SELECT local_uri FROM audio_cache WHERE song_id = ?', songId
+      );
+      if (row) {
+        const fileCheck = await FileSystem.getInfoAsync(row.local_uri);
+        if (fileCheck.exists) return row.local_uri;
+        await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', songId);
+      }
+    }
+
+    const filePath = `${audioDir}${songId}.m4a`;
     const downloaded = await FileSystem.downloadAsync(url, filePath);
+    const fileInfo = await FileSystem.getInfoAsync(filePath);
+
+    if (db && fileInfo.exists) {
+      await db.runAsync(
+        'INSERT OR REPLACE INTO audio_cache (song_id, local_uri, size, downloaded_at) VALUES (?, ?, ?, ?)',
+        songId, filePath, fileInfo.size ?? 0, Date.now()
+      );
+    }
     return downloaded.uri;
   } catch {
     return url;
@@ -223,10 +266,19 @@ export async function downloadToCache(songId: string, url: string): Promise<stri
 export async function getCachedAudioPath(songId: string): Promise<string | null> {
   if (Platform.OS === 'web') return null;
   try {
+    const db = await getDb();
+    if (!db) return null;
+    const row: any = await db.getFirstAsync(
+      'SELECT local_uri FROM audio_cache WHERE song_id = ?', songId
+    );
+    if (!row) return null;
     const FileSystem = require('expo-file-system');
-    const filePath = `${FileSystem.cacheDirectory}muzix-audio/${songId}.m4a`;
-    const info = await FileSystem.getInfoAsync(filePath);
-    return info.exists ? filePath : null;
+    const info = await FileSystem.getInfoAsync(row.local_uri);
+    if (!info.exists) {
+      await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', songId);
+      return null;
+    }
+    return row.local_uri;
   } catch {
     return null;
   }
