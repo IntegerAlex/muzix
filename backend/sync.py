@@ -1,7 +1,8 @@
 """
 Muzix local sync script.
 
-Reads ID3 tags from local MP3s, uploads them to a PRIVATE Cloudflare R2 bucket,
+Reads ID3 tags from local MP3s, transcodes to AAC 96Kbps,
+uploads them to a PRIVATE Cloudflare R2 bucket,
 and writes metadata rows into the PostgreSQL `songs` table.
 
 Usage:
@@ -13,6 +14,8 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -78,18 +81,33 @@ async def main() -> None:
 
     print(f"[1/4] Reading tags from {path.name} ...")
     tags = extract_tags(str(path))
-    object_key = f"songs/{path.stem}.mp3"
-    tags["r2_object_key"] = object_key
     print(f"      title={tags['title']!r} artist={tags['artist']!r} dur={tags['duration']}")
 
-    print(f"[2/4] Uploading to R2 bucket '{R2_BUCKET}' as {object_key} ...")
-    r2 = get_r2()
-    r2.upload_file(
-        str(path),
-        R2_BUCKET,
-        object_key,
-        ExtraArgs={"ContentType": "audio/mpeg"},
-    )
+    print(f"[2/4] Transcoding to AAC 96Kbps ...")
+    with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", str(path),
+                "-c:a", "aac", "-b:a", "96k",
+                tmp_path,
+            ],
+            capture_output=True, check=True, timeout=120,
+        )
+        object_key = f"songs/{path.stem}.m4a"
+        tags["r2_object_key"] = object_key
+        print(f"[3/4] Uploading to R2 bucket '{R2_BUCKET}' as {object_key} ...")
+        r2 = get_r2()
+        r2.upload_file(
+            tmp_path,
+            R2_BUCKET,
+            object_key,
+            ExtraArgs={"ContentType": "audio/mp4"},
+        )
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
     print("[3/4] Inserting metadata into PostgreSQL ...")
     async with SessionLocal() as session:

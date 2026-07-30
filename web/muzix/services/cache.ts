@@ -210,7 +210,7 @@ export async function downloadToCache(songId: string, url: string): Promise<stri
     const cacheDir = `${FileSystem.cacheDirectory}muzix-audio/`;
     const info = await FileSystem.getInfoAsync(cacheDir);
     if (!info.exists) await FileSystem.makeDirectoryAsync(cacheDir, { intermediates: true });
-    const filePath = `${cacheDir}${songId}.mp3`;
+    const filePath = `${cacheDir}${songId}.m4a`;
     const fileInfo = await FileSystem.getInfoAsync(filePath);
     if (fileInfo.exists) return filePath;
     const downloaded = await FileSystem.downloadAsync(url, filePath);

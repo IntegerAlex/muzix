@@ -41,7 +41,7 @@ def _load_local_songs() -> list[dict]:
             "lyrics": None,
             "colors": colors_from_title(title),
             "r2_object_key": None,
-            "audioUrl": f"http://localhost:8000/assets/audio/{vid_id}.mp3",
+            "audioUrl": f"http://localhost:8000/assets/audio/{vid_id}.m4a",
             "thumbnailUrl": f"http://localhost:8000/assets/thumbnails/{vid_id}.jpg",
         })
     _local_cache["data"] = songs

@@ -279,14 +279,15 @@ def download_song(song: dict, idx: int, total: int) -> dict | None:
         log("WARN", f"[{idx}/{total}] Skip '{yt_title}' ({duration}s out of range)")
         return None
 
-    audio_path = AUDIO_DIR / f"{vid_id}.mp3"
+    audio_path = AUDIO_DIR / f"{vid_id}.m4a"
 
     if not audio_path.exists():
         log("INFO", f"[{idx}/{total}] Downloading: {vid_id} ({duration}s)")
         r = subprocess.run(
             [
                 "yt-dlp",
-                "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K",
+                "--extract-audio", "--audio-format", "m4a",
+                "--postprocessor-args", "ffmpeg:-c:a aac -b:a 96k",
                 "-o", str(AUDIO_DIR / "%(id)s.%(ext)s"),
                 "--no-playlist", "--no-warnings", "--quiet",
                 f"https://www.youtube.com/watch?v={vid_id}",
@@ -416,7 +417,7 @@ async def insert_db(songs: list[dict]):
                         "duration": f"{dur_min}:{dur_sec:02d}",
                         "duration_ms": s["duration"] * 1000,
                         "lyrics": s.get("lyrics"),
-                        "r2_object_key": f"audio/{s['vid_id']}.mp3",
+                        "r2_object_key": f"audio/{s['vid_id']}.m4a",
                         "colors": colors,
                     },
                 )
@@ -484,7 +485,7 @@ def main():
     ok = 0
     for i, s in enumerate(downloaded, 1):
         try:
-            upload_r2(s["audio_path"], f"audio/{s['vid_id']}.mp3", "audio/mpeg")
+            upload_r2(s["audio_path"], f"audio/{s['vid_id']}.m4a", "audio/mp4")
             if s["thumb_path"]:
                 upload_r2(s["thumb_path"], f"thumbnails/{s['vid_id']}.jpg", "image/jpeg")
             ok += 1
