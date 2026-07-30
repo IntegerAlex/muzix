@@ -198,6 +198,15 @@ async def get_current_user(authorization: str | None = Header(None)) -> CurrentU
     return CurrentUser(user_id)
 
 
+async def get_current_user_optional(authorization: str | None = Header(None)) -> CurrentUser | None:
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        return await get_current_user(authorization)
+    except HTTPException:
+        return None
+
+
 async def get_current_user_full(authorization: str | None = Header(None)) -> User:
     """Fetch full User object from DB — only for routes that need it (e.g. /auth/me)."""
     cu = await get_current_user(authorization)

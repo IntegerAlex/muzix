@@ -200,6 +200,27 @@ async def get_recent_activity(user_id: str, limit: int) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Mood computation helpers
+# ---------------------------------------------------------------------------
+
+async def get_genres_since(user_id: str, since: datetime) -> list[str]:
+    """Return genres of songs played by user since the given datetime."""
+    async with SessionLocal() as session:
+        stmt = (
+            select(Song.genre)
+            .join(ListeningEvent, ListeningEvent.song_id == Song.id)
+            .where(
+                ListeningEvent.user_id == user_id,
+                ListeningEvent.started_at >= since,
+                Song.genre.isnot(None),
+                Song.genre != "",
+            )
+        )
+        result = await session.execute(stmt)
+        return [row[0] for row in result.all()]
+
+
+# ---------------------------------------------------------------------------
 # Advanced analytics: skip rate
 # ---------------------------------------------------------------------------
 
