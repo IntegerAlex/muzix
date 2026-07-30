@@ -393,8 +393,10 @@ export default function HomeScreen() {
                     <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }}>
                       <Text fontSize={11} fontWeight="600" color={TEXT_MUTED} textTransform="uppercase" letterSpacing={0.5}>Weather</Text>
                       <View style={{ alignItems: 'flex-end', justifyContent: 'flex-end', flex: 1 }}>
-                        <WeatherIcon size={32} color={w.color} />
-                        {w.temp && <Text style={{ marginTop: 2 }} fontSize={13} fontWeight="700" color={w.color}>{w.temp}</Text>}
+                        <WeatherIcon size={24} color={w.color} />
+                        <Text style={{ marginTop: 4 }} fontSize={13} fontWeight="700" color={w.color}>
+                          {w.temp ? `${w.label} ${w.temp}` : w.label}
+                        </Text>
                       </View>
                     </View>
                   </View>
