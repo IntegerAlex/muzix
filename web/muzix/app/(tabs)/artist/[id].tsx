@@ -4,7 +4,6 @@ import { ActivityIndicator, FlatList, Pressable, View, RefreshControl } from 're
 import { Text } from 'tamagui';
 import { Music, ChevronLeft, UserPlus, UserCheck, Share2 } from '@/lib/icons';
 import { GlassCard } from '@/components/GlassCard';
-import { RADIUS } from '@/lib/sizing';
 import { SPACING } from '@/lib/spacing';
 import { Artwork } from '@/components/Artwork';
 import { SongRow } from '@/components/SongRow';

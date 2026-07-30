@@ -53,7 +53,10 @@ interface SongRowProps {
 export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, subtitle, onShare, isSharing }: SongRowProps) {
   const playSong = usePlayerStore((s) => s.playSong);
   const queueRef = useRef(queue);
-  queueRef.current = queue;
+
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
 
   const handlePress = useCallback(() => {
     playSong(song, queueRef.current, index);

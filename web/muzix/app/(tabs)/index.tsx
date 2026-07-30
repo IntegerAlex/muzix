@@ -1,29 +1,25 @@
 import { memo, useEffect, useMemo, useState, useCallback } from 'react';
 import { Link, type Href } from 'expo-router';
-import { Pressable, ScrollView, View, RefreshControl, Platform } from 'react-native';
+import { Pressable, ScrollView, View, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import { Play, Sun, Moon, Cloud, CloudSun, CloudMoon, CloudRain, CloudLightning, CloudSnow, CloudFog, Zap, Sparkles, Heart, Music2, Angry, Grinning, Happy as HappyIcon, Kissing, Neutral, Pensive, Relieved, Smile, Wink } from '@/lib/icons';
+import { Sun, Moon, Cloud, CloudSun, CloudMoon, CloudRain, CloudLightning, CloudSnow, CloudFog, Music2, Angry, Grinning, Happy as HappyIcon, Kissing, Neutral, Pensive, Relieved, Smile, Wink } from '@/lib/icons';
 import { Text, YStack } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { SongRow } from '@/components/SongRow';
 import { SectionHeader } from '@/components/SectionHeader';
-import { Skeleton, SongSkeleton, CardSkeleton } from '@/components/Skeleton';
+import { Skeleton, SongSkeleton } from '@/components/Skeleton';
 import { useAlbums, usePlaylists, useSongs, reloadAll } from '@/services/data';
 import { api } from '@/services/api';
 import { useSharing } from '@/hooks/useSharing';
 import { useToast } from '@/components/Toast';
-import type { Album, Playlist, Song } from '@/services/types';
+import type { Playlist, Song } from '@/services/types';
 import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { AnimatedEntrance } from '@/lib/useEntrance';
 import { CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, BG } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
-
-function prefetchAlbum(id: string): void {
-  api.album(id).catch((e) => console.error('Failed to prefetch album:', e));
-}
 
 function prefetchPlaylist(id: string): void {
   api.playlist(id).catch((e) => console.error('Failed to prefetch playlist:', e));
@@ -104,49 +100,6 @@ const WideCard = memo(function WideCard({ playlist }: { playlist: Playlist }) {
         </View>
       </Pressable>
     </Link>
-  );
-});
-
-const SquareCard = memo(function SquareCard({ album }: { album: Album }) {
-   return (
-    <Link href={`/album/${album.id}` as Href} asChild>
-      <Pressable
-        onLongPress={() => prefetchAlbum(album.id)}
-        onHoverIn={() => prefetchAlbum(album.id)}
-        style={{ width: '47%' }}
-        accessibilityLabel={`${album.title} by ${album.artist}`}
-        accessibilityRole="button"
-      >
-        <Artwork colors={album.colors} style={{ height: 160, width: '100%' }} radius={RADIUS.lg} />
-        <Text style={{ marginTop: SPACING.sm }} fontSize={13} fontWeight="700" color={TEXT_PRIMARY} numberOfLines={1}>
-          {album.title}
-        </Text>
-        <Text style={{ marginTop: SPACING.xs }} fontSize={11} fontWeight="500" color={TEXT_SECONDARY} numberOfLines={1}>
-          {album.artist}
-        </Text>
-      </Pressable>
-    </Link>
-  );
-});
-
-const QuickCard = memo(function QuickCard({ album, onPress }: { album: Album; onPress: () => void }) {
-   return (
-    <Pressable
-      onPress={onPress}
-      onLongPress={() => prefetchAlbum(album.id)}
-      onHoverIn={() => prefetchAlbum(album.id)}
-      style={{ flexDirection: 'row', alignItems: 'center', overflow: 'hidden', borderRadius: 16, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER }}
-      accessibilityLabel={`Play ${album.title}`}
-      accessibilityRole="button"
-    >
-      <Artwork colors={album.colors} style={{ height: 48, width: 48 }} radius={0} />
-      <Text style={{ flex: 1, paddingHorizontal: SPACING.md }} fontSize={13} fontWeight="700" color={TEXT_PRIMARY} numberOfLines={1}>
-        {album.title}
-      </Text>
-      <View style={{ marginRight: SPACING.md, height: 28, width: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 9999, backgroundColor: BORDER }}>
-        <Play size={12} color={TEXT_PRIMARY} fill={TEXT_PRIMARY} />
-      </View>
-    </Pressable>
   );
 });
 
@@ -238,11 +191,10 @@ const TimeWeatherMoodGrid = memo(function TimeWeatherMoodGrid({ songs, weatherDa
 });
 
 export default function HomeScreen() {
-  const playSong = usePlayerStore((s) => s.playSong);
   const current = usePlayerStore((s) => s.current);
-  const { data: albums, loading: albumsLoading, error: albumsError, refetch: reloadAlbums } = useAlbums();
+  const { error: albumsError, refetch: reloadAlbums } = useAlbums();
   const { data: playlists, loading: playlistsLoading, error: playlistsError, refetch: reloadPlaylists } = usePlaylists();
-  const { data: songs, loading: songsLoading, error: songsError, refetch: reloadSongs } = useSongs();
+  const { data: songs, error: songsError, refetch: reloadSongs } = useSongs();
   const token = useAuthStore((s) => s.token);
   const { share, isSharing, shareError, resetError } = useSharing();
   const { toast } = useToast();
@@ -257,7 +209,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [topPicks, setTopPicks] = useState<Song[]>([]);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
-  const [recommendationsError, setRecommendationsError] = useState<string | null>(null);
+  const [, setRecommendationsError] = useState<string | null>(null);
 
   const [weatherData, setWeatherData] = useState<{ icon: React.ComponentType<{ size: number; color: string }>; label: string; color: string; temp?: string } | null>(null);
 
@@ -352,11 +304,6 @@ export default function HomeScreen() {
   }, [reloadAlbums, reloadPlaylists, reloadSongs, token, songs]);
 
   const error = albumsError || playlistsError || songsError;
-
-  const initialLoading = albumsLoading && playlistsLoading && songsLoading;
-
-  const recentSongs = useMemo(() => songs.slice(0, 6), [songs]);
-  const featuredAlbums = useMemo(() => albums.slice(0, 6), [albums]);
 
   const songIndexMap = useMemo(() => {
     const map = new Map<string, number>();

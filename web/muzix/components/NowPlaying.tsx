@@ -16,7 +16,7 @@ import Animated, {
 import {
   Pause, Play, SkipBack, SkipForward, ChevronDown,
   Shuffle, Repeat, Repeat1, Heart,
-  VolumeX, Volume2, AlertCircle, Maximize2, Minimize2, Share2,
+  VolumeX, Volume2, AlertCircle, Share2,
 } from '@/lib/icons';
 import { View, Text } from 'tamagui';
 import { useShallow } from 'zustand/react/shallow';
@@ -35,7 +35,7 @@ import { useResponsive } from '@/lib/useResponsive';
 
 export function NowPlaying() {
   const insets = useSafeAreaInsets();
-  const { orientation, isDesktop, isTablet, isMobile, width } = useResponsive();
+  const { orientation, isDesktop, isTablet } = useResponsive();
   const isLandscape = orientation === 'landscape';
   const isWide = (isTablet || isDesktop) && isLandscape;
   const [showLyrics, setShowLyrics] = useState(false);
@@ -79,8 +79,8 @@ export function NowPlaying() {
   const [selectedLyrics, setSelectedLyrics] = useState<string[]>([]);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [shareSuccess, setShareSuccess] = useState(false);
-  const { imageRef, generate, shareUri, isGenerating, shareError } = useLyricsSharing();
-  const { share, isSharing: isSharingLink, shareError: shareLinkError, resetError } = useSharing();
+  const { imageRef, generate, isGenerating, shareError } = useLyricsSharing();
+  const { share } = useSharing();
 
   const isLiked = current ? !!likedSongs[current.id] : false;
 

@@ -1,13 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Link, type Href } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, TextInput } from 'react-native';
-import { View, Text, XStack } from 'tamagui';
+import { View, Text } from 'tamagui';
 import { Search, ChevronLeft, ChevronRight, ListMusic, Music, User } from '@/lib/icons';
 import { SongRow } from '@/components/SongRow';
 import { SectionHeader } from '@/components/SectionHeader';
 import { SongSkeleton } from '@/components/Skeleton';
 import { useSearch } from '@/services/data';
-import type { Album, Artist } from '@/services/types';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSharing } from '@/hooks/useSharing';
 import { useToast } from '@/components/Toast';
@@ -46,7 +45,6 @@ export default function SearchScreen() {
 
   const [query, setQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>(loadRecent);
-  const playSong = usePlayerStore((s) => s.playSong);
   const current = usePlayerStore((s) => s.current);
   const { share, isSharing, shareError, resetError } = useSharing();
   const { toast } = useToast();
@@ -296,7 +294,7 @@ export default function SearchScreen() {
               <View style={{ alignItems: 'center', paddingTop: 60 }}>
                 <Search size={48} color={TEXT_MUTED} strokeWidth={1.5} />
                 <Text style={{ marginTop: SPACING.md, textAlign: 'center', fontWeight: '500' }} fontSize={15} color={TEXT_SECONDARY}>
-                  No results for "{query.trim()}"
+                  No results for &quot;{query.trim()}&quot;
                 </Text>
                 <Text style={{ marginTop: SPACING.sm, textAlign: 'center' }} fontSize={13} color={TEXT_MUTED}>
                   Try different keywords or check the spelling
@@ -436,7 +434,7 @@ export default function SearchScreen() {
           <View style={{ alignItems: 'center', paddingTop: 60 }}>
             <Search size={48} color={TEXT_MUTED} strokeWidth={1.5} />
             <Text style={{ marginTop: SPACING.md, textAlign: 'center', fontWeight: '500' }} fontSize={15} color={TEXT_SECONDARY}>
-              No results for "{query.trim()}"
+              No results for &quot;{query.trim()}&quot;
             </Text>
             <Text style={{ marginTop: SPACING.sm, textAlign: 'center' }} fontSize={13} color={TEXT_MUTED}>
               Try different keywords or check the spelling

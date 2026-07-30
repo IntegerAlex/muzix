@@ -248,7 +248,7 @@ export default function LoginScreen() {
             accessibilityRole="button"
           >
             <Text style={{ fontSize: 14, color: TEXT_MUTED }}>
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Text style={{ color: ACCENT, fontWeight: '700' }}>Sign up</Text>
             </Text>
           </Pressable>

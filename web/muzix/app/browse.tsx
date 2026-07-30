@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Text, XStack, YStack } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { SectionHeader } from '@/components/SectionHeader';
-import { Skeleton, CardSkeleton } from '@/components/Skeleton';
+import { Skeleton } from '@/components/Skeleton';
 import { useAlbums, reloadAll } from '@/services/data';
 import { api } from '@/services/api';
 import type { Album } from '@/services/types';
@@ -85,26 +85,6 @@ const FeaturedCard = memo(function FeaturedCard({ album }: { album: Album }) {
           </Text>
         </YStack>
       </View>
-    </Pressable>
-  );
-});
-
-const ChartCard = memo(function ChartCard({ album }: { album: Album }) {
-  const router = useRouter();
-  return (
-    <Pressable
-      onPress={() => router.push(`/album/${album.id}`)}
-      style={{ width: 155 }}
-      accessibilityLabel={`${album.title} by ${album.artist}`}
-      accessibilityRole="button"
-    >
-      <Artwork colors={album.colors} style={{ height: 155, width: 155 }} radius={20} />
-        <Text style={{ marginTop: SPACING.md }} fontSize={13} fontWeight="700" color={TEXT_PRIMARY} numberOfLines={1}>
-        {album.title}
-      </Text>
-      <Text style={{ marginTop: 2 }} fontSize={11} fontWeight="500" color={TEXT_SECONDARY} numberOfLines={1}>
-        {album.artist}
-      </Text>
     </Pressable>
   );
 });

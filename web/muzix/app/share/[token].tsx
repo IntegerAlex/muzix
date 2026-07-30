@@ -48,8 +48,6 @@ export default function ShareScreen() {
 
   useEffect(() => { fetchShare(); }, [fetchShare]);
 
-  const deepLink = data ? `muzix://album/${data.content_id}` : '';
-
   const handleOpenInApp = useCallback(async () => {
     if (!data) return;
     const url = `muzix://album/${data.content_id}`;

@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
 import { Text, View, Animated } from 'react-native';
 import { router, usePathname } from 'expo-router';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { useConnectivity } from '@/hooks/useConnectivity';
@@ -25,7 +25,7 @@ import config from '../tamagui.config';
 import { loadAll } from '@/services/data';
 import { ToastProvider } from '@/components/Toast';
 import { useAuthStore } from '@/store/authStore';
-import { BG, TEXT_PRIMARY, ACCENT, SURFACE_ICON, DANGER, BORDER } from '@/lib/colors';
+import { BG, TEXT_PRIMARY, SURFACE_ICON, DANGER } from '@/lib/colors';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const PUBLIC_ROUTES = ['/login', '/register'];
@@ -147,7 +147,7 @@ export default function RootLayout() {
                 transform: [{ translateY: offlineAnim.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) }],
               }}>
                 <Text style={{ color: TEXT_PRIMARY, fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
-                  You're offline — some features may be limited
+                  You&apos;re offline — some features may be limited
                 </Text>
               </Animated.View>
               <View style={{ flex: 1 }}>

@@ -24,12 +24,6 @@ const GLASS_SHADOW: ViewStyle = Platform.select({
   android: {
     elevation: 6,
   },
-  default: {
-    shadowColor: 'black',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
 });
 
 const PLATFORM_BLUR_STYLE: ViewStyle | undefined = Platform.select({

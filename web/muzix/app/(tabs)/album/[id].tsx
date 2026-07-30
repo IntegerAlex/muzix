@@ -3,7 +3,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { ActivityIndicator, ScrollView, Pressable, View, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from 'tamagui';
-import { Music, ChevronLeft, Share2, Shuffle, Play } from '@/lib/icons';
+import { Music, ChevronLeft, Share2, Shuffle } from '@/lib/icons';
 
 import { GlassCard } from '@/components/GlassCard';
 import { RADIUS } from '@/lib/sizing';
@@ -14,8 +14,7 @@ import { useAlbum, useSongs } from '@/services/data';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSharing } from '@/hooks/useSharing';
 import { useToast } from '@/components/Toast';
-import type { Song } from '@/services/types';
-import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT } from '@/lib/colors';
+import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 
 function AlbumSkeletonView() {
@@ -69,11 +68,6 @@ export default function AlbumDetail() {
     if (!album) return [];
     return allSongs.filter((s) => album.songIds.includes(s.id));
   }, [allSongs, album]);
-
-  const handlePlayAll = useCallback(() => {
-    if (songs.length === 0) return;
-    playSong(songs[0], songs, 0);
-  }, [songs, playSong]);
 
   const handleShuffle = useCallback(() => {
     if (songs.length === 0) return;

@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import { Pressable, ScrollView, RefreshControl } from 'react-native';
 import { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, Text } from 'tamagui';
 import { router } from 'expo-router';
@@ -222,7 +222,6 @@ function SkeletonSection({ count = 3 }: { count?: number }) {
 
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
-  const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
   const [stats, setStats] = useState<Stats | null>(null);
   const [topSongs, setTopSongs] = useState<Song[]>([]);
   const [recentSongs, setRecentSongs] = useState<Song[]>([]);

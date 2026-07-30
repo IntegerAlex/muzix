@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { ScrollView, Pressable, Text, View, Alert } from 'react-native';
 import Animated, { useSharedValue, withTiming, Easing, useAnimatedStyle } from 'react-native-reanimated';
-import { Check, Share2, X } from '@/lib/icons';
+import { Check, Share2 } from '@/lib/icons';
 
 interface LyricLine {
   time: number; // seconds

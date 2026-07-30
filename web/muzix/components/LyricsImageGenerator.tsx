@@ -11,7 +11,7 @@ interface LyricsImageGeneratorProps {
   timestamp?: string;
 }
 
-const { width: screenW, height: screenH } = Dimensions.get('window');
+const { width: screenW } = Dimensions.get('window');
 const W = Math.min(screenW * 0.9, 1080);
 const H = W * 1.7778;
 

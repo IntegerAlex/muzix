@@ -56,7 +56,7 @@ function ToastItem({ toast }: { toast: Toast }) {
   useEffect(() => {
     opacity.value = withTiming(1, { duration: 250, easing: Easing.out(Easing.ease) });
     translateY.value = withTiming(0, { duration: 250, easing: Easing.out(Easing.ease) });
-  }, []);
+  }, [opacity, translateY]);
 
   const style = useAnimatedStyle(() => ({
     opacity: opacity.value,
