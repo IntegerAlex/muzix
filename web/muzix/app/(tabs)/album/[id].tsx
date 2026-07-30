@@ -47,7 +47,7 @@ function AlbumSkeletonView() {
 export default function AlbumDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: album, loading, error, refetch } = useAlbum(id);
-  const { data: allSongs } = useSongs();
+  const { data: allSongs, loading: songsLoading } = useSongs();
   const current = usePlayerStore((s) => s.current);
   const playSong = usePlayerStore((s) => s.playSong);
   const { share, isSharing, shareError, resetError } = useSharing();
@@ -143,7 +143,11 @@ export default function AlbumDetail() {
         </View>
 
         <GlassCard padding={SPACING.lg} style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.xxl, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text fontSize={13} fontWeight="500" color={TEXT_SECONDARY}>{songs.length} songs</Text>
+          {songsLoading ? (
+            <Skeleton width={60} height={14} borderRadius={4} />
+          ) : (
+            <Text fontSize={13} fontWeight="500" color={TEXT_SECONDARY}>{songs.length} songs</Text>
+          )}
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Pressable onPress={handleShare} disabled={isSharing} style={{ borderRadius: 9999, backgroundColor: '#242424', paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }} accessibilityLabel="Share album" accessibilityRole="button">
               {isSharing ? <ActivityIndicator size={14} color={TEXT_PRIMARY} /> : <Share2 size={14} color={TEXT_PRIMARY} />}
@@ -169,7 +173,11 @@ export default function AlbumDetail() {
         </GlassCard>
 
         <View style={{ marginTop: SPACING.lg, paddingHorizontal: SPACING.xs }}>
-          {songs.map((song, index) => (
+          {songsLoading ? (
+            [0, 1, 2, 3, 4].map((i) => (
+              <SongSkeleton key={i} />
+            ))
+          ) : songs.map((song, index) => (
             <SongRow
               key={song.id}
               song={song}
@@ -178,7 +186,7 @@ export default function AlbumDetail() {
               isCurrent={current?.id === song.id}
             />
           ))}
-          {songs.length === 0 && (
+          {!songsLoading && songs.length === 0 && (
             <View style={{ alignItems: 'center', paddingVertical: 40 }}>
               <Music size={40} color={TEXT_MUTED} strokeWidth={1.5} />
               <Text style={{ marginTop: 12 }} fontSize={14} color={TEXT_MUTED}>No songs in this album</Text>

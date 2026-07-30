@@ -32,6 +32,17 @@ async def get_home(request: Request, user=Depends(get_current_user_optional)):
         {**item, "song": _add_thumbnail(item.get("song"))}
         for item in recent.get("items", [])
     ]
+
+    seen_songs: set[str] = set()
+    deduped: list = []
+    for item in recent["items"]:
+        sid = item.get("song_id")
+        if sid and sid in seen_songs:
+            continue
+        if sid:
+            seen_songs.add(sid)
+        deduped.append(item)
+    recent["items"] = deduped
     picks = [
         {**pick, "imageUrl": f"{base}/thumbnails/{pick['id']}.jpg"}
         for pick in picks
