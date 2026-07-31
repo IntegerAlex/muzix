@@ -180,7 +180,11 @@ export const usePlayerStore = create<PlayerState>()(
             patchLyrics(song);
             return;
           }
-          set({ current: null, currentIndex: -1, isPlaying: false, error: null });
+          if (queue.length === 0) {
+            set({ current: null, currentIndex: -1, isPlaying: false, error: null });
+            return;
+          }
+          set({ isPlaying: false, error: null });
           return;
         }
 

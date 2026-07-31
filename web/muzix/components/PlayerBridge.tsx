@@ -257,7 +257,14 @@ export function PlayerBridge() {
     if (RNTP_OWNS_AUDIO) return;
     if (!current) return;
     try {
-      if (isPlaying && !status.playing) player.play();
+      if (isPlaying && !status.playing) {
+        if (status.didJustFinish && status.duration && status.currentTime >= status.duration - 0.05) {
+          player.seekTo(0);
+          didJustFinishRef.current = false;
+          prevTimeRef.current = 0;
+        }
+        player.play();
+      }
       if (!isPlaying && status.playing) player.pause();
     } catch {}
   }, [isPlaying, status.playing, current, player]);
@@ -311,11 +318,11 @@ export function PlayerBridge() {
     if (curr < prevTimeRef.current - 0.5) {
       didJustFinishRef.current = false;
     }
-    if (!didJustFinishRef.current && curr >= status.duration * 0.98) {
+    if (!didJustFinishRef.current && curr >= status.duration * 0.98 && isPlaying) {
       handleTrackComplete();
     }
     prevTimeRef.current = curr;
-  }, [status.currentTime, status.duration, current?.id]);
+  }, [status.currentTime, status.duration, current?.id, isPlaying]);
 
   useEffect(() => {
     if (RNTP_OWNS_AUDIO || seekPosition == null || !current) return;
