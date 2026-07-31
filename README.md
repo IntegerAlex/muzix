@@ -2,9 +2,24 @@
   <img src="logo.png" alt="Muzix" width="120" />
 </p>
 
-# Muzix
+<h1 align="center">Muzix</h1>
 
-Music streaming app with FastAPI backend, PostgreSQL, Cloudflare R2 storage, and Expo (React Native) frontend.
+<p align="center">
+  <img src="https://img.shields.io/badge/Expo-React%20Native-000020?style=flat&logo=expo&logoColor=white" alt="Expo" />
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/Cloudflare-F48120?style=flat&logo=cloudflare&logoColor=white" alt="Cloudflare" />
+  <img src="https://img.shields.io/badge/Zustand-1A1A2E?style=flat&logoColor=white" alt="Zustand" />
+  <img src="https://img.shields.io/badge/Sentry-362D59?style=flat&logo=sentry&logoColor=white" alt="Sentry" />
+  <img src="https://img.shields.io/badge/NumPy-013243?style=flat&logo=numpy&logoColor=white" alt="NumPy" />
+  <img src="https://img.shields.io/badge/SQLite-003B57?style=flat&logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/Argon2-000000?style=flat&logoColor=white" alt="Argon2" />
+</p>
+
+<p align="center">
+  Music streaming app with real-time play tracking, lyrics sharing, and mood-based home dashboard.
+</p>
 
 ## Screenshots
 
