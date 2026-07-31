@@ -11,18 +11,16 @@ function getWebStorage(): Storage | null {
   return null;
 }
 
-function getNativeStorage(): {
-  getItem: (key: string) => Promise<string | null>;
-  setItem: (key: string, value: string) => Promise<void>;
-  removeItem: (key: string) => Promise<void>;
-} | null {
+let _mmkv: any = null;
+function getMMKV(): any {
+  if (_mmkv) return _mmkv;
   try {
-    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-    if (AsyncStorage?.getItem) {
-      return AsyncStorage;
-    }
-  } catch {}
-  return null;
+    const { MMKV } = require('react-native-mmkv');
+    _mmkv = new MMKV({ id: 'muzix' });
+    return _mmkv;
+  } catch {
+    return null;
+  }
 }
 
 export const safeStorage = {
@@ -32,11 +30,9 @@ export const safeStorage = {
       if (w) return w.getItem(key);
       return memoryStorage.get(key) ?? null;
     }
-    const native = getNativeStorage();
-    if (native) {
-      try {
-        return await native.getItem(key);
-      } catch {}
+    const mmkv = getMMKV();
+    if (mmkv) {
+      return mmkv.getString(key) ?? null;
     }
     return memoryStorage.get(key) ?? null;
   },
@@ -48,12 +44,10 @@ export const safeStorage = {
       memoryStorage.set(key, value);
       return;
     }
-    const native = getNativeStorage();
-    if (native) {
-      try {
-        await native.setItem(key, value);
-        return;
-      } catch {}
+    const mmkv = getMMKV();
+    if (mmkv) {
+      mmkv.set(key, value);
+      return;
     }
     memoryStorage.set(key, value);
   },
@@ -65,12 +59,10 @@ export const safeStorage = {
       memoryStorage.delete(key);
       return;
     }
-    const native = getNativeStorage();
-    if (native) {
-      try {
-        await native.removeItem(key);
-        return;
-      } catch {}
+    const mmkv = getMMKV();
+    if (mmkv) {
+      mmkv.delete(key);
+      return;
     }
     memoryStorage.delete(key);
   },
