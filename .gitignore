@@ -73,3 +73,6 @@ android/.gradle/
 # Misc
 *.pem
 *.log
+
+# Planning docs
+PLAN_BACKEND_OPTIMIZATION.md
