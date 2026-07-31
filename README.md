@@ -94,6 +94,10 @@ web/muzix/
 └── lib/               # Colors, spacing, utilities, responsive breakpoints
 ```
 
+## Algorithms
+
+See [`algorithms/`](algorithms/) for documented runtime logic: ALS recommendation engine, Fisher-Yates shuffle, play-time tracking, analytics scoring, caching strategies, and more — 16 algorithms with actual code references, constants, and input/output specs.
+
 ## Features
 
 - **Content sharing:** Generate share links for songs, albums, artists, playlists, lyrics. 30-day token expiry. Web Share API / native share sheet / clipboard fallback.
@@ -105,7 +109,7 @@ web/muzix/
 - **Audio playback:** Uses `expo-audio` for cross-platform playback; downloads audio to cache via `expo-file-system`. Falls back gracefully when native TrackPlayer module is unavailable.
 - **Play time tracking:** Persistent per-song accumulator flushes deltas to `POST /telemetry/duration` every 30s. Survives app backgrounding and restarts.
 - **Queue management:** Slide-up panel with reorder (up/down arrows), remove, clear all.
-- **Keyboard shortcuts (web):** Space=play/pause, arrows=seek, N/P=next/prev, L=like, Q=queue, Esc=close.
+- **Keyboard shortcuts (web):** Space=play/pause, arrows=next/prev, N/P=next/prev, L=like, Q=queue, Esc=close.
 - **Haptic feedback:** Light/medium/success/error on native (no-op on web).
 - **Offline banner:** Persistent top banner when disconnected.
 - **Pull-to-refresh:** All detail screens (album, artist, playlist, profile).
