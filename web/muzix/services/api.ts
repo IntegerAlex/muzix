@@ -3,6 +3,7 @@ import { isOnline } from '@/services/networkStatus';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/lib/config';
 import * as Sentry from '@sentry/react-native';
+import { apiResponseTime, apiError } from '@/services/metrics';
 
 const REQUEST_TIMEOUT = 10_000;
 const MAX_RETRIES = 3;
@@ -113,6 +114,7 @@ interface RequestOptions {
 
 async function requestRaw<T>(path: string, options?: RequestOptions): Promise<T> {
   const url = `${API_URL}${path}`;
+  const start = Date.now();
   const res = await timeoutFetch(url, {
     method: options?.method ?? 'GET',
     headers: {
@@ -121,12 +123,14 @@ async function requestRaw<T>(path: string, options?: RequestOptions): Promise<T>
     },
     body: options?.body,
   });
+  apiResponseTime(path, Date.now() - start);
 
   if (!res.ok) {
     const msg = await parseErrorBody(res);
     if (res.status === 401) {
       handleAuthError();
     }
+    apiError(path, res.status);
     const requestId = res.headers.get('x-request-id');
     if (requestId) {
       Sentry.withScope((scope) => {

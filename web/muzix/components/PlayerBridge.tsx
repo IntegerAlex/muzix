@@ -7,6 +7,7 @@ import { downloadToCache, getCachedAudioPath } from '@/services/cache';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore } from '@/store/authStore';
 import * as playTimeTracker from '@/services/playTimeTracker';
+import { trackPlay } from '@/services/metrics';
 
 const IS_WEB = Platform.OS === 'web';
 const RNTP_OWNS_AUDIO = false;
@@ -199,6 +200,7 @@ export function PlayerBridge() {
         player.volume = volume;
         player.play();
         setPlaying(true);
+        trackPlay();
         playTimeTracker.startPlaying(current.id);
         retryCountRef.current = 0;
         positionTrackRef.current = current.id;

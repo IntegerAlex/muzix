@@ -4,6 +4,7 @@ import type { Song } from '@/services/types';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { safeStorage } from '@/store/storage';
+import { queueDepth } from '@/services/metrics';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -288,6 +289,7 @@ export const usePlayerStore = create<PlayerState>()(
         const newQueue = [...queue, song];
         set({ queue: newQueue });
         saveQueue({ queue: newQueue, currentIndex: get().currentIndex, shuffle: get().shuffle, repeat: get().repeat });
+        queueDepth(newQueue.length);
       },
 
       playNext: (song) => {
@@ -296,6 +298,7 @@ export const usePlayerStore = create<PlayerState>()(
         newQueue.splice(currentIndex + 1, 0, song);
         set({ queue: newQueue });
         saveQueue({ queue: newQueue, currentIndex: get().currentIndex, shuffle: get().shuffle, repeat: get().repeat });
+        queueDepth(newQueue.length);
       },
 
       removeFromQueue: (index) => {
