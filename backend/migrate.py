@@ -435,13 +435,23 @@ async def migrate() -> None:
         )
 
         # ----- song_durations (persistent per-user listening time accumulator) -----
+        await conn.execute(text("""
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'song_durations_song_id_fkey'
+                ) THEN
+                    ALTER TABLE song_durations DROP CONSTRAINT song_durations_song_id_fkey;
+                END IF;
+            END $$;
+        """))
         await conn.execute(
             text(
                 """
                 CREATE TABLE IF NOT EXISTS song_durations (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+                    song_id TEXT NOT NULL,
                     total_ms BIGINT NOT NULL DEFAULT 0,
                     last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     UNIQUE(user_id, song_id)

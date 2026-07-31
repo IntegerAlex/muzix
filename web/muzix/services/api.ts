@@ -421,7 +421,7 @@ export const api = {
   recordDuration: (songId: string, durationMs: number, token: string) =>
     requestAuthed<{ recorded_ms: number }>('/telemetry/duration', token, {
       method: 'POST',
-      body: JSON.stringify({ song_id: songId, session_id: '', duration_ms: durationMs }),
+      body: JSON.stringify({ song_id: songId, duration_ms: durationMs }),
       skipRetry: true,
     }),
 

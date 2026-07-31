@@ -237,7 +237,7 @@ class SongDuration(Base):
 
     id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String(64), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    song_id = Column(String(64), ForeignKey("songs.id", ondelete="CASCADE"), nullable=False, index=True)
+    song_id = Column(String(64), nullable=False, index=True)
     total_ms = Column(BigInteger, default=0, nullable=False)
     last_updated = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

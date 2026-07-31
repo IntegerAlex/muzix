@@ -8,6 +8,7 @@ import orjson
 import re
 import time
 from collections import defaultdict
+from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 from typing import Literal
 
@@ -102,8 +103,14 @@ def compute_etag(data: dict | list) -> str:
     return hashlib.sha256(serialized).hexdigest()[:32]
 
 
+def _json_default(obj):
+    if isinstance(obj, Decimal):
+        return int(obj)
+    raise TypeError(f"Type is not JSON serializable: {type(obj)}")
+
+
 def make_cached_response(body: dict, request: Request) -> Response:
-    serialized = orjson.dumps(body)
+    serialized = orjson.dumps(body, default=_json_default)
     if_none_match = request.headers.get("If-None-Match")
     if not if_none_match:
         etag = compute_etag(body.get("data"))

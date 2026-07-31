@@ -61,10 +61,9 @@ class SessionEndIn(BaseModel):
 
 class DurationIn(BaseModel):
     song_id: str
-    session_id: str
     duration_ms: int
 
-    @field_validator("song_id", "session_id")
+    @field_validator("song_id")
     @classmethod
     def validate_non_empty(cls, v: str) -> str:
         if not v or not v.strip():
