@@ -2,6 +2,16 @@
 
 Music streaming app with FastAPI backend, PostgreSQL, Cloudflare R2 storage, and Expo (React Native) frontend.
 
+## Screenshots
+
+| Home | Search | Library | Profile |
+|------|--------|---------|---------|
+| ![Home](screenshots/home.png) | ![Search](screenshots/search.png) | ![Library](screenshots/library.png) | ![Profile](screenshots/profile.png) |
+
+| Sign In |
+|---------|
+| ![Sign In](screenshots/sign-in.png) |
+
 ## Architecture
 
 ### Backend
