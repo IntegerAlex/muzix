@@ -166,8 +166,16 @@ export const usePlayerStore = create<PlayerState>()(
             if (!song) return;
             set({ current: song, currentIndex: 0, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + song.durationMs });
             patchLyrics(song);
-            driveSkipToIndex(0);
+            return;
           }
+          if (repeat === 'one') {
+            const song = queue[currentIndex];
+            if (!song) return;
+            set({ history: [...get().history, currentIndex], error: null });
+            patchLyrics(song);
+            return;
+          }
+          set({ current: null, currentIndex: -1, isPlaying: false, error: null });
           return;
         }
 
@@ -320,8 +328,8 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       clearQueue: () => {
-        set({ queue: [], currentIndex: 0 });
-        saveQueue({ queue: [], currentIndex: 0, shuffle: get().shuffle, repeat: get().repeat });
+        set({ queue: [], currentIndex: -1, current: null, isPlaying: false });
+        saveQueue({ queue: [], currentIndex: -1, shuffle: get().shuffle, repeat: get().repeat });
       },
 
       shuffleQueue: () => {

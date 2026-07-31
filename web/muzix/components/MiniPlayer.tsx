@@ -9,6 +9,7 @@ import Animated, {
   useSharedValue,
   withSpring,
   withTiming,
+  cancelAnimation,
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
@@ -80,6 +81,11 @@ export function MiniPlayer() {
       progress.value = withTiming(1, { duration: current.durationMs, easing: Easing.linear });
     }
   }, [current?.id, loadingId]);
+
+  useEffect(() => {
+    if (!current || isPlaying) return;
+    cancelAnimation(progress);
+  }, [isPlaying, current?.id]);
 
   useEffect(() => {
     if (!current || !isPlaying) return;

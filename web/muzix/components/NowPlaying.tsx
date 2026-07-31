@@ -11,6 +11,7 @@ import Animated, {
   withRepeat,
   withTiming,
   withSpring,
+  cancelAnimation,
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
@@ -129,14 +130,17 @@ export function NowPlaying() {
   }, [current?.id, loadingId]);
 
   useEffect(() => {
+    if (!current || isPlaying) return;
+    cancelAnimation(progress);
+  }, [isPlaying, current?.id]);
+
+  useEffect(() => {
     if (!current || error) return;
     if (isPlaying && loadingId !== current.id) {
       const remainingMs = (1 - progress.value) * current.durationMs;
       if (remainingMs > 0) {
         progress.value = withTiming(1, { duration: remainingMs, easing: Easing.linear });
       }
-    } else {
-      progress.value = progress.value;
     }
   }, [isPlaying, loadingId]);
 
