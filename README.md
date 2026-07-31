@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="Muzix" width="120" />
+</p>
+
 # Muzix
 
 Music streaming app with FastAPI backend, PostgreSQL, Cloudflare R2 storage, and Expo (React Native) frontend.
