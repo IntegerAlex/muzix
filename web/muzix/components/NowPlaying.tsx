@@ -241,7 +241,7 @@ export function NowPlaying() {
                   />
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                     <Text fontSize={11} fontWeight="500" color="rgba(255,255,255,0.4)">
-                      {scrubbing ? formatTime(scrubValue * current.durationMs) : elapsedText}
+                      {scrubbing ? formatTime(scrubValue * durationMs) : elapsedText}
                     </Text>
                     <Text fontSize={11} fontWeight="500" color="rgba(255,255,255,0.4)">{current.duration}</Text>
                   </View>
@@ -627,7 +627,7 @@ export function NowPlaying() {
               />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text fontSize={11} fontWeight="500" color="rgba(255,255,255,0.4)">
-                  {scrubbing ? formatTime(scrubValue * current.durationMs) : elapsedText}
+                  {scrubbing ? formatTime(scrubValue * durationMs) : elapsedText}
                 </Text>
                 <Text fontSize={11} fontWeight="500" color="rgba(255,255,255,0.4)">{current.duration}</Text>
               </View>

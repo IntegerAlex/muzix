@@ -313,15 +313,15 @@ export function PlayerBridge() {
     prevTimeRef.current = curr;
   }, [status.currentTime, status.duration, current?.id]);
 
-  const lastSeekRef = useRef(seekPosition);
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO || seekPosition == null || !current || seekPosition === lastSeekRef.current) return;
-    lastSeekRef.current = seekPosition;
-    recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'seek', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: current.durationMs > 0 ? Math.round((seekPosition / current.durationMs) * 100) : 0 });
+    if (RNTP_OWNS_AUDIO || seekPosition == null || !current) return;
     const clampedFraction = Math.max(0, Math.min(seekPosition, 1));
-    player.seekTo((clampedFraction * (current.durationMs ?? 0)) / 1000);
+    const durationSec = status.duration > 0 ? status.duration : (current.durationMs ?? 0) / 1000;
+    player.seekTo(clampedFraction * durationSec);
+    usePlayerStore.getState().setPlaybackPosition(clampedFraction * durationSec * 1000, durationSec);
+    recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'seek', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: current.durationMs > 0 ? Math.round(clampedFraction * 100) : 0 });
     setSeekPosition(null);
-  }, [seekPosition, current, player, setSeekPosition]);
+  }, [seekPosition, current, player, status.duration, setSeekPosition]);
 
   useEffect(() => {
     if (RNTP_OWNS_AUDIO) return;
