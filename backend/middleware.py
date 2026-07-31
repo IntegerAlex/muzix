@@ -35,6 +35,11 @@ class SecurityMiddleware:
         request = Request(scope, receive)
         origin = request.headers.get("origin")
 
+        # Strip propagated trace context headers from frontend to avoid
+        # unintentional parent-child span relationships in Logfire.
+        for h in ("traceparent", "tracestate", "server-timing"):
+            scope["headers"] = [(k, v) for k, v in scope.get("headers", []) if k != h.encode()]
+
         if request.method == "OPTIONS":
             if not _origin_allowed(origin):
                 response = Response(status_code=403, content="Origin not allowed")
