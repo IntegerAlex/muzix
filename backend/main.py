@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from fastapi.exceptions import HTTPException
+import logfire
 
 logger = logging.getLogger("muzix")
 
@@ -28,6 +29,15 @@ async def lifespan(app: FastAPI):
 
 # --- App ---
 app = FastAPI(title="Muzix API", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+
+# --- Logfire ---
+logfire.configure()
+logfire.instrument_fastapi(
+    app,
+    request_attributes_mapper=lambda req, attrs: (
+        {"errors": attrs["errors"]} if attrs["errors"] else {}
+    ),
+)
 
 # --- Middleware ---
 app.add_middleware(SecurityMiddleware)
