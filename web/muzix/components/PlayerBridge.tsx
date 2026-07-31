@@ -346,7 +346,10 @@ export function PlayerBridge() {
   }, [seekPosition, current, player, status.duration, setSeekPosition]);
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO) return;
+    if (RNTP_OWNS_AUDIO || !IS_WEB) return;
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.maxTouchPoints > 0 && /Macintosh/.test(ua));
+    if (isIOS) return;
     try {
       player.volume = volume;
     } catch {}

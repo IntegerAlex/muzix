@@ -1,7 +1,7 @@
 """Listening event repository: database operations for telemetry/analytics."""
 import uuid
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import select, func, case
+from sqlalchemy import BigInteger, select, func, case
 from db import SessionLocal
 from models import ListeningEvent, Song, UserSession, SongDuration
 
@@ -103,7 +103,7 @@ async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
             Song.duration_ms.label("song_duration_ms"),
             Song.colors.label("song_colors"),
             func.count(ListeningEvent.id).label("play_count"),
-            func.coalesce(func.sum(SongDuration.total_ms), 0).label("total_ms"),
+            func.coalesce(func.cast(func.sum(SongDuration.total_ms), BigInteger), 0).label("total_ms"),
             func.count(func.distinct(ListeningEvent.session_id)).label("sessions"),
         ).select_from(
             ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True).outerjoin(
@@ -154,7 +154,7 @@ async def get_stats(user_id: str, period: str, since: datetime | None = None) ->
     async with SessionLocal() as session:
         stats_result = await session.execute(
             select(
-                func.coalesce(func.sum(SongDuration.total_ms), 0).label("total_ms"),
+                func.coalesce(func.cast(func.sum(SongDuration.total_ms), BigInteger), 0).label("total_ms"),
                 func.count(func.distinct(ListeningEvent.song_id)).label("unique_songs"),
                 func.count(ListeningEvent.id).label("total_plays"),
             ).select_from(

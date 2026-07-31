@@ -23,6 +23,8 @@ from db import engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from migrate import migrate as run_migrate
+    await run_migrate()
     yield
     await engine.dispose()
 
@@ -53,6 +55,7 @@ if THUMB_DIR.exists():
 # --- Exception handlers ---
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    from middleware import _origin_allowed
     status_code = exc.status_code
     if status_code >= 500:
         body = {"status": "exception", "data": [], "message": exc.detail or "Internal server error", "meta": {}}
@@ -60,14 +63,29 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         body = {"status": "failed", "data": [], "message": "Not Modified", "meta": {}}
     else:
         body = {"status": "failed", "data": [], "message": exc.detail or "Failed", "meta": {}}
-    return Response(content=orjson.dumps(body), media_type="application/json", status_code=status_code, headers=exc.headers)
+    origin = request.headers.get("origin")
+    headers = dict(exc.headers) if exc.headers else {}
+    if _origin_allowed(origin):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        vary = headers.get("Vary", "")
+        if "Origin" not in vary:
+            headers["Vary"] = f"{vary}, Origin".strip(", ") if vary else "Origin"
+    return Response(content=orjson.dumps(body), media_type="application/json", status_code=status_code, headers=headers)
 
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    from middleware import _origin_allowed
     body = {"status": "exception", "data": [], "message": "Internal server error", "meta": {}}
-    return Response(content=orjson.dumps(body), media_type="application/json", status_code=500)
+    origin = request.headers.get("origin")
+    headers = {"Content-Type": "application/json"}
+    if _origin_allowed(origin):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
+    return Response(content=orjson.dumps(body), media_type="application/json", status_code=500, headers=headers)
 
 
 # --- Routes ---
