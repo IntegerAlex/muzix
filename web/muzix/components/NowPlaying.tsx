@@ -1,19 +1,16 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
-  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
   withSpring,
-  cancelAnimation,
   Easing,
-  runOnJS,
 } from 'react-native-reanimated';
 import {
   Pause, Play, SkipBack, SkipForward, ChevronDown,
@@ -71,43 +68,27 @@ export function NowPlaying() {
   );
 
   const pulse = useSharedValue(1);
-  const progress = useSharedValue(0);
-  const lastSeek = useRef<number | null>(null);
-  const [elapsedText, setElapsedText] = useState('0:00');
-  const [progressPct, setProgressPct] = useState(0);
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubValue, setScrubValue] = useState(0);
-  const [currentTimeSec, setCurrentTimeSec] = useState(0);
   const [selectedLyrics, setSelectedLyrics] = useState<string[]>([]);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [shareSuccess, setShareSuccess] = useState(false);
   const { imageRef, generate, isGenerating, shareError } = useLyricsSharing();
   const { share } = useSharing();
 
+  const positionMs = usePlayerStore((s) => s.positionMs);
+  const durationSec = usePlayerStore((s) => s.durationSec);
+
   const isLiked = current ? !!likedSongs[current.id] : false;
+
+  const durationMs = durationSec > 0 ? durationSec * 1000 : (current?.durationMs ?? 0);
+  const progressPct = durationMs > 0 ? Math.min(100, Math.round((positionMs / durationMs) * 100)) : 0;
+  const elapsedText = formatTime(Math.min(positionMs, durationMs || positionMs));
+  const currentTimeSec = positionMs / 1000;
 
   const upNext = useMemo(
     () => queue.slice(currentIndex + 1, currentIndex + 4),
     [queue, currentIndex]
-  );
-
-  const updateElapsed = (value: number) => {
-    if (current) {
-      setElapsedText(formatTime(value * current.durationMs));
-      setCurrentTimeSec(value * (current.durationMs / 1000));
-    }
-  };
-
-  useAnimatedReaction(
-    () => progress.value,
-    (value) => runOnJS(updateElapsed)(value)
-  );
-
-  useAnimatedReaction(
-    () => progress.value,
-    (v) => {
-      if (!scrubbing) runOnJS(setProgressPct)(Math.round(v * 100));
-    }
   );
 
   useEffect(() => {
@@ -122,41 +103,7 @@ export function NowPlaying() {
     return () => { pulse.value = 1; };
   }, [isPlaying, pulse]);
 
-  useEffect(() => {
-    progress.value = 0;
-    if (current && isPlaying && !error && loadingId !== current.id) {
-      progress.value = withTiming(1, { duration: current.durationMs, easing: Easing.linear });
-    }
-  }, [current?.id, loadingId]);
-
-  useEffect(() => {
-    if (!current || isPlaying) return;
-    cancelAnimation(progress);
-  }, [isPlaying, current?.id]);
-
-  useEffect(() => {
-    if (!current || error) return;
-    if (isPlaying && loadingId !== current.id) {
-      const remainingMs = (1 - progress.value) * current.durationMs;
-      if (remainingMs > 0) {
-        progress.value = withTiming(1, { duration: remainingMs, easing: Easing.linear });
-      }
-    }
-  }, [isPlaying, loadingId]);
-
   const seekPosition = usePlayerStore((s) => s.seekPosition);
-
-  useEffect(() => {
-    if (seekPosition == null || !current) return;
-    if (seekPosition === lastSeek.current) return;
-    lastSeek.current = seekPosition;
-    const fraction = Math.min(1, Math.max(0, seekPosition));
-    progress.value = fraction;
-    if (isPlaying && loadingId !== current.id) {
-      const remainingMs = (1 - fraction) * current.durationMs;
-      progress.value = withTiming(1, { duration: remainingMs, easing: Easing.linear });
-    }
-  }, [seekPosition, current, isPlaying, progress, loadingId]);
 
   useEffect(() => {
     if (selectedLyrics.length > 0) {
@@ -289,8 +236,6 @@ export function NowPlaying() {
                     onSlidingComplete={(v) => {
                       setScrubbing(false);
                       setSeekPosition(v);
-                      setProgressPct(Math.round(v * 100));
-                      if (current) setElapsedText(formatTime(v * current.durationMs));
                     }}
                     style={{ flex: 1, height: 28 }}
                   />
@@ -676,8 +621,6 @@ export function NowPlaying() {
                 onSlidingComplete={(v) => {
                   setScrubbing(false);
                   setSeekPosition(v);
-                  setProgressPct(Math.round(v * 100));
-                  if (current) setElapsedText(formatTime(v * current.durationMs));
                 }}
                 style={{ flex: 1, height: 28 }}
                 accessibilityLabel="Seek"

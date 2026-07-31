@@ -47,6 +47,8 @@ interface PlayerState {
   error: string | null;
   volume: number;
   seekPosition: number | null;
+  positionMs: number;
+  durationSec: number;
   connectionStatus: 'online' | 'offline';
   totalPlays: number;
   totalListeningMs: number;
@@ -72,6 +74,7 @@ interface PlayerState {
   removeHistoryTop: () => void;
   setVolume: (v: number) => void;
   setSeekPosition: (v: number | null) => void;
+  setPlaybackPosition: (positionMs: number, durationSec: number) => void;
   setConnectionStatus: (status: 'online' | 'offline') => void;
   retry: () => void;
 }
@@ -116,6 +119,8 @@ export const usePlayerStore = create<PlayerState>()(
       likedSongs: {},
       volume: 0.7,
       seekPosition: null,
+      positionMs: 0,
+      durationSec: 0,
       error: null,
       connectionStatus: 'online',
       totalPlays: 0,
@@ -356,6 +361,10 @@ export const usePlayerStore = create<PlayerState>()(
 
       setSeekPosition: (v) => {
         set({ seekPosition: v });
+      },
+
+      setPlaybackPosition: (positionMs, durationSec) => {
+        set({ positionMs, durationSec });
       },
 
       setConnectionStatus: (status) => set({ connectionStatus: status }),

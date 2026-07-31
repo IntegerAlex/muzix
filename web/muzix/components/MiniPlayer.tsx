@@ -1,17 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { ActivityIndicator, Pressable } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
-  useAnimatedReaction,
   useAnimatedStyle,
-  useDerivedValue,
   useSharedValue,
   withSpring,
   withTiming,
-  cancelAnimation,
   Easing,
-  runOnJS,
 } from 'react-native-reanimated';
 import { Pause, Play, SkipBack, SkipForward, Share2 } from '@/lib/icons';
 import { View, Text } from 'tamagui';
@@ -32,6 +28,8 @@ export function MiniPlayer() {
   const showNowPlaying = usePlayerStore((s) => s.showNowPlaying);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const loadingId = usePlayerStore((s) => s.loadingId);
+  const positionMs = usePlayerStore((s) => s.positionMs);
+  const durationSec = usePlayerStore((s) => s.durationSec);
   const setPlaying = usePlayerStore((s) => s.setPlaying);
   const setShowNowPlaying = usePlayerStore((s) => s.setShowNowPlaying);
   const next = usePlayerStore((s) => s.next);
@@ -39,31 +37,14 @@ export function MiniPlayer() {
 
   const translateY = useSharedValue(100);
   const opacity = useSharedValue(0);
-  const progress = useSharedValue(0);
-  const [elapsedText, setElapsedText] = useState('0:00');
-  const [progressPct, setProgressPct] = useState(0);
   const { isDesktop } = useResponsive();
   const { share, isSharing } = useSharing();
 
   const isLoading = current ? loadingId === current.id : false;
 
-  const updateElapsed = (value: number) => {
-    if (current) setElapsedText(formatTime(value * current.durationMs));
-  };
-
-  const elapsed = useDerivedValue(() =>
-    current ? progress.value * current.durationMs : 0
-  );
-
-  useAnimatedReaction(
-    () => elapsed.value,
-    (value) => runOnJS(updateElapsed)(value / (current?.durationMs ?? 1))
-  );
-
-  useAnimatedReaction(
-    () => progress.value,
-    (v) => runOnJS(setProgressPct)(Math.round(v * 100))
-  );
+  const durationMs = durationSec > 0 ? durationSec * 1000 : (current?.durationMs ?? 0);
+  const progressPct = durationMs > 0 ? Math.min(100, Math.round((positionMs / durationMs) * 100)) : 0;
+  const elapsedText = formatTime(Math.min(positionMs, durationMs || positionMs));
 
   useEffect(() => {
     if (current && !showNowPlaying) {
@@ -74,27 +55,6 @@ export function MiniPlayer() {
       opacity.value = withTiming(0, { duration: 200 });
     }
   }, [current, showNowPlaying, translateY, opacity]);
-
-  useEffect(() => {
-    progress.value = 0;
-    if (current && isPlaying && loadingId !== current.id) {
-      progress.value = withTiming(1, { duration: current.durationMs, easing: Easing.linear });
-    }
-  }, [current?.id, loadingId]);
-
-  useEffect(() => {
-    if (!current || isPlaying) return;
-    cancelAnimation(progress);
-  }, [isPlaying, current?.id]);
-
-  useEffect(() => {
-    if (!current || !isPlaying) return;
-    if (loadingId === current.id) return;
-    const remainingMs = (1 - progress.value) * current.durationMs;
-    if (remainingMs > 0) {
-      progress.value = withTiming(1, { duration: remainingMs, easing: Easing.linear });
-    }
-  }, [isPlaying, loadingId]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],

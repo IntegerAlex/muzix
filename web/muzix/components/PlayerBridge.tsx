@@ -131,7 +131,7 @@ function releasePreloaded(url: string) {
 }
 
 export function PlayerBridge() {
-  const player = useAudioPlayer();
+  const player = useAudioPlayer(null, { updateInterval: 250 });
   const status = useAudioPlayerStatus(player);
 
   const current = usePlayerStore((s) => s.current);
@@ -150,6 +150,7 @@ export function PlayerBridge() {
   const retryCountRef = useRef(0);
   const bufferedTrackRef = useRef<string | null>(null);
   const bufferedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const positionTrackRef = useRef<string | null>(null);
   const MAX_RETRIES = 3;
 
   useEffect(() => { recordSessionStart(); }, []);
@@ -191,6 +192,7 @@ export function PlayerBridge() {
         setPlaying(true);
         playStartRef.current = new Date();
         retryCountRef.current = 0;
+        positionTrackRef.current = current.id;
         usePlayerStore.setState({ error: null });
 
         bufferedTrackRef.current = current.id;
@@ -238,6 +240,18 @@ export function PlayerBridge() {
       bufferedTrackRef.current = null;
     }
   }, [status.currentTime, current?.id]);
+
+  useEffect(() => {
+    if (RNTP_OWNS_AUDIO || !current) return;
+    if (positionTrackRef.current !== current.id) {
+      usePlayerStore.getState().setPlaybackPosition(0, 0);
+      return;
+    }
+    usePlayerStore.getState().setPlaybackPosition(
+      Math.max(0, Math.round(status.currentTime * 1000)),
+      status.duration ?? 0
+    );
+  }, [status.currentTime, status.duration, current?.id]);
 
   useEffect(() => {
     if (RNTP_OWNS_AUDIO) return;
