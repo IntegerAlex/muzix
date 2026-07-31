@@ -434,6 +434,25 @@ async def migrate() -> None:
             text("CREATE INDEX IF NOT EXISTS idx_user_likes_song ON user_likes(song_id);")
         )
 
+        # ----- song_durations (persistent per-user listening time accumulator) -----
+        await conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS song_durations (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    song_id TEXT NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+                    total_ms BIGINT NOT NULL DEFAULT 0,
+                    last_updated TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE(user_id, song_id)
+                );
+                """
+            )
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_song_durations_user ON song_durations(user_id);")
+        )
+
         # ----- shares -----
         await conn.execute(
             text(

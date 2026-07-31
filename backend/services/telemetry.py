@@ -11,6 +11,12 @@ async def record_events(user_id: str, events: list[dict]) -> int:
     return await event_repo.record_events(user_id, events)
 
 
+async def record_duration(user_id: str, song_id: str, delta_ms: int) -> None:
+    if delta_ms <= 0:
+        return
+    await event_repo.upsert_duration(user_id, song_id, delta_ms)
+
+
 async def start_session(user_id: str, data: dict) -> None:
     sess = UserSession(
         id=data["session_id"],

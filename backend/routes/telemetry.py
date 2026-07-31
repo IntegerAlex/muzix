@@ -59,6 +59,19 @@ class SessionEndIn(BaseModel):
         return v[:128]
 
 
+class DurationIn(BaseModel):
+    song_id: str
+    session_id: str
+    duration_ms: int
+
+    @field_validator("song_id", "session_id")
+    @classmethod
+    def validate_non_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Field must not be empty")
+        return v[:128]
+
+
 @router.post("/events")
 async def record_telemetry_event(events: list[TelemetryEventIn], user=Depends(get_current_user)):
     recorded = await tel_svc.record_events(user.id, [e.model_dump() for e in events])
@@ -75,3 +88,9 @@ async def start_session(data: SessionStartIn, user=Depends(get_current_user)):
 async def end_session(data: SessionEndIn, user=Depends(get_current_user)):
     await tel_svc.end_session(user.id, data.session_id, data.exit_reason)
     return success_resp(data={}, message="Session ended")
+
+
+@router.post("/duration")
+async def record_duration(data: DurationIn, user=Depends(get_current_user)):
+    await tel_svc.record_duration(user.id, data.song_id, data.duration_ms)
+    return success_resp(data={"recorded_ms": data.duration_ms})

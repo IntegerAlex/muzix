@@ -3,7 +3,25 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, func, case
 from db import SessionLocal
-from models import ListeningEvent, Song, UserSession
+from models import ListeningEvent, Song, UserSession, SongDuration
+
+
+async def upsert_duration(user_id: str, song_id: str, delta_ms: int) -> None:
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(SongDuration).where(
+                SongDuration.user_id == user_id,
+                SongDuration.song_id == song_id,
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            row.total_ms += delta_ms
+            row.last_updated = datetime.now(timezone.utc)
+        else:
+            row = SongDuration(user_id=user_id, song_id=song_id, total_ms=delta_ms)
+            session.add(row)
+        await session.commit()
 
 
 async def record_events(user_id: str, events: list[dict]) -> int:
@@ -85,10 +103,14 @@ async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
             Song.duration_ms.label("song_duration_ms"),
             Song.colors.label("song_colors"),
             func.count(ListeningEvent.id).label("play_count"),
-            func.sum(ListeningEvent.duration_played_ms).label("total_ms"),
+            func.coalesce(func.sum(SongDuration.total_ms), 0).label("total_ms"),
             func.count(func.distinct(ListeningEvent.session_id)).label("sessions"),
         ).select_from(
-            ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True)
+            ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True).outerjoin(
+                SongDuration,
+                (ListeningEvent.user_id == SongDuration.user_id)
+                & (ListeningEvent.song_id == SongDuration.song_id),
+            )
         ).where(
             ListeningEvent.user_id == user_id,
             ListeningEvent.event_type == "play",
@@ -132,9 +154,15 @@ async def get_stats(user_id: str, period: str, since: datetime | None = None) ->
     async with SessionLocal() as session:
         stats_result = await session.execute(
             select(
-                func.coalesce(func.sum(ListeningEvent.duration_played_ms), 0).label("total_ms"),
+                func.coalesce(func.sum(SongDuration.total_ms), 0).label("total_ms"),
                 func.count(func.distinct(ListeningEvent.song_id)).label("unique_songs"),
                 func.count(ListeningEvent.id).label("total_plays"),
+            ).select_from(
+                ListeningEvent.__table__.outerjoin(
+                    SongDuration,
+                    (ListeningEvent.user_id == SongDuration.user_id)
+                    & (ListeningEvent.song_id == SongDuration.song_id),
+                )
             ).where(*base_filter)
         )
         stats = stats_result.one()

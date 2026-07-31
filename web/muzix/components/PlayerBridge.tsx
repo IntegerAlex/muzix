@@ -6,6 +6,7 @@ import { api, ApiError } from '@/services/api';
 import { downloadToCache, getCachedAudioPath } from '@/services/cache';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore } from '@/store/authStore';
+import * as playTimeTracker from '@/services/playTimeTracker';
 
 const IS_WEB = Platform.OS === 'web';
 const RNTP_OWNS_AUDIO = false;
@@ -99,8 +100,14 @@ function recordSessionEnd(exitReason = 'user_close') {
 }
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-  window.addEventListener('beforeunload', () => recordSessionEnd('user_close'));
-  window.addEventListener('pagehide', () => recordSessionEnd('background'));
+  window.addEventListener('beforeunload', () => {
+    playTimeTracker.flushDelta();
+    recordSessionEnd('user_close');
+  });
+  window.addEventListener('pagehide', () => {
+    playTimeTracker.flushDelta();
+    recordSessionEnd('background');
+  });
 }
 
 const preloadCache = new Map<string, HTMLAudioElement>();
@@ -144,8 +151,6 @@ export function PlayerBridge() {
   const setLoading = usePlayerStore((s) => s.setLoading);
   const setSeekPosition = usePlayerStore((s) => s.setSeekPosition);
 
-  const lastPlayedMsRef = useRef(0);
-  const playStartRef = useRef<Date | null>(null);
   const currentUrlRef = useRef<string | null>(null);
   const retryCountRef = useRef(0);
   const bufferedTrackRef = useRef<string | null>(null);
@@ -153,7 +158,11 @@ export function PlayerBridge() {
   const positionTrackRef = useRef<string | null>(null);
   const MAX_RETRIES = 3;
 
-  useEffect(() => { recordSessionStart(); }, []);
+  useEffect(() => {
+    recordSessionStart();
+    playTimeTracker.startPeriodicFlush();
+    return () => { playTimeTracker.stopPeriodicFlush(); };
+  }, []);
 
   useEffect(() => {
     if (RNTP_OWNS_AUDIO) return;
@@ -190,7 +199,7 @@ export function PlayerBridge() {
         player.volume = volume;
         player.play();
         setPlaying(true);
-        playStartRef.current = new Date();
+        playTimeTracker.startPlaying(current.id);
         retryCountRef.current = 0;
         positionTrackRef.current = current.id;
         usePlayerStore.setState({ error: null });
@@ -226,6 +235,7 @@ export function PlayerBridge() {
     attemptLoad();
     return () => {
       cancelled = true;
+      playTimeTracker.flushDelta();
       if (bufferedTimeoutRef.current) clearTimeout(bufferedTimeoutRef.current);
       bufferedTimeoutRef.current = null;
     };
@@ -274,14 +284,12 @@ export function PlayerBridge() {
     if (RNTP_OWNS_AUDIO || !current) return;
     if (prevIsPlayingRef.current !== isPlaying) {
       if (isPlaying) {
-        playStartRef.current = new Date();
+        playTimeTracker.startPlaying(current.id);
         recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: 0 });
       } else {
         const now = new Date();
-        const playedMs = playStartRef.current ? now.getTime() - playStartRef.current.getTime() : 0;
-        lastPlayedMsRef.current += playedMs;
-        playStartRef.current = null;
-        recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'pause', started_at: now.toISOString(), ended_at: now.toISOString(), duration_played_ms: playedMs, song_duration_ms: current.durationMs, completion_percentage: current.durationMs > 0 ? Math.round((lastPlayedMsRef.current / current.durationMs) * 100) : 0 });
+        playTimeTracker.pausePlaying();
+        recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'pause', started_at: now.toISOString(), ended_at: now.toISOString(), duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: 0 });
       }
     }
     prevIsPlayingRef.current = isPlaying;
@@ -295,10 +303,12 @@ export function PlayerBridge() {
     didJustFinishRef.current = true;
     recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'complete', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: current.durationMs, song_duration_ms: current.durationMs, completion_percentage: 100 });
     if (usePlayerStore.getState().repeat === 'one') {
+      playTimeTracker.flushDelta(current.id);
       player.seekTo(0);
       player.play();
       return;
     }
+    playTimeTracker.flushDelta(current.id);
     usePlayerStore.getState().next();
   };
 
@@ -328,6 +338,7 @@ export function PlayerBridge() {
     if (RNTP_OWNS_AUDIO || seekPosition == null || !current) return;
     const clampedFraction = Math.max(0, Math.min(seekPosition, 1));
     const durationSec = status.duration > 0 ? status.duration : (current.durationMs ?? 0) / 1000;
+    playTimeTracker.flushDelta(current.id);
     player.seekTo(clampedFraction * durationSec);
     usePlayerStore.getState().setPlaybackPosition(clampedFraction * durationSec * 1000, durationSec);
     recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'seek', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: current.durationMs > 0 ? Math.round(clampedFraction * 100) : 0 });
