@@ -18,7 +18,8 @@ function getMMKV(): any {
     const { MMKV } = require('react-native-mmkv');
     _mmkv = new MMKV({ id: 'muzix' });
     return _mmkv;
-  } catch {
+  } catch (e) {
+    console.warn('[storage] MMKV unavailable, falling back to in-memory:', e);
     return null;
   }
 }

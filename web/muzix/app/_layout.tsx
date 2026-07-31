@@ -99,12 +99,12 @@ function RootLayoutInner() {
 
   useEffect(() => {
     if (loading) return;
-    if (!authed && !isPublic) {
+    if (!authed && !isPublic && isOnline) {
       router.replace('/login');
     } else if (authed && isPublic) {
       router.replace('/');
     }
-  }, [authed, loading, pathname]);
+  }, [authed, loading, pathname, isOnline]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;

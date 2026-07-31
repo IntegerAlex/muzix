@@ -54,7 +54,9 @@ export const useAuthStore = create<AuthState>()(
         setTimeout(() => {
           const { token, tokenExpiresAt } = useAuthStore.getState();
           if (token && tokenExpiresAt && Date.now() > tokenExpiresAt) {
-            useAuthStore.getState().logout();
+            if (typeof navigator !== 'undefined' && navigator.onLine) {
+              useAuthStore.getState().logout();
+            }
             return;
           }
           if (token) {
