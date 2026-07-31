@@ -3,6 +3,7 @@ import { Pressable } from 'react-native';
 import { View, Text } from 'tamagui';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, ACCENT, DANGER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
+import * as Sentry from '@sentry/react-native';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -26,7 +27,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary] Caught error:', error, errorInfo);
+    Sentry.withScope((scope) => {
+      scope.setContext('react', { componentStack: errorInfo.componentStack });
+      Sentry.captureException(error);
+    });
     this.props.onError?.(error, errorInfo);
   }
 

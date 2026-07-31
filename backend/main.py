@@ -45,11 +45,13 @@ logfire.instrument_fastapi(
 app.add_middleware(SecurityMiddleware)
 
 # --- Static files (dev only) ---
-from fastapi.staticfiles import StaticFiles
-if AUDIO_DIR.exists():
-    app.mount("/assets/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
-if THUMB_DIR.exists():
-    app.mount("/assets/thumbnails", StaticFiles(directory=str(THUMB_DIR)), name="thumbnails")
+import os as _os
+if _os.getenv("ENV") != "production":
+    from fastapi.staticfiles import StaticFiles
+    if AUDIO_DIR.exists():
+        app.mount("/assets/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
+    if THUMB_DIR.exists():
+        app.mount("/assets/thumbnails", StaticFiles(directory=str(THUMB_DIR)), name="thumbnails")
 
 
 # --- Exception handlers ---
@@ -99,7 +101,6 @@ from routes.likes import router as likes_router
 from routes.stream import router as stream_router
 from routes.thumbnails import router as thumbnails_router
 from routes.search import router as search_router
-from routes.local import router as local_router
 from routes.telemetry import router as telemetry_router
 from routes.analytics import router as analytics_router
 from routes.recommendations import router as recommendations_router
@@ -116,9 +117,14 @@ app.include_router(likes_router)
 app.include_router(stream_router)
 app.include_router(thumbnails_router)
 app.include_router(search_router)
-app.include_router(local_router)
 app.include_router(telemetry_router)
 app.include_router(analytics_router)
 app.include_router(recommendations_router)
 app.include_router(home_router)
 app.include_router(share_router, prefix="/api/share", tags=["share"])
+
+# Dev-only routes: gated behind DEBUG/ENV flag
+import os as _os
+if _os.getenv("ENV") != "production":
+    from routes.local import router as local_router
+    app.include_router(local_router)

@@ -73,6 +73,9 @@ class DurationIn(BaseModel):
 
 @router.post("/events")
 async def record_telemetry_event(events: list[TelemetryEventIn], user=Depends(get_current_user)):
+    if len(events) > 50:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="Maximum 50 events per request")
     recorded = await tel_svc.record_events(user.id, [e.model_dump() for e in events])
     return success_resp(data={"recorded": recorded}, message="Events recorded")
 

@@ -426,7 +426,9 @@ export const api = {
     }),
 
   logError(error: Error, context: string) {
-    console.error(`[MUZIX API] ${context}:`, error);
-    // TODO: Integrate with Sentry or similar
+    Sentry.withScope((scope) => {
+      scope.setTag('api_context', context);
+      Sentry.captureException(error);
+    });
   },
 };

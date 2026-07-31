@@ -236,55 +236,6 @@ export default function RegisterScreen() {
             </Pressable>
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: SPACING.xxl, gap: SPACING.lg }}>
-            <View style={{ flex: 1, height: 1, backgroundColor: BORDER }} />
-            <Text style={{ fontSize: 13, color: TEXT_MUTED }}>or continue with</Text>
-            <View style={{ flex: 1, height: 1, backgroundColor: BORDER }} />
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: SPACING.md, marginTop: SPACING.lg }}>
-            <Pressable
-              style={({ pressed }) => ({
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                backgroundColor: SURFACE,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: BORDER,
-                paddingVertical: 12,
-                opacity: pressed ? 0.7 : 1,
-              })}
-              accessibilityLabel="Sign up with Google"
-              accessibilityRole="button"
-            >
-              <Text style={{ fontSize: 18 }}>G</Text>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: TEXT_SECONDARY }}>Google</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => ({
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                backgroundColor: SURFACE,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: BORDER,
-                paddingVertical: 12,
-                opacity: pressed ? 0.7 : 1,
-              })}
-              accessibilityLabel="Sign up with GitHub"
-              accessibilityRole="button"
-            >
-              <Text style={{ fontSize: 18 }}>⌘</Text>
-              <Text style={{ fontSize: 14, fontWeight: '600', color: TEXT_SECONDARY }}>GitHub</Text>
-            </Pressable>
-          </View>
-
           <Pressable
             onPress={() => router.push('/login')}
             style={{ alignItems: 'center', marginTop: SPACING.xxl }}

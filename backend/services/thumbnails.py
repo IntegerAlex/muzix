@@ -8,6 +8,8 @@ STREAM_CHUNK = 64 * 1024  # 64KB chunks
 
 
 async def get_thumbnail(filename: str) -> tuple[bytes, str]:
+    if '/' in filename or '\\' in filename or '..' in filename or '\0' in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
     key = f"thumbnails/{filename}"
     try:
         obj = await asyncio.to_thread(r2.get_object, Bucket=R2_BUCKET, Key=key)

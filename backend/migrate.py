@@ -48,7 +48,7 @@ async def migrate() -> None:
                     token_hash TEXT NOT NULL UNIQUE,
                     family_id TEXT NOT NULL,
                     expires_at TIMESTAMPTZ NOT NULL,
-                    is_revoked TEXT NOT NULL DEFAULT '0',
+                    is_revoked BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
                 """
@@ -63,6 +63,22 @@ async def migrate() -> None:
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);")
         )
+        # Fix legacy TEXT is_revoked column → BOOLEAN (idempotent)
+        await conn.execute(text("""
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM pg_attribute
+                    WHERE attrelid = 'refresh_tokens'::regclass
+                    AND attname = 'is_revoked'
+                    AND atttypid = 'text'::regtype
+                ) THEN
+                    ALTER TABLE refresh_tokens
+                        ALTER COLUMN is_revoked DROP DEFAULT,
+                        ALTER COLUMN is_revoked TYPE BOOLEAN USING (is_revoked = '1'),
+                        ALTER COLUMN is_revoked SET DEFAULT FALSE;
+                END IF;
+            END $$;
+        """))
 
         # ----- pg_trgm for fuzzy search -----
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm;"))
