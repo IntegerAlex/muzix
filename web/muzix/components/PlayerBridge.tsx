@@ -283,32 +283,36 @@ export function PlayerBridge() {
   const didJustFinishRef = useRef(status.didJustFinish);
   const prevTimeRef = useRef(0);
 
-  useEffect(() => {
-    didJustFinishRef.current = false;
-    prevTimeRef.current = 0;
-  }, [current?.id]);
+  const handleTrackComplete = () => {
+    if (!current) return;
+    didJustFinishRef.current = true;
+    recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'complete', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: current.durationMs, song_duration_ms: current.durationMs, completion_percentage: 100 });
+    if (usePlayerStore.getState().repeat === 'one') {
+      player.seekTo(0);
+      player.play();
+      return;
+    }
+    usePlayerStore.getState().next();
+  };
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO) return;
+    if (RNTP_OWNS_AUDIO || positionTrackRef.current !== current?.id) return;
     if (status.didJustFinish && current && !didJustFinishRef.current) {
-      didJustFinishRef.current = true;
-      recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'complete', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: current.durationMs, song_duration_ms: current.durationMs, completion_percentage: 100 });
-      usePlayerStore.getState().next();
+      handleTrackComplete();
     } else if (!status.didJustFinish) {
       didJustFinishRef.current = false;
     }
   }, [status.didJustFinish, current]);
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO || !current || !status.duration || status.duration <= 0) return;
+    if (RNTP_OWNS_AUDIO || !current || positionTrackRef.current !== current.id) return;
+    if (!status.duration || status.duration <= 0) return;
     const curr = status.currentTime;
     if (curr < prevTimeRef.current - 0.5) {
       didJustFinishRef.current = false;
     }
     if (!didJustFinishRef.current && curr >= status.duration * 0.98) {
-      didJustFinishRef.current = true;
-      recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'complete', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: current.durationMs, song_duration_ms: current.durationMs, completion_percentage: 100 });
-      usePlayerStore.getState().next();
+      handleTrackComplete();
     }
     prevTimeRef.current = curr;
   }, [status.currentTime, status.duration, current?.id]);
