@@ -49,7 +49,16 @@
         }
       ],
       "expo-status-bar",
-      "expo-image"
+      "expo-image",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "muzix",
+          "organization": "payquill"
+        }
+      ],
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true

@@ -2,7 +2,7 @@ import '@tamagui/core/reset.css';
 
 import { NAV_THEME } from '@/lib/theme';
 import { ThemeProvider } from 'expo-router/react-navigation';
-import { Stack } from 'expo-router';
+import { Stack, useNavigationContainerRef } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
 import { Text, View, Animated } from 'react-native';
@@ -27,10 +27,19 @@ import { ToastProvider } from '@/components/Toast';
 import { useAuthStore } from '@/store/authStore';
 import { BG, TEXT_PRIMARY, SURFACE_ICON, DANGER } from '@/lib/colors';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import * as Sentry from '@sentry/react-native';
+import { isRunningInExpoGo } from 'expo';
+
+Sentry.init({
+  dsn: 'https://c0faa5751f993e71d1fb4646f7b8d278@o4511132584574976.ingest.de.sentry.io/4511829268234320',
+  environment: __DEV__ ? 'development' : 'production',
+  tracesSampleRate: __DEV__ ? 1.0 : 0.2,
+  enableNativeFramesTracking: !isRunningInExpoGo(),
+});
 
 const PUBLIC_ROUTES = ['/login', '/register'];
 
-export default function RootLayout() {
+function RootLayoutInner() {
   const colorScheme = useColorScheme();
   const pathname = usePathname();
   const token = useAuthStore((s) => s.token);
@@ -163,3 +172,9 @@ export default function RootLayout() {
     </TamaguiProvider>
   );
 }
+
+const navigationIntegration = Sentry.reactNavigationIntegration({
+  enableTimeToInitialDisplay: !isRunningInExpoGo(),
+});
+
+export default Sentry.wrap(RootLayoutInner);

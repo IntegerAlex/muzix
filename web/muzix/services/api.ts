@@ -2,6 +2,7 @@ import { cachedFetch } from '@/services/cache';
 import { isOnline } from '@/services/networkStatus';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/lib/config';
+import * as Sentry from '@sentry/react-native';
 
 const REQUEST_TIMEOUT = 10_000;
 const MAX_RETRIES = 3;
@@ -126,7 +127,19 @@ async function requestRaw<T>(path: string, options?: RequestOptions): Promise<T>
     if (res.status === 401) {
       handleAuthError();
     }
+    const requestId = res.headers.get('x-request-id');
+    if (requestId) {
+      Sentry.withScope((scope) => {
+        scope.setTag('request_id', requestId);
+        scope.setTag('api_path', path);
+        Sentry.captureMessage(`${classifyError(res.status)} ${res.status}: ${path}`, 'error');
+      });
+    }
     throw new ApiError(res.status, msg, classifyError(res.status));
+  }
+  const requestId = res.headers.get('x-request-id');
+  if (requestId) {
+    Sentry.setTag('request_id', requestId);
   }
   const raw = await res.json();
   return (raw && typeof raw === 'object' && 'data' in raw ? raw.data : raw) as T;

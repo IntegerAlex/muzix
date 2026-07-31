@@ -1,5 +1,7 @@
-"""Security middleware: CORS + security headers as raw ASGI."""
+"""Security middleware: CORS + security headers + X-Request-ID as raw ASGI."""
 from __future__ import annotations
+
+import uuid
 
 from fastapi import Request, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -35,6 +37,9 @@ class SecurityMiddleware:
         request = Request(scope, receive)
         origin = request.headers.get("origin")
 
+        # Use client-sent X-Request-ID if present, otherwise generate one
+        request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+
         # Strip propagated trace context headers from frontend to avoid
         # unintentional parent-child span relationships in Logfire.
         for h in ("traceparent", "tracestate", "server-timing"):
@@ -61,6 +66,7 @@ class SecurityMiddleware:
                     raw_headers = [(k, v) for k, v in raw_headers if k != b"server"]
                     for k, v in SECURITY_HEADERS.items():
                         raw_headers.append((k.lower().encode(), v.encode()))
+                    raw_headers.append((b"x-request-id", request_id.encode()))
                     if _origin_allowed(origin):
                         raw_headers.append((b"access-control-allow-origin", origin.encode()))
                         raw_headers.append((b"access-control-allow-credentials", b"true"))

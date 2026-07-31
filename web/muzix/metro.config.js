@@ -1,7 +1,7 @@
-const { getDefaultConfig } = require('expo/metro-config');
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 const { withTamagui } = require('@tamagui/metro-plugin');
 
-const config = getDefaultConfig(__dirname, { isCSSEnabled: true });
+const config = getSentryExpoConfig(__dirname, { isCSSEnabled: true });
 
 module.exports = withTamagui(config, {
   components: ['tamagui'],
