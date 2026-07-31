@@ -168,8 +168,14 @@ export function useQuery<T>(fetcher: () => Promise<T>, deps: readonly unknown[],
   const [tick, setTick] = useState(0);
   const mountedRef = useRef(true);
   const isFirstRef = useRef(true);
+  const fetchResolveRef = useRef<(() => void) | null>(null);
 
-  const refetch = useCallback(() => { setTick((t) => t + 1); }, []);
+  const refetch = useCallback(() => {
+    setTick((t) => t + 1);
+    return new Promise<void>((resolve) => {
+      fetchResolveRef.current = resolve;
+    });
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -196,6 +202,10 @@ export function useQuery<T>(fetcher: () => Promise<T>, deps: readonly unknown[],
           setError(String(e));
           setLoading(false);
         }
+      })
+      .finally(() => {
+        fetchResolveRef.current?.();
+        fetchResolveRef.current = null;
       });
 
     return () => {
@@ -335,7 +345,7 @@ export function useHome(): QueryResult<HomeResponse> {
   }, [token], null as unknown as HomeResponse);
 }
 
-export function useAlbum(id: string): { data: Album | undefined; loading: boolean; error: string | null; refetch: () => void } {
+export function useAlbum(id: string): { data: Album | undefined; loading: boolean; error: string | null; refetch: () => Promise<void> } {
   const [staleData, setStaleData] = useState<Album | undefined>(() => getAlbum(id));
 
   const { data, loading, error, refetch } = useQuery(async () => {
@@ -350,7 +360,7 @@ export function useAlbum(id: string): { data: Album | undefined; loading: boolea
   return { data: data ?? staleData, loading, error, refetch };
 }
 
-export function useArtist(id: string): { data: Artist | undefined; loading: boolean; error: string | null; refetch: () => void } {
+export function useArtist(id: string): { data: Artist | undefined; loading: boolean; error: string | null; refetch: () => Promise<void> } {
   const [staleData, setStaleData] = useState<Artist | undefined>(() => getArtist(id));
 
   const { data, loading, error, refetch } = useQuery(async () => {
@@ -365,7 +375,7 @@ export function useArtist(id: string): { data: Artist | undefined; loading: bool
   return { data: data ?? staleData, loading, error, refetch };
 }
 
-export function usePlaylist(id: string): { data: Playlist | undefined; loading: boolean; error: string | null; refetch: () => void } {
+export function usePlaylist(id: string): { data: Playlist | undefined; loading: boolean; error: string | null; refetch: () => Promise<void> } {
   const [staleData, setStaleData] = useState<Playlist | undefined>(() => getPlaylist(id));
 
   const { data, loading, error, refetch } = useQuery(async () => {
