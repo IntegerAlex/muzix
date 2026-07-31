@@ -57,8 +57,7 @@
           "project": "muzix",
           "organization": "payquill"
         }
-      ],
-      "@sentry/react-native"
+      ]
     ],
     "experiments": {
       "typedRoutes": true

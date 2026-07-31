@@ -35,7 +35,6 @@ Sentry.init({
   environment: __DEV__ ? 'development' : 'production',
   tracesSampleRate: __DEV__ ? 1.0 : 0.2,
   enableNativeFramesTracking: !isRunningInExpoGo(),
-  _experiments: { enableMetrics: true },
 });
 
 const PUBLIC_ROUTES = ['/login', '/register'];
