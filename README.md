@@ -4,17 +4,17 @@ Music streaming app with FastAPI backend, PostgreSQL, Cloudflare R2 storage, and
 
 ## Screenshots
 
-| Home | Search | Library | Profile |
-|------|--------|---------|---------|
-| ![Home](screenshots/home.png) | ![Search](screenshots/search.png) | ![Library](screenshots/library.png) | ![Profile](screenshots/profile.png) |
+| Search | Library | Profile | Sign In |
+|--------|---------|---------|---------|
+| ![Search](screenshots/search.png) | ![Library](screenshots/library.png) | ![Profile](screenshots/profile.png) | ![Sign In](screenshots/sign-in.png) |
 
-| Player | Mini Player | Lyrics |
-|--------|-------------|--------|
-| ![Player](screenshots/player.png) | ![Mini Player](screenshots/mini-player.png) | ![Lyrics](screenshots/lyrics.png) |
+| Mini Player | Lyrics | Share Link |
+|-------------|--------|------------|
+| ![Mini Player](screenshots/mini-player.png) | ![Lyrics](screenshots/lyrics.png) | ![Share Link](screenshots/sharelink-gen.png) |
 
-| Sign In | Share Link |
-|---------|------------|
-| ![Sign In](screenshots/sign-in.png) | ![Share Link](screenshots/sharelink-gen.png) |
+| Home | Player |
+|------|--------|
+| ![Home](screenshots/home.png) | ![Player](screenshots/player.png) |
 
 ## Architecture
 
