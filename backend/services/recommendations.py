@@ -94,7 +94,6 @@ _item_features_map: dict[str, dict] = {}
 _last_trained_at: datetime | None = None
 _model_version_hash: str = ""
 _training_lock = asyncio.Lock()
-_training_task: Any = None
 _popular_cache: tuple[float, list[dict]] | None = None
 _POPULAR_CACHE_TTL = 60
 
@@ -117,11 +116,9 @@ async def _get_cached_popular(limit: int, base_url: str = "") -> list[dict]:
     return result
 
 
-async def _ensure_model() -> bool:
-    global _model, _user_factors, _item_factors, _user_id_map, _item_id_map, _item_features_map, _last_trained_at, _model_version_hash, _training_lock
+async def train_model() -> bool:
+    global _model, _user_factors, _item_factors, _user_id_map, _item_id_map, _item_features_map, _last_trained_at, _model_version_hash
 
-    if _training_lock.locked():
-        return False
     async with _training_lock:
         return await _train()
 
@@ -201,11 +198,9 @@ def _content_score(song_id: str, user_data: dict) -> float:
 
 
 async def get_recommendations(user_id: str, limit: int = 20, base_url: str = "") -> list[dict]:
-    global _model, _user_factors, _item_factors, _user_id_map, _item_id_map, _training_lock, _training_task
+    global _model, _user_factors, _item_factors, _user_id_map, _item_id_map
 
     if _model is None or _user_factors is None or _item_factors is None:
-        if not _training_lock.locked():
-            _training_task = asyncio.create_task(_ensure_model())
         return await _get_cached_popular(limit, base_url=base_url)
 
     try:

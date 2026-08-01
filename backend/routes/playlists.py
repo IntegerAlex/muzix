@@ -33,10 +33,10 @@ async def create_playlist(body: PlaylistCreate, user=Depends(get_current_user)):
 
 
 @router.get("/playlists")
-async def list_playlists(request: Request, user=Depends(get_current_user), limit: int = 100, offset: int = 0):
+async def list_playlists(request: Request, user=Depends(get_current_user), limit: int = 20, offset: int = 0):
     rate_limit(request, max_requests=60, window=60)
     items, total = await playlist_svc.list_playlists(user, limit, offset)
-    body = success_resp(data=items, message="Playlists retrieved", meta=pagination_meta(total, max(1, min(limit, 500)), max(0, offset)))
+    body = success_resp(data=items, message="Playlists retrieved", meta=pagination_meta(total, max(1, min(limit, 100)), max(0, offset)))
     return make_cached_response(body, request)
 
 

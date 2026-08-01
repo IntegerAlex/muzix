@@ -24,7 +24,9 @@ from db import engine
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from migrate import migrate as run_migrate
+    from services.recommendations import train_model
     await run_migrate()
+    await train_model()
     yield
     await engine.dispose()
 

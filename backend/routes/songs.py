@@ -7,9 +7,9 @@ router = APIRouter()
 
 
 @router.get("/songs")
-async def list_songs(request: Request, limit: int = 100, offset: int = 0):
+async def list_songs(request: Request, limit: int = 20, offset: int = 0):
     rate_limit(request, max_requests=60, window=60)
-    limit = max(1, min(limit, 500))
+    limit = max(1, min(limit, 100))
     offset = max(0, offset)
     base = str(request.base_url).rstrip("/")
     items, total = await song_svc.list_songs(limit, offset, base)

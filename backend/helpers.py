@@ -98,11 +98,6 @@ def rate_limit(request: Request, max_requests: int = 30, window: int = 60):
 # Caching
 # ---------------------------------------------------------------------------
 
-def compute_etag(data: dict | list) -> str:
-    serialized = orjson.dumps(data, option=orjson.OPT_SORT_KEYS)
-    return hashlib.sha256(serialized).hexdigest()[:32]
-
-
 def _json_default(obj):
     if isinstance(obj, Decimal):
         return int(obj)
@@ -113,12 +108,12 @@ def make_cached_response(body: dict, request: Request) -> Response:
     serialized = orjson.dumps(body, default=_json_default)
     if_none_match = request.headers.get("If-None-Match")
     if not if_none_match:
-        etag = compute_etag(body.get("data"))
+        etag = hashlib.sha256(serialized).hexdigest()[:32]
         return Response(content=serialized, media_type="application/json", headers={"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"})
-    raw_data = body.get("data")
-    etag = compute_etag(raw_data)
+    if_none_match = if_none_match.strip('"')
+    etag = hashlib.sha256(serialized).hexdigest()[:32]
     cache_headers = {"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"}
-    if if_none_match.strip('"') == etag:
+    if if_none_match == etag:
         raise HTTPException(status_code=304, headers=cache_headers)
     return Response(content=serialized, media_type="application/json", headers=cache_headers)
 

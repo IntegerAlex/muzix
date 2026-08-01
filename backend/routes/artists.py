@@ -7,9 +7,9 @@ router = APIRouter()
 
 
 @router.get("/artists")
-async def list_artists(request: Request, limit: int = 100, offset: int = 0):
+async def list_artists(request: Request, limit: int = 20, offset: int = 0):
     rate_limit(request, max_requests=60, window=60)
-    limit = max(1, min(limit, 500))
+    limit = max(1, min(limit, 100))
     offset = max(0, offset)
     items, total = await artist_svc.list_artists(limit, offset)
     body = success_resp(data=items, message="Artists retrieved", meta=pagination_meta(total, limit, offset))
