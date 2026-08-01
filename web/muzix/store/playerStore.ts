@@ -1,22 +1,48 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { Song } from '@/services/types';
+import type { Song, QueueItem } from '@/services/types';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { safeStorage } from '@/store/storage';
 import { queueDepth } from '@/services/metrics';
+import { enqueueRequest } from '@/services/offlineQueue';
+import { isOnline } from '@/services/networkStatus';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
 const QUEUE_STORAGE_KEY = 'muzix-queue';
 
+// ---------------------------------------------------------------------------
+// Unique queue-slot identifier. Collides ~never for any realistic queue size.
+// ---------------------------------------------------------------------------
+export function generateQueueItemId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
+}
+
+/** Wrap a plain Song into a QueueItem with a fresh slot ID. */
+function toQueueItem(song: Song): QueueItem {
+  return { ...song, queueItemId: generateQueueItemId() };
+}
+
+/**
+ * Accept either Song[] (from album/playlist screens) or QueueItem[] (from
+ * restore / internal copies). Returns a proper QueueItem[].
+ */
+function ensureQueueItems(songs: (Song | QueueItem)[]): QueueItem[] {
+  return songs.map((s) => ('queueItemId' in s ? (s as QueueItem) : toQueueItem(s)));
+}
+
+// ---------------------------------------------------------------------------
+// Persistence helpers
+// ---------------------------------------------------------------------------
+
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
-function saveQueue(state: { queue: Song[]; currentIndex: number; shuffle: boolean; repeat: RepeatMode }) {
+function saveQueue(state: { queue: QueueItem[]; currentIndex: number; shuffle: boolean; repeat: RepeatMode }) {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
       const data = {
-        queue: state.queue.map(s => s.id),
+        queue: state.queue.map((s) => ({ ...s })),
         currentIndex: state.currentIndex,
         shuffle: state.shuffle,
         repeat: state.repeat,
@@ -26,17 +52,30 @@ function saveQueue(state: { queue: Song[]; currentIndex: number; shuffle: boolea
   }, 500);
 }
 
-async function restoreQueue(): Promise<{ queueIds: string[]; currentIndex: number } | null> {
+export async function restoreQueue(): Promise<{ queue: QueueItem[]; currentIndex: number } | null> {
   try {
     const raw = await safeStorage.getItem(QUEUE_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Accept both old Song[] format (no queueItemId) and new QueueItem[] format.
+    const queue: QueueItem[] = Array.isArray(parsed.queue)
+      ? parsed.queue
+          .filter((s: unknown): s is Song => !!s && typeof s === 'object' && typeof (s as Song).id === 'string')
+          .map((s: Song) => ('queueItemId' in s ? (s as QueueItem) : toQueueItem(s)))
+      : [];
+    if (queue.length === 0) return null;
+    return { queue, currentIndex: parsed.currentIndex ?? 0 };
   } catch { return null; }
 }
 
+// ---------------------------------------------------------------------------
+// Store interface
+// ---------------------------------------------------------------------------
+
 interface PlayerState {
   current: Song | null;
-  queue: Song[];
-  originalQueue: Song[];
+  queue: QueueItem[];
+  originalQueue: QueueItem[];
   currentIndex: number;
   isPlaying: boolean;
   loadingId: string | null;
@@ -55,7 +94,12 @@ interface PlayerState {
   totalListeningMs: number;
   recentlyPlayed: string[];
 
-  playSong: (song: Song, queue?: Song[], index?: number) => void;
+  /**
+   * Start playing a song.
+   * `queue` may be Song[] (from list screens) or QueueItem[] (internal).
+   * Each element will be wrapped into a QueueItem if it isn't one already.
+   */
+  playSong: (song: Song, queue?: (Song | QueueItem)[], index?: number) => void;
   setPlaying: (v: boolean) => void;
   setLoading: (id: string | null) => void;
   setShowNowPlaying: (v: boolean) => void;
@@ -66,9 +110,13 @@ interface PlayerState {
   toggleLike: (songId: string) => void;
   syncLikes: () => Promise<void>;
   syncRecent: () => Promise<void>;
+  /** Append a song to the end of the queue. */
   addToQueue: (song: Song) => void;
+  /** Insert a song immediately after the currently playing track. */
   playNext: (song: Song) => void;
-  removeFromQueue: (index: number) => void;
+  /** Remove the queue slot identified by its unique queueItemId. */
+  removeFromQueue: (queueItemId: string) => void;
+  /** Move a queue slot from one index to another (used by drag-and-drop). */
   reorderQueue: (from: number, to: number) => void;
   clearQueue: () => void;
   shuffleQueue: () => void;
@@ -79,6 +127,10 @@ interface PlayerState {
   setConnectionStatus: (status: 'online' | 'offline') => void;
   retry: () => void;
 }
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
 
 function shuffleArray<T>(arr: T[]): T[] {
   const shuffled = [...arr];
@@ -103,6 +155,10 @@ async function patchLyrics(song: Song): Promise<void> {
     console.warn('Failed to fetch lyrics for', song.title, e);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
 
 export const usePlayerStore = create<PlayerState>()(
   persist(
@@ -129,19 +185,27 @@ export const usePlayerStore = create<PlayerState>()(
       recentlyPlayed: [],
 
       playSong: (song, queue, index) => {
-        const nextQueue = queue ?? get().queue;
-        const nextIndex =
+        const nextQueue: QueueItem[] = queue
+          ? ensureQueueItems(queue)
+          : get().queue.length
+          ? get().queue
+          : [toQueueItem(song)];
+
+        // Find the slot index. Prefer the explicit index; fall back to
+        // finding the first slot whose underlying song.id matches.
+        let resolvedIndex =
           index != null
             ? index
             : nextQueue.findIndex((s) => s.id === song.id);
-        const resolvedIndex = nextIndex >= 0 ? nextIndex : 0;
-        const resolvedQueue = nextQueue.length ? nextQueue : [song];
+        if (resolvedIndex < 0) resolvedIndex = 0;
+
         const recent = get().recentlyPlayed;
         const deduped = [song.id, ...recent.filter((id) => id !== song.id)].slice(0, 50);
+
         set({
           current: song,
-          queue: resolvedQueue,
-          originalQueue: queue ? resolvedQueue : get().originalQueue,
+          queue: nextQueue,
+          originalQueue: queue ? nextQueue : get().originalQueue,
           currentIndex: resolvedIndex,
           isPlaying: true,
           history: [],
@@ -151,7 +215,7 @@ export const usePlayerStore = create<PlayerState>()(
           recentlyPlayed: deduped,
         });
         patchLyrics(song);
-        saveQueue({ queue: resolvedQueue, currentIndex: resolvedIndex, shuffle: get().shuffle, repeat: get().repeat });
+        saveQueue({ queue: nextQueue, currentIndex: resolvedIndex, shuffle: get().shuffle, repeat: get().repeat });
       },
 
       setPlaying: (v) => {
@@ -168,17 +232,17 @@ export const usePlayerStore = create<PlayerState>()(
 
         if (ni >= queue.length) {
           if (repeat === 'all') {
-            const song = queue[0];
-            if (!song) return;
-            set({ current: song, currentIndex: 0, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + song.durationMs });
-            patchLyrics(song);
+            const item = queue[0];
+            if (!item) return;
+            set({ current: item, currentIndex: 0, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + item.durationMs });
+            patchLyrics(item);
             return;
           }
           if (repeat === 'one') {
-            const song = queue[currentIndex];
-            if (!song) return;
+            const item = queue[currentIndex];
+            if (!item) return;
             set({ history: [...get().history, currentIndex], error: null });
-            patchLyrics(song);
+            patchLyrics(item);
             return;
           }
           if (queue.length === 0) {
@@ -189,9 +253,9 @@ export const usePlayerStore = create<PlayerState>()(
           return;
         }
 
-        const song = queue[ni];
-        set({ current: song, currentIndex: ni, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + song.durationMs });
-        patchLyrics(song);
+        const item = queue[ni];
+        set({ current: item, currentIndex: ni, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + item.durationMs });
+        patchLyrics(item);
       },
 
       previous: () => {
@@ -200,18 +264,18 @@ export const usePlayerStore = create<PlayerState>()(
         if (history.length > 0) {
           const newHistory = [...history];
           const prevIndex = newHistory.pop()!;
-          const song = queue[prevIndex];
-          if (song) {
-            set({ current: song, currentIndex: prevIndex, history: newHistory, error: null });
-            patchLyrics(song);
+          const item = queue[prevIndex];
+          if (item) {
+            set({ current: item, currentIndex: prevIndex, history: newHistory, error: null });
+            patchLyrics(item);
             return;
           }
         }
         const pi = Math.max(0, currentIndex - 1);
-        const song = queue[pi];
-        if (!song) return;
-        set({ current: song, currentIndex: pi, error: null });
-        patchLyrics(song);
+        const item = queue[pi];
+        if (!item) return;
+        set({ current: item, currentIndex: pi, error: null });
+        patchLyrics(item);
       },
 
       toggleShuffle: () => {
@@ -219,22 +283,18 @@ export const usePlayerStore = create<PlayerState>()(
         if (!shuffle) {
           const remaining = queue.filter((_, i) => i !== currentIndex);
           const shuffled = shuffleArray(remaining);
-          const newQueue = current ? [current, ...shuffled] : shuffled;
-          set({
-            shuffle: true,
-            queue: newQueue,
-            currentIndex: 0,
-            history: [],
-          });
+          // Keep the current QueueItem in slot 0 so its queueItemId is preserved.
+          const newQueue = current
+            ? [queue[currentIndex] ?? toQueueItem(current), ...shuffled]
+            : shuffled;
+          set({ shuffle: true, queue: newQueue, currentIndex: 0, history: [] });
           saveQueue({ queue: newQueue, currentIndex: 0, shuffle: true, repeat: get().repeat });
         } else {
-          const newIndex = current ? originalQueue.findIndex((s) => s.id === current.id) : 0;
+          const newIndex = current
+            ? originalQueue.findIndex((s) => s.id === current.id)
+            : 0;
           const resolvedIndex = newIndex >= 0 ? newIndex : 0;
-          set({
-            shuffle: false,
-            queue: originalQueue,
-            currentIndex: resolvedIndex,
-          });
+          set({ shuffle: false, queue: originalQueue, currentIndex: resolvedIndex });
           saveQueue({ queue: originalQueue, currentIndex: resolvedIndex, shuffle: false, repeat: get().repeat });
         }
       },
@@ -251,6 +311,11 @@ export const usePlayerStore = create<PlayerState>()(
         set({ likedSongs: { ...likedSongs, [songId]: !wasLiked } });
         const token = useAuthStore.getState().token;
         if (token) {
+          if (!isOnline()) {
+            const method = wasLiked ? 'DELETE' : 'POST';
+            enqueueRequest(`/likes/${songId}`, method);
+            return;
+          }
           const apiCall = wasLiked ? api.unlike : api.like;
           apiCall(songId, token).catch(() => {
             set((s) => ({ likedSongs: { ...s.likedSongs, [songId]: wasLiked } }));
@@ -286,7 +351,7 @@ export const usePlayerStore = create<PlayerState>()(
 
       addToQueue: (song) => {
         const { queue } = get();
-        const newQueue = [...queue, song];
+        const newQueue = [...queue, toQueueItem(song)];
         set({ queue: newQueue });
         saveQueue({ queue: newQueue, currentIndex: get().currentIndex, shuffle: get().shuffle, repeat: get().repeat });
         queueDepth(newQueue.length);
@@ -295,20 +360,24 @@ export const usePlayerStore = create<PlayerState>()(
       playNext: (song) => {
         const { queue, currentIndex } = get();
         const newQueue = [...queue];
-        newQueue.splice(currentIndex + 1, 0, song);
+        newQueue.splice(currentIndex + 1, 0, toQueueItem(song));
         set({ queue: newQueue });
         saveQueue({ queue: newQueue, currentIndex: get().currentIndex, shuffle: get().shuffle, repeat: get().repeat });
         queueDepth(newQueue.length);
       },
 
-      removeFromQueue: (index) => {
+      removeFromQueue: (queueItemId) => {
         const { queue, currentIndex } = get();
-        if (index < 0 || index >= queue.length) return;
+        const index = queue.findIndex((s) => s.queueItemId === queueItemId);
+        if (index < 0) return;
+
         const newQueue = queue.filter((_, i) => i !== index);
         if (newQueue.length === 0) {
           set({ queue: [], currentIndex: -1, current: null, isPlaying: false });
+          saveQueue({ queue: [], currentIndex: -1, shuffle: get().shuffle, repeat: get().repeat });
           return;
         }
+
         let newIndex = currentIndex;
         if (index < currentIndex) {
           newIndex = currentIndex - 1;
@@ -347,7 +416,7 @@ export const usePlayerStore = create<PlayerState>()(
       shuffleQueue: () => {
         const { queue, currentIndex, current } = get();
         if (queue.length <= 1) return;
-        const before = current ? [current] : [];
+        const before = current ? [queue[currentIndex] ?? toQueueItem(current)] : [];
         const rest = queue.filter((_, i) => i !== currentIndex);
         const shuffled = shuffleArray(rest);
         const newQueue = [...before, ...shuffled];
@@ -377,7 +446,7 @@ export const usePlayerStore = create<PlayerState>()(
       setConnectionStatus: (status) => set({ connectionStatus: status }),
 
       retry: () => {
-        const { current, queue, currentIndex } = get();
+        const { current } = get();
         if (!current) return;
         set({ error: null, loadingId: current.id });
       },

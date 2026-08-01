@@ -1,13 +1,17 @@
 import { useEffect, useCallback } from 'react';
-import { Pressable, ScrollView, useWindowDimensions, StyleSheet } from 'react-native';
+import { Pressable, useWindowDimensions, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, withSpring, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, ChevronUp, ChevronDown, ListMusic, Trash2 } from '@/lib/icons';
+import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import type { RenderItem } from 'react-native-draggable-flatlist';
+import { X, ListMusic, Trash2 } from '@/lib/icons';
 import { View, Text } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { usePlayerStore } from '@/store/playerStore';
+import { useHaptics } from '@/hooks/useHaptics';
 import { SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, DANGER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
+import type { QueueItem } from '@/services/types';
 
 function EmptyQueue() {
   return (
@@ -17,6 +21,19 @@ function EmptyQueue() {
       <Text fontSize={13} color={TEXT_MUTED} style={{ textAlign: 'center', paddingHorizontal: 32 }}>
         Add songs to your queue to see them here
       </Text>
+    </View>
+  );
+}
+
+function GripHandle() {
+  return (
+    <View style={{ flexDirection: 'row', gap: 3, padding: 6 }}>
+      {[0, 1, 2].map((col) => (
+        <View key={col} style={{ gap: 3 }}>
+          <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: TEXT_MUTED }} />
+          <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: TEXT_MUTED }} />
+        </View>
+      ))}
     </View>
   );
 }
@@ -34,6 +51,7 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
   const reorderQueue = usePlayerStore((s) => s.reorderQueue);
   const playSong = usePlayerStore((s) => s.playSong);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
+  const { impact } = useHaptics();
 
   const translateY = useSharedValue(screenHeight);
 
@@ -51,29 +69,17 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
     transform: [{ translateY: translateY.value }],
   }));
 
-  const handleMoveUp = useCallback(
-    (index: number) => {
-      if (index > 0) reorderQueue(index, index - 1);
-    },
-    [reorderQueue]
-  );
-
-  const handleMoveDown = useCallback(
-    (index: number) => {
-      if (index < queue.length - 1) reorderQueue(index, index + 1);
-    },
-    [reorderQueue, queue.length]
-  );
-
   const handleRemove = useCallback(
-    (index: number) => {
-      removeFromQueue(index);
+    (queueItemId: string) => {
+      removeFromQueue(queueItemId);
     },
     [removeFromQueue]
   );
 
   const handlePlay = useCallback(
-    (index: number) => {
+    (queueItemId: string) => {
+      const index = queue.findIndex((s) => s.queueItemId === queueItemId);
+      if (index < 0) return;
       const song = queue[index];
       if (song) {
         playSong(song, queue, index);
@@ -85,6 +91,89 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
   const handleClearAll = useCallback(() => {
     clearQueue();
   }, [clearQueue]);
+
+  const handleDragEnd = useCallback(
+    ({ from, to }: { from: number; to: number }) => {
+      impact('medium');
+      if (from !== to) {
+        reorderQueue(from, to);
+      }
+    },
+    [impact, reorderQueue]
+  );
+
+  const renderItem = useCallback<RenderItem<QueueItem>>(
+    ({ item: song, getIndex, drag, isActive }) => {
+      const index = getIndex() ?? 0;
+      const isCurrent = index === currentIndex;
+      return (
+        <ScaleDecorator activeScale={1.02}>
+          <View
+            style={[
+              {
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: SPACING.sm,
+                paddingHorizontal: SPACING.lg,
+                paddingVertical: SPACING.sm,
+                backgroundColor: isCurrent ? 'rgba(29,185,84,0.08)' : 'transparent',
+                borderRadius: 12,
+              },
+              isActive && {
+                backgroundColor: SURFACE_ELEVATED,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.35,
+                shadowRadius: 16,
+                elevation: 12,
+              },
+            ]}
+          >
+            <Pressable
+              onPress={() => handlePlay(song.queueItemId)}
+              onLongPress={drag}
+              disabled={isActive}
+              style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: SPACING.sm }}
+              accessibilityLabel={`${song.title} by ${song.artist}`}
+              accessibilityRole="button"
+            >
+              <GripHandle />
+              <Artwork
+                source={song.imageUrl ? { uri: song.imageUrl } : undefined}
+                colors={song.colors}
+                style={{ height: 48, width: 48, borderRadius: 8 }}
+                radius={8}
+              />
+              <View style={{ flex: 1 }}>
+                <Text
+                  fontSize={14}
+                  fontWeight="600"
+                  color={isCurrent ? ACCENT : TEXT_PRIMARY}
+                  numberOfLines={1}
+                >
+                  {song.title}
+                </Text>
+                <Text fontSize={12} color={TEXT_SECONDARY} numberOfLines={1}>
+                  {song.artist}
+                </Text>
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={() => handleRemove(song.queueItemId)}
+              hitSlop={8}
+              accessibilityLabel="Remove from queue"
+              accessibilityRole="button"
+              style={{ padding: 4 }}
+            >
+              <X size={18} color={TEXT_MUTED} />
+            </Pressable>
+          </View>
+        </ScaleDecorator>
+      );
+    },
+    [currentIndex, handlePlay, handleRemove]
+  );
 
   return (
     <View style={StyleSheet.absoluteFill}>
@@ -118,91 +207,26 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
               <X size={22} color={TEXT_PRIMARY} />
             </Pressable>
           </View>
-          <Text fontSize={12} color={TEXT_MUTED} style={{ marginTop: 2 }}>{queue.length} {queue.length === 1 ? 'song' : 'songs'}</Text>
+          <Text fontSize={12} color={TEXT_MUTED} style={{ marginTop: 2 }}>
+            {queue.length} {queue.length === 1 ? 'song' : 'songs'} · hold & drag to reorder
+          </Text>
         </View>
 
         {queue.length === 0 ? (
           <EmptyQueue />
         ) : (
           <>
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-              {queue.map((song, index) => {
-                const isCurrent = index === currentIndex;
-                return (
-                  <View
-                    key={`${song.id}-${index}`}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: SPACING.sm,
-                      paddingHorizontal: SPACING.lg,
-                      paddingVertical: SPACING.sm,
-                      backgroundColor: isCurrent ? 'rgba(29,185,84,0.08)' : 'transparent',
-                    }}
-                  >
-                    <View style={{ flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-                      <Pressable
-                        onPress={() => handleMoveUp(index)}
-                        disabled={index === 0}
-                        hitSlop={4}
-                        accessibilityLabel="Move up"
-                        accessibilityRole="button"
-                        style={{ opacity: index === 0 ? 0.2 : 1 }}
-                      >
-                        <ChevronUp size={14} color={TEXT_SECONDARY} />
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleMoveDown(index)}
-                        disabled={index === queue.length - 1}
-                        hitSlop={4}
-                        accessibilityLabel="Move down"
-                        accessibilityRole="button"
-                        style={{ opacity: index === queue.length - 1 ? 0.2 : 1 }}
-                      >
-                        <ChevronDown size={14} color={TEXT_SECONDARY} />
-                      </Pressable>
-                    </View>
-
-                    <Pressable
-                      onPress={() => handlePlay(index)}
-                      style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: SPACING.sm }}
-                      accessibilityLabel={`${song.title} by ${song.artist}`}
-                      accessibilityRole="button"
-                    >
-                      <Artwork
-                        source={song.imageUrl ? { uri: song.imageUrl } : undefined}
-                        colors={song.colors}
-                        style={{ height: 48, width: 48, borderRadius: 8 }}
-                        radius={8}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          fontSize={14}
-                          fontWeight="600"
-                          color={isCurrent ? ACCENT : TEXT_PRIMARY}
-                          numberOfLines={1}
-                        >
-                          {song.title}
-                        </Text>
-                        <Text fontSize={12} color={TEXT_SECONDARY} numberOfLines={1}>
-                          {song.artist}
-                        </Text>
-                      </View>
-                    </Pressable>
-
-                    <Pressable
-                      onPress={() => handleRemove(index)}
-                      hitSlop={8}
-                      accessibilityLabel="Remove from queue"
-                      accessibilityRole="button"
-                      style={{ padding: 4 }}
-                    >
-                      <X size={18} color={TEXT_MUTED} />
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </ScrollView>
+            <DraggableFlatList
+              data={queue}
+              keyExtractor={(item) => item.queueItemId}
+              onDragBegin={() => impact('light')}
+              onDragEnd={handleDragEnd}
+              renderItem={renderItem}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: SPACING.md }}
+              showsVerticalScrollIndicator={false}
+              dragItemOverflow={false}
+            />
 
             <Pressable
               onPress={handleClearAll}

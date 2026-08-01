@@ -43,6 +43,13 @@ export interface Playlist {
   colors: [string, string];
 }
 
+/**
+ * A Song instance inside the playback queue. `queueItemId` is a unique
+ * per-slot identifier so the same song can appear multiple times in the
+ * queue without React key collisions or store logic mixing them up.
+ */
+export type QueueItem = Song & { queueItemId: string };
+
 export interface QueryResult<T> {
   data: T;
   loading: boolean;
