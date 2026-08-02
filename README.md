@@ -39,9 +39,11 @@
 
 <div align="center">
 
-  <iframe width="854" height="480" src="https://www.youtube.com/embed/-RSNJYJikx0" title="Muzix demo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+  <a href="https://www.youtube.com/shorts/-RSNJYJikx0">
+    <img src="screenshots/home.png" alt="Muzix demo" width="854">
+  </a>
 
-  <p><em>Muzix demo</em></p>
+  <p><em>Muzix demo — click to play on YouTube</em></p>
 
 </div>
 
