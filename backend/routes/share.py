@@ -3,7 +3,7 @@ import os
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
-from helpers import success_resp, check_rate_limit, get_current_user
+from helpers import success_resp, rate_limit_async, get_current_user
 from services import share as share_svc
 
 router = APIRouter()
@@ -18,8 +18,8 @@ class ShareGenerate(BaseModel):
 
 
 @router.post("/generate")
-async def generate_share(body: ShareGenerate, user=Depends(get_current_user)):
-    check_rate_limit(f"share:{user.id}", max_requests=10, window=60)
+async def generate_share(body: ShareGenerate, request: Request, user=Depends(get_current_user)):
+    await rate_limit_async(request, max_requests=10, window=60)
     data = await share_svc.create_share(
         user_id=user.id,
         content_type=body.content_type,

@@ -29,6 +29,8 @@ async def lifespan(app: FastAPI):
     await train_model()
     yield
     await engine.dispose()
+    from services.redis_client import redis
+    await redis.close()
 
 
 # --- App ---

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import secrets
 import uuid
 import orjson
@@ -16,6 +17,8 @@ import jwt
 from fastapi import Depends, Header, HTTPException, Request
 from fastapi.responses import ORJSONResponse, Response
 from pydantic import BaseModel, field_validator
+
+logger = logging.getLogger("muzix")
 
 from config import (
     ACCESS_TOKEN_EXPIRY_HOURS,
@@ -94,6 +97,32 @@ def rate_limit(request: Request, max_requests: int = 30, window: int = 60):
     check_rate_limit(f"{ip}:{request.url.path}", max_requests, window)
 
 
+async def rate_limit_async(request: Request, max_requests: int = 30, window: int = 60):
+    """Distributed rate limit over Redis, falling back to the in-memory limiter.
+
+    Safety contract:
+      - If Upstash is configured and reachable, the counter is shared across
+        all serverless instances (the whole point — it fixes the per-process
+        dict being useless under multiple workers).
+      - If Redis is *unavailable* (not configured, network error, timeout), we
+        fall back to the existing in-memory limiter and log a warning. This is
+        fail-open, so a Redis outage never locks every user out nor 5xxs.
+    """
+    ip = _client_ip(request)
+    key = f"{ip}:{request.url.path}"
+    try:
+        from services.redis_client import redis
+
+        allowed = await redis.rate_limit_check(key, max_requests, window * 1000)
+        if not allowed:
+            raise HTTPException(status_code=429, detail="Too many requests")
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 - degrade to in-memory on any Redis fault
+        logger.warning("Redis rate limiter unavailable (%s); falling back to in-memory", exc)
+        check_rate_limit(key, max_requests, window)
+
+
 # ---------------------------------------------------------------------------
 # Caching
 # ---------------------------------------------------------------------------
@@ -116,6 +145,61 @@ def make_cached_response(body: dict, request: Request) -> Response:
     if if_none_match == etag:
         raise HTTPException(status_code=304, headers=cache_headers)
     return Response(content=serialized, media_type="application/json", headers=cache_headers)
+
+
+async def get_catalog_epoch(namespace: str) -> int:
+    """Return the current generation for a namespace (1 when never bumped).
+
+    The epoch is read from Redis on every cached request. This is deliberate:
+    caching the generation in-process could mask a just-bumped epoch and let an
+    old, stale key be served — which would defeat the whole invalidation scheme.
+    One extra GET is the price of correct, immediate invalidation. (Writers
+    bump via ``cache_bump_epoch``; readers must observe the bump unstaled.)
+    """
+    from services.redis_client import redis
+
+    try:
+        epoch = await redis.cache_get_epoch(namespace)
+        return epoch + 1  # 0 (never bumped) -> namespace v1
+    except Exception:  # noqa: BLE001 - absence of Redis only disables caching
+        return 1
+
+
+async def cached_catalog_response(namespace: str, key: str, body: dict, request: Request) -> Response:
+    """Serve a catalog GET from Redis when fresh, else compute-then-store.
+
+    Invalidation strategy:
+      - Cache key embeds ``get_catalog_epoch(namespace)``. Any writer that calls
+        ``redis.cache_bump_epoch(namespace)`` (import scripts) atomically
+        invalidates *every* key in that namespace in one INCR — no O(n) deletes.
+      - A 60s TTL mirrors the existing Cache-Control: max-age=60 contract, so a
+        stale read can never exceed what the API already advertises to clients.
+      - Only immutable, user-agnostic namespaces (catalog:*) should use this.
+        User-scoped data (home, likes) stays on the pre-Redis path to avoid a
+        correctness regression.
+    """
+    from config import CACHE_TTL_MS
+    from services.redis_client import redis
+
+    epoch = await get_catalog_epoch(namespace)
+    rkey = f"{epoch}:{key}"
+    try:
+        raw = await redis.cache_get(namespace, rkey)
+        if raw is not None:
+            return Response(
+                content=raw.encode(),
+                media_type="application/json",
+                headers={"Cache-Control": "public, max-age=60, stale-while-revalidate=300"},
+            )
+    except Exception as exc:  # noqa: BLE001 - cache miss on Redis fault, recompute
+        logger.warning("Redis cache read failed (%s); serving from DB", exc)
+    serialized = orjson.dumps(body, default=_json_default)
+    try:
+        await redis.cache_set(namespace, rkey, serialized.decode(), CACHE_TTL_MS)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Redis cache write failed (%s); response still valid", exc)
+    etag = hashlib.sha256(serialized).hexdigest()[:32]
+    return Response(content=serialized, media_type="application/json", headers={"ETag": f'"{etag}"', "Cache-Control": "public, max-age=60, stale-while-revalidate=300"})
 
 
 # ---------------------------------------------------------------------------

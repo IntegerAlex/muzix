@@ -24,6 +24,17 @@ R2_PUBLIC_URL = os.getenv("R2_PUBLIC_URL")
 if not all([R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET]):
     raise RuntimeError("R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET are required")
 
+# --- Redis (Upstash, REST protocol) ---
+# Optional. When unset the app degrades to in-memory rate limiting / no cache.
+UPSTASH_REDIS_REST_URL = os.getenv("UPSTASH_REDIS_REST_URL")
+UPSTASH_REDIS_REST_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
+REDIS_ENABLED = bool(UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN)
+
+# Cache TTLs. The list/search endpoints already advertise Cache-Control:
+# max-age=60, so a 60s Redis TTL cannot make data any staler than the API
+# already promises clients.
+CACHE_TTL_MS = 60_000  # 60s default for catalog reads
+
 CORS_ORIGINS = [
     o.strip()
     for o in (os.getenv("CORS_ORIGINS") or "http://localhost:8081,http://localhost:3000").split(",")

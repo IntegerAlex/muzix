@@ -560,9 +560,27 @@ def main():
     log("INFO", "STEP 4/4: Insert into database")
     asyncio.run(insert_db(downloaded))
 
+    # Invalidate catalog cache so newly imported songs appear immediately.
+    log("INFO", "")
+    log("INFO", "Invalidating catalog cache")
+    asyncio.run(_invalidate_catalog_cache())
+
     log("INFO", "")
     log("OK", f"IMPORT COMPLETE: {len(downloaded)} songs")
     log("INFO", "=" * 55)
+
+
+async def _invalidate_catalog_cache() -> None:
+    """Bump the catalog generation so all cached reads become essential misses.
+
+    Runs best-effort: a Redis outage just means caches age out on their own TTL
+    (60s) instead of immediately — correctness is preserved either way.
+    """
+    from services.redis_client import redis
+    try:
+        await redis.cache_bump_epoch("catalog")
+    except Exception as e:  # noqa: BLE001
+        log("WARN", f"Catalog cache invalidation skipped (Redis unavailable): {e}")
 
 
 if __name__ == "__main__":
