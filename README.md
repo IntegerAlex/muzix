@@ -37,13 +37,13 @@
 
 ## Demo
 
-<a href="screenshots/demo.mp4">
-  <img src="screenshots/home.png" alt="Demo Video" width="640" style="border-radius: 8px; cursor: pointer;" />
-</a>
+<div align="center">
 
-<p align="center">
-  <a href="screenshots/demo.mp4">▶ Watch the 5MiB demo (16:9 mobile recording)</a>
-</p>
+  <iframe width="854" height="480" src="https://www.youtube.com/embed/-RSNJYJikx0" title="Muzix demo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+
+  <p><em>Muzix demo</em></p>
+
+</div>
 
 ## Architecture
 
