@@ -1,6 +1,6 @@
 # Copyright
 
-Copyright (C) 2026 Akshat Kotpalliwar
+Copyright (C) 2026 [Akshat Kotpalliwar](https://www.akshatkotpalliwar.in/)
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
@@ -18,7 +18,7 @@ The full license text is available in the [LICENSE](LICENSE) file.
 
 ## Contact
 
-- **Author**: Akshat Kotpalliwar
+- **Author**: [Akshat Kotpalliwar](https://www.akshatkotpalliwar.in/)
 - **Email**: akshatkot@gmail.com
 - **GitHub**: [@IntegerAlex](https://github.com/IntegerAlex)
 

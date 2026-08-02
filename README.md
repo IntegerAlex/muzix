@@ -299,6 +299,6 @@ uv run fastapi cloud deploy
 ---
 
 <p align="center">
-  <strong>Designed and developed by Akshat Kotpalliwar</strong><br />
+  <strong>Designed and developed by <a href="https://www.akshatkotpalliwar.in/">Akshat Kotpalliwar</a></strong><br />
   Copyright © 2026 Akshat Kotpalliwar. All rights reserved. Licensed under the <a href="LICENSE">AGPL-3.0</a>.
 </p>
