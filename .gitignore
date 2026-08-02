@@ -76,3 +76,7 @@ android/.gradle/
 
 # Planning docs
 PLAN_BACKEND_OPTIMIZATION.md
+
+# Local tooling
+.neon
+.kilo/
