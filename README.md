@@ -39,11 +39,9 @@
 
 <div align="center">
 
-  <a href="https://www.youtube.com/shorts/-RSNJYJikx0">
-    <img src="screenshots/home.png" alt="Muzix demo" width="854">
-  </a>
+  [![Muzix demo](https://img.youtube.com/vi/-RSNJYJikx0/maxresdefault.jpg)](https://www.youtube.com/shorts/-RSNJYJikx0)
 
-  <p><em>Muzix demo — click to play on YouTube</em></p>
+  <p><em>Muzix demo</em></p>
 
 </div>
 
