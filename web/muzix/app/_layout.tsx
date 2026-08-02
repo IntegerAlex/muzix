@@ -1,5 +1,6 @@
 import '@tamagui/core/reset.css';
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NAV_THEME } from '@/lib/theme';
 import { ThemeProvider } from 'expo-router/react-navigation';
 import { Stack, useNavigationContainerRef } from 'expo-router';
@@ -12,9 +13,10 @@ import { useState, useEffect } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { useConnectivity } from '@/hooks/useConnectivity';
+import { initCatalog } from '@/services/catalogDb';
+import { initPlayer } from '@/store/initPlayer';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
-import { useHaptics } from '@/hooks/useHaptics';
-import QueuePanel from '@/components/QueuePanel';
+import { QueuePanel } from '@/components/QueuePanel';
 import { usePlayerStore } from '@/store/playerStore';
 import { MiniPlayer } from '@/components/MiniPlayer';
 import { NowPlaying } from '@/components/NowPlaying';
@@ -69,26 +71,31 @@ function RootLayoutInner() {
     setPrevOnline(isOnline);
   }, [isOnline]);
 
-  const { impact } = useHaptics();
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
-    const handleLike = () => { impact('medium'); };
-    window.addEventListener('like-song', handleLike);
-    window.addEventListener('unlike-song', handleLike);
-    return () => {
-      window.removeEventListener('like-song', handleLike);
-      window.removeEventListener('unlike-song', handleLike);
-    };
-  }, [impact]);
-
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
+  }, []);
+
+  const [catalogReady, setCatalogReady] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    Promise.race([
+      (async () => {
+        await useAuthStore.getState().hydrate();
+        await initCatalog();
+        await initPlayer();
+        await import('@/services/offlineQueue').then((m) => m.retryQueuedRequests()).catch(() => {});
+      })(),
+      new Promise<void>((_, reject) => setTimeout(() => reject(new Error('catalog init timeout')), 2500)),
+    ])
+      .catch((e: unknown) => { console.error('catalog init failed', e); })
+      .finally(() => { if (mounted) setCatalogReady(true); });
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const el = document.activeElement;
-    if (el && el !== document.body && el instanceof Element) {
+    if (el && el !== document.body && el instanceof HTMLElement) {
       const hiddenAncestor = el.closest('[aria-hidden="true"], [inert]');
       const style = hiddenAncestor as HTMLElement | null;
       if (style && getComputedStyle(style).display === 'none') {
@@ -98,13 +105,13 @@ function RootLayoutInner() {
   }, [pathname]);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !catalogReady) return;
     if (!authed && !isPublic && isOnline) {
       router.replace('/login');
     } else if (authed && isPublic) {
       router.replace('/');
     }
-  }, [authed, loading, pathname, isOnline]);
+  }, [authed, loading, pathname, catalogReady, isOnline]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
@@ -119,7 +126,7 @@ function RootLayoutInner() {
     return () => window.removeEventListener('unhandledrejection', handler);
   }, []);
 
-  if (loading) {
+  if (loading || !catalogReady) {
     return (
       <TamaguiProvider config={config} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
         <View style={{ flex: 1, backgroundColor: BG, justifyContent: 'center', alignItems: 'center' }}>
@@ -134,42 +141,44 @@ function RootLayoutInner() {
   }
 
   return (
-    <TamaguiProvider config={config} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
-      <ToastProvider>
-        <ThemeProvider value={NAV_THEME[(colorScheme ?? 'light') as 'light' | 'dark']}>
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-          <ErrorBoundary>
-            <View style={{ flex: 1 }}>
-              <Animated.View style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                backgroundColor: DANGER,
-                zIndex: 1000,
-                paddingTop: insets.top,
-                paddingBottom: 8,
-                paddingHorizontal: 16,
-                alignItems: 'center',
-                transform: [{ translateY: offlineAnim.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) }],
-              }}>
-                <Text style={{ color: TEXT_PRIMARY, fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
-                  You&apos;re offline — some features may be limited
-                </Text>
-              </Animated.View>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <TamaguiProvider config={config} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
+        <ToastProvider>
+          <ThemeProvider value={NAV_THEME[(colorScheme ?? 'light') as 'light' | 'dark']}>
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+            <ErrorBoundary>
               <View style={{ flex: 1 }}>
-                <AnimatedBackdrop />
-                <Stack screenOptions={{ headerShown: false }} />
-                <MiniPlayer />
-                <NowPlaying />
-                <PlayerBridge />
+                <Animated.View style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  backgroundColor: DANGER,
+                  zIndex: 1000,
+                  paddingTop: insets.top,
+                  paddingBottom: 8,
+                  paddingHorizontal: 16,
+                  alignItems: 'center',
+                  transform: [{ translateY: offlineAnim.interpolate({ inputRange: [0, 1], outputRange: [-80, 0] }) }],
+                }}>
+                  <Text style={{ color: TEXT_PRIMARY, fontSize: 12, fontWeight: '600', textAlign: 'center' }}>
+                    You&apos;re offline — some features may be limited
+                  </Text>
+                </Animated.View>
+                <View style={{ flex: 1 }}>
+                  <AnimatedBackdrop />
+                  <Stack screenOptions={{ headerShown: false }} />
+                  <MiniPlayer />
+                  <NowPlaying />
+                  <PlayerBridge />
+                </View>
+                {showQueue && <QueuePanel onClose={() => setShowQueue(false)} />}
               </View>
-              {showQueue && <QueuePanel onClose={() => setShowQueue(false)} />}
-            </View>
-          </ErrorBoundary>
-        </ThemeProvider>
-      </ToastProvider>
-    </TamaguiProvider>
+            </ErrorBoundary>
+          </ThemeProvider>
+        </ToastProvider>
+      </TamaguiProvider>
+    </GestureHandlerRootView>
   );
 }
 
