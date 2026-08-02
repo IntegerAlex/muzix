@@ -35,6 +35,16 @@
 |------|--------|
 | ![Home](screenshots/home.png) | ![Player](screenshots/player.png) |
 
+## Demo
+
+<a href="screenshots/demo.mp4">
+  <img src="screenshots/home.png" alt="Demo Video" width="640" style="border-radius: 8px; cursor: pointer;" />
+</a>
+
+<p align="center">
+  <a href="screenshots/demo.mp4">▶ Watch the 5MiB demo (16:9 mobile recording)</a>
+</p>
+
 ## Architecture
 
 ### Backend
