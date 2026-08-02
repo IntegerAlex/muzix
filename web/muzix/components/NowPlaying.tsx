@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Platform } from 'react-native';
 import { Image } from 'expo-image';
 
 import Slider from '@react-native-community/slider';
@@ -15,7 +15,7 @@ import Animated, {
 import {
   Pause, Play, SkipBack, SkipForward, ChevronDown,
   Shuffle, Repeat, Repeat1, Heart,
-  VolumeX, Volume2, AlertCircle, Share2,
+  VolumeX, Volume2, AlertCircle, Share2, Cloud, Check,
 } from '@/lib/icons';
 import { View, Text } from 'tamagui';
 import { useShallow } from 'zustand/react/shallow';
@@ -26,9 +26,14 @@ import { LyricsImageGenerator } from '@/components/LyricsImageGenerator';
 import { useLyricsSharing } from '@/hooks/useLyricsSharing';
 import { useSharing } from '@/hooks/useSharing';
 import { usePlayerStore } from '@/store/playerStore';
+import { useConnectivity } from '@/hooks/useConnectivity';
+import { useHaptics } from '@/hooks/useHaptics';
+import { useAuthStore } from '@/store/authStore';
+import { apiStream } from '@/services/data';
+import { downloadToCache, getCachedAudioPath, markDownloaded } from '@/services/audioCache';
 import type { Song } from '@/services/types';
 import { formatTime } from '@/lib/utils';
-import { SURFACE_ICON, BORDER, ACCENT } from '@/lib/colors';
+import { SURFACE_ICON, BORDER, ACCENT, TEXT_MUTED } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 import { useResponsive } from '@/lib/useResponsive';
 
@@ -75,11 +80,34 @@ export function NowPlaying() {
   const [shareSuccess, setShareSuccess] = useState(false);
   const { imageRef, generate, isGenerating, shareError } = useLyricsSharing();
   const { share } = useSharing();
+  const { isOnline } = useConnectivity();
+  const { impact } = useHaptics();
+  const [cached, setCached] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const positionMs = usePlayerStore((s) => s.positionMs);
   const durationSec = usePlayerStore((s) => s.durationSec);
 
   const isLiked = current ? !!likedSongs[current.id] : false;
+
+  useEffect(() => {
+    if (current) {
+      getCachedAudioPath(current.id).then(p => setCached(!!p)).catch(() => {});
+    }
+  }, [current?.id]);
+
+  const handleDownload = useCallback(async () => {
+    if (!current || cached || downloading || !isOnline) return;
+    const id = current.id;
+    setDownloading(true);
+    try {
+      const { url } = await apiStream(id);
+      await downloadToCache(id, url);
+      await markDownloaded(id);
+      setCached(true);
+    } catch {}
+    setDownloading(false);
+  }, [current, cached, downloading, isOnline]);
 
   const durationMs = durationSec > 0 ? durationSec * 1000 : (current?.durationMs ?? 0);
   const progressPct = durationMs > 0 ? Math.min(100, Math.round((positionMs / durationMs) * 100)) : 0;
@@ -170,7 +198,7 @@ export function NowPlaying() {
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
           paddingTop: insets.top, paddingBottom: insets.bottom,
         }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm }}>
             <Pressable
               style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 9999, backgroundColor: SURFACE_ICON, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }}
               onPress={() => setShowNowPlaying(false)}
@@ -178,11 +206,7 @@ export function NowPlaying() {
               <ChevronDown size={18} color="rgba(255,255,255,0.7)" />
               <Text fontSize={13} fontWeight="500" color="rgba(255,255,255,0.7)">Dismiss</Text>
             </Pressable>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text fontSize={13} fontWeight="600" color="rgba(255,255,255,0.8)" numberOfLines={1}>
-                {current.album}
-              </Text>
-            </View>
+            <View style={{ flex: 1 }} />
             <Pressable
               onPress={() => share({ contentType: 'song', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl })}
               hitSlop={8}
@@ -190,6 +214,11 @@ export function NowPlaying() {
             >
               <Share2 size={20} color={ACCENT} />
             </Pressable>
+            <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' }}>
+              <Text fontSize={13} fontWeight="600" color="rgba(255,255,255,0.8)" numberOfLines={1}>
+                {current.album}
+              </Text>
+            </View>
           </View>
 
           <View style={{ flex: 1, flexDirection: 'row', paddingHorizontal: SPACING.xl }}>
@@ -203,10 +232,10 @@ export function NowPlaying() {
                 />
               </Animated.View>
               <View style={{ marginTop: SPACING.lg, alignItems: 'center', width: '100%' }}>
-                <Text fontSize={20} fontWeight="700" letterSpacing={-0.5} color="white" numberOfLines={1}>
+                <Text fontSize={20} fontWeight="700" letterSpacing={-0.5} color="white" numberOfLines={1} style={{ textAlign: 'center' }}>
                   {current.title}
                 </Text>
-                <Text fontSize={14} fontWeight="500" color="rgba(255,255,255,0.5)" numberOfLines={1}>
+                <Text fontSize={14} fontWeight="500" color="rgba(255,255,255,0.5)" numberOfLines={1} style={{ textAlign: 'center' }}>
                   {current.artist}
                 </Text>
               </View>
@@ -522,7 +551,7 @@ export function NowPlaying() {
           contentContainerStyle={{ paddingHorizontal: SPACING.xxl, paddingTop: SPACING.sm, paddingBottom: SPACING.xxxl }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative' }}>
             <Pressable
               style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 9999, backgroundColor: SURFACE_ICON, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }}
               hitSlop={8}
@@ -533,11 +562,7 @@ export function NowPlaying() {
               <ChevronDown size={18} color="rgba(255,255,255,0.7)" />
               <Text fontSize={13} fontWeight="500" color="rgba(255,255,255,0.7)">Dismiss</Text>
             </Pressable>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <Text fontSize={13} fontWeight="600" color="rgba(255,255,255,0.8)" numberOfLines={1}>
-                {current.album}
-              </Text>
-            </View>
+            <View style={{ flex: 1 }} />
             <Pressable
               onPress={() => share({ contentType: 'song', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl })}
               hitSlop={8}
@@ -545,6 +570,11 @@ export function NowPlaying() {
             >
               <Share2 size={20} color={ACCENT} />
             </Pressable>
+            <View pointerEvents="none" style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, alignItems: 'center', justifyContent: 'center' }}>
+              <Text fontSize={13} fontWeight="600" color="rgba(255,255,255,0.8)" numberOfLines={1}>
+                {current.album}
+              </Text>
+            </View>
           </View>
 
           <View style={{ alignItems: 'center', paddingVertical: 32 }}>
@@ -573,6 +603,7 @@ export function NowPlaying() {
                   likeScale.value = withSpring(1, { damping: 15, stiffness: 300 });
                 });
                 toggleLike(current.id);
+                impact('medium');
               }}
               hitSlop={12}
               accessibilityLabel={isLiked ? 'Unlike' : 'Like'}
@@ -587,6 +618,23 @@ export function NowPlaying() {
                 />
               </Animated.View>
             </Pressable>
+            {Platform.OS !== 'web' && (
+              <Pressable
+                onPress={handleDownload}
+                hitSlop={12}
+                accessibilityLabel={cached ? 'Downloaded' : 'Download'}
+                accessibilityRole="button"
+                disabled={downloading}
+              >
+                {downloading ? (
+                  <ActivityIndicator size={20} color="rgba(255,255,255,0.4)" />
+                ) : cached ? (
+                  <Check size={20} color={ACCENT} />
+                ) : (
+                  <Cloud size={20} color={isOnline ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)'} />
+                )}
+              </Pressable>
+            )}
           </View>
 
           {error ? (

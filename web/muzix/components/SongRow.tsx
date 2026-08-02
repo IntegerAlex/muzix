@@ -1,5 +1,5 @@
-import { useCallback, useEffect, memo, useRef } from 'react';
-import { ActivityIndicator, Pressable } from 'react-native';
+import { useCallback, useEffect, useState, memo, useRef } from 'react';
+import { ActivityIndicator, Pressable, Platform } from 'react-native';
 import { Text, View } from 'tamagui';
 import Animated, {
   useAnimatedStyle,
@@ -8,14 +8,18 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { Share2 } from '@/lib/icons';
+import { Share2, Cloud, Check } from '@/lib/icons';
 import { Artwork } from '@/components/Artwork';
 import { PressableScale } from '@/components/PressableScale';
 import { SPACING } from '@/lib/spacing';
 import { Skeleton } from '@/components/Skeleton';
 import { usePlayerStore } from '@/store/playerStore';
+import { useConnectivity } from '@/hooks/useConnectivity';
+import { useAuthStore } from '@/store/authStore';
+import { apiStream } from '@/services/data';
+import { downloadToCache, getCachedAudioPath, markDownloaded } from '@/services/audioCache';
 import type { Song } from '@/services/types';
-import { TEXT_MUTED } from '@/lib/colors';
+import { TEXT_MUTED, ACCENT } from '@/lib/colors';
 
 export function EqualizerBar({ phase }: { phase: number }) {
   const h = useSharedValue(4 + Math.sin(phase) * 4);
@@ -53,14 +57,33 @@ interface SongRowProps {
 export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, subtitle, onShare, isSharing }: SongRowProps) {
   const playSong = usePlayerStore((s) => s.playSong);
   const queueRef = useRef(queue);
+  const { isOnline } = useConnectivity();
+  const [cached, setCached] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     queueRef.current = queue;
   }, [queue]);
 
+  useEffect(() => {
+    getCachedAudioPath(song.id).then(p => setCached(!!p)).catch(() => {});
+  }, [song.id]);
+
   const handlePress = useCallback(() => {
     playSong(song, queueRef.current, index);
   }, [playSong, song, index]);
+
+  const handleDownload = useCallback(async () => {
+    if (cached || downloading || !isOnline) return;
+    setDownloading(true);
+    try {
+      const { url } = await apiStream(song.id);
+      await downloadToCache(song.id, url);
+      await markDownloaded(song.id);
+      setCached(true);
+    } catch {}
+    setDownloading(false);
+  }, [song.id, cached, downloading, isOnline]);
 
   return (
     <PressableScale
@@ -83,6 +106,14 @@ export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, su
           {subtitle ?? song.artist}
         </Text>
       </View>
+      {Platform.OS !== 'web' && isOnline && !cached && (
+        <Pressable onPress={handleDownload} hitSlop={8} disabled={downloading}>
+          {downloading ? <ActivityIndicator size={16} color={TEXT_MUTED} /> : <Cloud size={16} color={TEXT_MUTED} />}
+        </Pressable>
+      )}
+      {Platform.OS !== 'web' && cached && (
+        <Check size={16} color={ACCENT} />
+      )}
       {onShare && (
         <Pressable
           onPress={() => !isSharing && onShare(song)}
