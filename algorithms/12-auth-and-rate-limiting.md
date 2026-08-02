@@ -5,7 +5,8 @@ JWT token management, refresh token rotation, and sliding window rate limiter.
 - **Type**: Custom
 - **File**: `web/muzix/store/authStore.ts`, lines 1–106 (client auth)
 - **File**: `backend/services/auth.py`, lines 1–75 (server auth)
-- **File**: `backend/helpers.py`, lines 67–94 (rate limiter)
+- **File**: `backend/helpers.py`, lines 70–123 (dual rate limiter)
+- **File**: `backend/services/redis_client.py`, lines 115–126 (distributed counter)
 
 ## How it works
 
@@ -52,31 +53,47 @@ isTokenExpired: () => {
 
 **Family tracking**: All refresh tokens in a rotation chain share `family_id`. If a revoked token is reused, the entire family is revoked (lines 58–60).
 
-### 5. Sliding Window Rate Limiter (helpers.py, lines 78–94)
+### 5. Rate Limiting — dual backend (helpers.py, lines 70–123)
+
+Two entry points share one Redis-backed core and an in-memory fallback:
+
+- `rate_limit(request, ...)` — synchronous, in-memory. Uses a `defaultdict[str, list[float]]` sliding window.
+- `rate_limit_async(request, ...)` — distributed over Redis with fail-open fallback to `check_rate_limit` (used by auth + share routes).
+
+**In-memory sliding window** (`check_rate_limit`, lines 81–93):
 
 ```python
-def check_rate_limit(key, max_requests=10, window=60):
-    now = time.time()
-    _rate_limit[key] = [t for t in _rate_limit[key] if now - t < window]  # evict old
-    if len(_rate_limit[key]) >= max_requests:
-        raise HTTPException(status_code=429, detail="Too many requests")
-    _rate_limit[key].append(now)
+_now_rate_limit[key] = [t for t in _rate_limit[key] if now - t < window]  # evict old
+if len(_rate_limit[key]) >= max_requests:
+    raise HTTPException(status_code=429, detail="Too many requests")
+_rate_limit[key].append(now)
 ```
 
-**Per-route limits**:
+**Distributed counter** (`redis_client.rate_limit_check`, lines 115–126) — a single atomic `EVAL` of a fixed-window Lua script counters this key with a TTL:
 
-| Route | Max Requests | Window |
-|-------|-------------|--------|
-| General (home, analytics, search, recommendations) | 30 | 60s |
-| Register | 5 | 300s |
-| Login | 10 | 60s |
-| Refresh | 10 | 60s |
-| Playlists | 60 | 60s |
-| Thumbnails | 120 | 60s |
+```
+1. Build full key:  rl:{ip}:{path}
+2. EVAL _FEAT_WINDOW_LUA (fixed-window script) -> current count
+3. Return count <= max_requests
+```
 
-**Cleanup**: Stale keys (no requests in window) are purged every 60 seconds (lines 85–89).
+Because the counter key carries a TTL set at creation, stale entries auto-expire in Redis — no manual cleanup pass (unlike the in-memory dict, which purges stale keys every 60 seconds, lines 88–93).
 
-**IP extraction**: Uses `X-Forwarded-For` header if present, otherwise `request.client.host` (lines 71–75).
+**Fail-open contract:** if Upstash is unconfigured, errors out, or times out, `rate_limit_async` catches the exception and degrades to the in-memory limiter (lines 119–123). A Redis outage never 429s or 5xxs the whole app.
+
+**Per-route limits** (auth/share use the async/Redis path; the rest use in-memory):
+
+| Route | Max Requests | Window | Backend |
+|-------|-------------|--------|---------|
+| Register | 5 | 300s | Redis (async) |
+| Login | 10 | 60s | Redis (async) |
+| Refresh | 10 | 60s | Redis (async) |
+| Share | 10 | 60s | Redis (async) |
+| Songs, albums, artists, playlists | 60 | 60s | In-memory |
+| General (home, analytics, search, recommendations) | 30 | 60s | In-memory |
+| Thumbnails | 120 | 60s | In-memory |
+
+**IP extraction**: Uses `X-Forwarded-For` header if present, otherwise `request.client.host` (helpers.py, `_client_ip`).
 
 ## Constants
 
@@ -87,7 +104,10 @@ def check_rate_limit(key, max_requests=10, window=60):
 | Token expiry buffer | 60,000ms | Pre-emptive expiry check |
 | Auth error cooldown | 5,000ms | Prevents rapid-fire logouts |
 | Rate limit window | 60s | Default for most routes |
-| Rate limit cleanup | 60s | Stale key purge interval |
+| Redis counter TTL | window | Auto-expired by Redis, no manual cleanup |
+| In-memory cleanup | 60s | Stale key purge interval (in-memory path only) |
+| Redis timeout | 3,000ms | `aiohttp.ClientTimeout.total` in `_exec` |
+| Share / auth limiter | async + Redis | register 5/300s, login 10/60s, refresh 10/60s, share 10/60s |
 
 ## Input → Output
 

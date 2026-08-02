@@ -58,6 +58,7 @@ backend/
 ├── main.py            # App bootstrap, exception handlers, router includes (local routes gated in prod)
 ├── db.py              # Async SQLAlchemy engine + session factory
 ├── models.py          # SQLAlchemy ORM models
+├── schemas.py         # Pydantic request/response models + OpenAPI error schemas
 ├── migrate.py         # Idempotent SQL migration (no Alembic)
 ├── backfill_genre.py  # Song genre enrichment via MusicBrainz + Wikipedia
 ├── import_songs.py    # Catalog import: Genius lyrics + YouTube download + MusicBrainz genre
@@ -104,9 +105,24 @@ web/muzix/
 └── lib/               # Colors, spacing, utilities, responsive breakpoints
 ```
 
+### API Flow
+
+> Example of a single API visualized — one endpoint's request → response path.
+
+![Single API flow example](screenshots/api-flow-demo.png)
+
+Generate and view the interactive API flow from `backend/`:
+
+```bash
+npx api-understanding scan                       # → writes analysis.json
+npx api-understanding dashboard analysis.json    # → interactive dashboard
+```
+
 ## Algorithms
 
 See [`algorithms/`](algorithms/) for documented runtime logic: ALS recommendation engine, Fisher-Yates shuffle, play-time tracking, analytics scoring, caching strategies, and more — 16 algorithms with actual code references, constants, and input/output specs.
+
+**What's newest:** the ALS model retraining now runs in the app lifespan as a background task (fit once on startup; subsequent requests serve the cached factor matrices).
 
 ## Features
 
@@ -142,9 +158,10 @@ See [`algorithms/`](algorithms/) for documented runtime logic: ALS recommendatio
 - **Security headers:** X-Content-Type-Options, X-Frame-Options, HSTS, CSP, Referrer-Policy, Permissions-Policy
 - **Input validation:** Pydantic models with email/password complexity rules
 - **IDOR protection:** Playlist ownership checks on all mutation endpoints
-- **Docs disabled:** `/docs` and `/redoc` return 404
+- **OpenAPI docs:** `/docs` (Swagger UI), `/redoc` (ReDoc), and `/openapi.json` are enabled with a fully typed spec — Pydantic request/response schemas, bearer-auth security scheme, and per-endpoint error responses for every route.
 - **Path traversal blocked:** `/thumbnails/{filename}` rejects `/`, `..`, `\`, null bytes
 - **Telemetry capped:** `POST /telemetry/events` limited to 50 events per request
+- **Bearer auth documented:** JWT-protected endpoints are declared with a `bearerAuth` security scheme in the generated OpenAPI spec
 - **Dev routes gated:** `/local/*` routes and static file mounts only available when `ENV != production`
 
 ## Quick Start
@@ -184,6 +201,7 @@ pnpm dev
 | `CORS_ORIGINS` | Comma-separated frontend origins |
 | `ENV` | Set to `production` to gate dev-only routes |
 | `LOGFIRE_TOKEN` | Pydemon Logfire token for tracing |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis credentials for distributed rate limiting and catalog cache (optional; falls back to in-memory) |
 
 ### Frontend (`web/muzix/.env.local`)
 
@@ -261,6 +279,7 @@ All endpoints return standardized JSON:
 
 - **Async everything:** All database and R2 operations are async (boto3 calls wrapped in `asyncio.to_thread`)
 - **ETag caching:** List endpoints return `ETag` + `Cache-Control` headers; 304 on `If-None-Match`
+- **Distributed Redis cache:** When Upstash credentials are set, rate limiting and catalog caching are distributed via Redis with automatic stale-key cleanup (falls back to in-memory)
 - **MMKV storage:** ~30x faster than AsyncStorage on native for key-value operations
 - **Rate limiting:** Sliding window per IP + path with automatic stale key cleanup
 - **Brief serialization:** List responses omit `lyrics` and `r2_object_key` (~3KB/song savings)
@@ -276,3 +295,10 @@ Backend is deployed to FastAPI Cloud:
 cd backend
 uv run fastapi cloud deploy
 ```
+
+---
+
+<p align="center">
+  <strong>Designed and developed by Akshat Kotpalliwar</strong><br />
+  Copyright © 2026 Akshat Kotpalliwar. All rights reserved. Licensed under the <a href="LICENSE">AGPL-3.0</a>.
+</p>
