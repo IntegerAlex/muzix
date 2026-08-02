@@ -2,6 +2,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api, type ApiSong, type ApiAlbum, type ApiArtist, type ApiPlaylist, type HomeResponse } from '@/services/api';
 import type { Song, Album, Artist, Playlist, QueryResult } from '@/services/types';
 import { useAuthStore } from '@/store/authStore';
+import { onStatusChange } from '@/services/networkStatus';
+
+let _catalogDb: typeof import('@/services/catalogDb') | null = null;
+async function getCatalogDb() {
+  if (!_catalogDb) _catalogDb = await import('@/services/catalogDb');
+  return _catalogDb;
+}
+
 
 let _songs: Song[] = [];
 let _albums: Album[] = [];
@@ -84,6 +92,11 @@ export function getSongs(): Song[] { return _songs; }
 export function getAlbums(): Album[] { return _albums; }
 export function getArtists(): Artist[] { return _artists; }
 export function getPlaylists(): Playlist[] { return _playlists; }
+
+export function setSongs(songs: Song[]): void { _songs = songs; _totalSongCount = songs.length; rebuildMaps(); _emitVersionChange(); }
+export function setAlbums(albums: Album[]): void { _albums = albums; rebuildMaps(); _emitVersionChange(); }
+export function setArtists(artists: Artist[]): void { _artists = artists; rebuildMaps(); _emitVersionChange(); }
+export function setPlaylists(playlists: Playlist[]): void { _playlists = playlists; rebuildMaps(); _emitVersionChange(); }
 
 export function getSongPaginationInfo(): { totalCount: number; hasMore: boolean } {
   return { totalCount: _totalSongCount, hasMore: _hasMoreSongs };
@@ -178,6 +191,12 @@ export function useQuery<T>(fetcher: () => Promise<T>, deps: readonly unknown[],
   }, []);
 
   useEffect(() => {
+    return onStatusChange((online) => {
+      if (online) refetch();
+    });
+  }, [refetch]);
+
+  useEffect(() => {
     mountedRef.current = true;
     let cancelled = false;
 
@@ -246,6 +265,7 @@ export function useSongs(): QueryResult<Song[]> {
     _hasMoreSongs = false;
     rebuildMaps();
     _emitVersionChange();
+    getCatalogDb().then(m => m.upsertSongs(all)).catch(() => {});
     const fresh = getSongs();
     setStaleData(fresh);
     return fresh;
@@ -273,6 +293,7 @@ export function useAlbums(): QueryResult<Album[]> {
     _albums = raw.map(mapAlbum);
     rebuildMaps();
     _emitVersionChange();
+    getCatalogDb().then(m => m.upsertAlbums(_albums)).catch(() => {});
     const fresh = getAlbums();
     setStaleData(fresh);
     return fresh;
@@ -300,6 +321,7 @@ export function useArtists(): QueryResult<Artist[]> {
     _artists = raw.map(mapArtist);
     rebuildMaps();
     _emitVersionChange();
+    getCatalogDb().then(m => m.upsertArtists(_artists)).catch(() => {});
     const fresh = getArtists();
     setStaleData(fresh);
     return fresh;
@@ -329,6 +351,7 @@ export function usePlaylists(): QueryResult<Playlist[]> {
     _playlists = raw.map(mapPlaylist);
     rebuildMaps();
     _emitVersionChange();
+    getCatalogDb().then(m => m.upsertPlaylists(_playlists)).catch(() => {});
     const fresh = getPlaylists();
     setStaleData(fresh);
     return fresh;
@@ -353,7 +376,10 @@ export function useAlbum(id: string): { data: Album | undefined; loading: boolea
     if (cached) return cached;
     const raw = await api.album(id);
     const mapped = raw ? mapAlbum(raw) : undefined;
-    if (mapped) setStaleData(mapped);
+    if (mapped) {
+      setStaleData(mapped);
+      getCatalogDb().then(m => m.upsertAlbums([mapped])).catch(() => {});
+    }
     return mapped;
   }, [id], staleData);
 
@@ -368,7 +394,10 @@ export function useArtist(id: string): { data: Artist | undefined; loading: bool
     if (cached) return cached;
     const raw = await api.artist(id);
     const mapped = raw ? mapArtist(raw) : undefined;
-    if (mapped) setStaleData(mapped);
+    if (mapped) {
+      setStaleData(mapped);
+      getCatalogDb().then(m => m.upsertArtists([mapped])).catch(() => {});
+    }
     return mapped;
   }, [id], staleData);
 
@@ -383,7 +412,10 @@ export function usePlaylist(id: string): { data: Playlist | undefined; loading: 
     if (cached) return cached;
     const raw = await api.playlist(id);
     const mapped = raw ? mapPlaylist(raw) : undefined;
-    if (mapped) setStaleData(mapped);
+    if (mapped) {
+      setStaleData(mapped);
+      getCatalogDb().then(m => m.upsertPlaylists([mapped])).catch(() => {});
+    }
     return mapped;
   }, [id], staleData);
 
