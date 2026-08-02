@@ -1,9 +1,18 @@
 import { Platform } from 'react-native';
-import { safeStorage } from '@/store/storage';
 import { API_URL } from '@/lib/config';
 
-function getAuthStore() {
-  return require('@/store/authStore').useAuthStore;
+async function handleAuthRefresh(): Promise<boolean> {
+  try {
+    const { useAuthStore } = require('@/store/authStore');
+    const { token, refreshToken } = useAuthStore.getState();
+    if (!refreshToken) return false;
+    const { api } = require('@/services/api');
+    const data = await api.refresh(refreshToken);
+    useAuthStore.getState().setAuth(data.token, data.refreshToken, data.user);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 interface CacheEntry {
@@ -161,15 +170,18 @@ export async function cachedFetch<T>(path: string, token?: string, ttlMs?: numbe
       touchEntry(key);
       return unwrapEnvelope<T>(cached.data as T);
     }
-    if (!res.ok) {
-      if (res.status === 401 && token) {
-        const authStore = getAuthStore();
-        const { token: currentToken } = authStore.getState();
-        if (currentToken) {
-          authStore.getState().logout();
-          if (typeof window !== 'undefined') window.location.href = '/login';
-        }
+    if (res.status === 401) {
+      // Stale/expired token — kick the shared refresh path, then retry once.
+      const refreshed = await handleAuthRefresh();
+      if (refreshed) {
+        const { useAuthStore } = require('@/store/authStore');
+        const newToken = useAuthStore.getState().token;
+        const retryHeaders = { ...headers };
+        if (newToken) retryHeaders['Authorization'] = `Bearer ${newToken}`;
+        res = await fetch(`${API_URL}${path}`, { headers: retryHeaders });
       }
+    }
+    if (!res.ok) {
       if (cached && !isExpired(cached)) return unwrapEnvelope<T>(cached.data as T);
       throw new Error(`API ${res.status}: ${await res.text()}`);
     }
@@ -217,147 +229,4 @@ export function cacheStats(): { memoryEntries: number; diskEntries: number } {
   return { memoryEntries: memCache.size, diskEntries: memCache.size };
 }
 
-const MAX_CACHED_SONGS = 50;
 
-let _db: any = null;
-
-async function getDb() {
-  if (_db) return _db;
-  if (Platform.OS === 'web') return null;
-  const SQLite = require('expo-sqlite');
-  _db = await SQLite.openDatabaseAsync('muzix-audio.db');
-  await _db.execAsync(`
-    CREATE TABLE IF NOT EXISTS audio_cache (
-      song_id TEXT PRIMARY KEY,
-      local_uri TEXT NOT NULL,
-      size INTEGER NOT NULL DEFAULT 0,
-      downloaded_at INTEGER NOT NULL
-    );
-  `);
-  return _db;
-}
-
-function getAudioDir(): string {
-  const FileSystem = require('expo-file-system');
-  return `${FileSystem.documentDirectory}muzix-audio/`;
-}
-
-async function deleteFile(uri: string): Promise<void> {
-  try {
-    const FileSystem = require('expo-file-system');
-    const info = await FileSystem.getInfoAsync(uri);
-    if (info.exists) await FileSystem.deleteAsync(uri);
-  } catch {}
-}
-
-async function evictOldEntries(keepSongId: string): Promise<void> {
-  try {
-    const db = await getDb();
-    if (!db) return;
-    const count: any = await db.getFirstAsync('SELECT COUNT(*) as c FROM audio_cache');
-    if (!count || count.c < MAX_CACHED_SONGS) return;
-
-    const excess = count.c - MAX_CACHED_SONGS + 5;
-    const rows: any[] = await db.getAllAsync(
-      'SELECT song_id, local_uri FROM audio_cache WHERE song_id != ? ORDER BY downloaded_at ASC LIMIT ?',
-      keepSongId, excess
-    );
-    for (const row of rows) {
-      await deleteFile(row.local_uri);
-      await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', row.song_id);
-    }
-  } catch {}
-}
-
-export async function downloadToCache(songId: string, url: string): Promise<string> {
-  if (Platform.OS === 'web') return url;
-  try {
-    const FileSystem = require('expo-file-system');
-    const audioDir = getAudioDir();
-    const info = await FileSystem.getInfoAsync(audioDir);
-    if (!info.exists) await FileSystem.makeDirectoryAsync(audioDir, { intermediates: true });
-
-    const db = await getDb();
-    if (db) {
-      const row: any = await db.getFirstAsync(
-        'SELECT local_uri FROM audio_cache WHERE song_id = ?', songId
-      );
-      if (row) {
-        const fileCheck = await FileSystem.getInfoAsync(row.local_uri);
-        if (fileCheck.exists) {
-          await db.runAsync(
-            'UPDATE audio_cache SET downloaded_at = ? WHERE song_id = ?',
-            Date.now(), songId
-          );
-          return row.local_uri;
-        }
-        await deleteFile(row.local_uri);
-        await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', songId);
-      }
-    }
-
-    const filePath = `${audioDir}${songId}.m4a`;
-    const downloaded = await FileSystem.downloadAsync(url, filePath);
-    const fileInfo = await FileSystem.getInfoAsync(filePath);
-
-    if (db && fileInfo.exists) {
-      await db.runAsync(
-        'INSERT OR REPLACE INTO audio_cache (song_id, local_uri, size, downloaded_at) VALUES (?, ?, ?, ?)',
-        songId, filePath, fileInfo.size ?? 0, Date.now()
-      );
-      await evictOldEntries(songId);
-    }
-    return downloaded.uri;
-  } catch {
-    return url;
-  }
-}
-
-export async function getCachedAudioPath(songId: string): Promise<string | null> {
-  if (Platform.OS === 'web') return null;
-  try {
-    const db = await getDb();
-    if (!db) return null;
-    const row: any = await db.getFirstAsync(
-      'SELECT local_uri FROM audio_cache WHERE song_id = ?', songId
-    );
-    if (!row) return null;
-    const FileSystem = require('expo-file-system');
-    const info = await FileSystem.getInfoAsync(row.local_uri);
-    if (!info.exists) {
-      await deleteFile(row.local_uri);
-      await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', songId);
-      return null;
-    }
-    return row.local_uri;
-  } catch {
-    return null;
-  }
-}
-
-export async function removeCachedAudio(songId: string): Promise<void> {
-  if (Platform.OS === 'web') return;
-  try {
-    const db = await getDb();
-    if (!db) return;
-    const row: any = await db.getFirstAsync(
-      'SELECT local_uri FROM audio_cache WHERE song_id = ?', songId
-    );
-    if (row) {
-      await deleteFile(row.local_uri);
-      await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', songId);
-    }
-  } catch {}
-}
-
-export async function getCachedAudioSize(): Promise<number> {
-  if (Platform.OS === 'web') return 0;
-  try {
-    const db = await getDb();
-    if (!db) return 0;
-    const row: any = await db.getFirstAsync('SELECT COALESCE(SUM(size), 0) as total FROM audio_cache');
-    return row?.total ?? 0;
-  } catch {
-    return 0;
-  }
-}

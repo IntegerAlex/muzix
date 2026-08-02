@@ -2,8 +2,7 @@ import { useState, useCallback } from 'react';
 import { Platform, Share } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
 import { ApiError } from '@/services/api';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
+import { API_URL } from '@/lib/config';
 
 export interface ShareContent {
   contentType: 'song' | 'album' | 'artist' | 'playlist' | 'lyrics';
