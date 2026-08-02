@@ -1,17 +1,26 @@
 """Playlist routes: CRUD + song management."""
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from config import MAX_TITLE_LEN, MAX_SONGS_PER_PLAYLIST
 from helpers import success_resp, rate_limit, pagination_meta, make_cached_response, get_current_user
+from schemas import Envelope, PlaylistOut, UNAUTHORIZED, RATE_LIMITED, NOT_FOUND
 from services import playlists as playlist_svc
 
-router = APIRouter()
+router = APIRouter(tags=["playlists"])
 
 
 class PlaylistCreate(BaseModel):
     title: str
     songIds: list[str] = []
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"title": "My Playlist", "songIds": ["song-1", "song-2"]}
+            ]
+        }
+    )
 
     @field_validator("title")
     @classmethod
@@ -26,13 +35,27 @@ class PlaylistCreate(BaseModel):
         return v[:MAX_SONGS_PER_PLAYLIST]
 
 
-@router.post("/playlists")
+@router.post(
+    "/playlists",
+    response_model=Envelope[PlaylistOut],
+    summary="Create playlist",
+    description="Create a new playlist for the authenticated user. Requires JWT.",
+    responses={**UNAUTHORIZED, **RATE_LIMITED},
+    openapi_extra={"security": [{"bearerAuth": []}]},
+)
 async def create_playlist(body: PlaylistCreate, user=Depends(get_current_user)):
     data = await playlist_svc.create_playlist(body.title, body.songIds, user)
     return success_resp(data=data, message="Playlist created")
 
 
-@router.get("/playlists")
+@router.get(
+    "/playlists",
+    response_model=Envelope[list[PlaylistOut]],
+    summary="List playlists",
+    description="Return the authenticated user's playlists (paginated). Cached with ETag. Requires JWT.",
+    responses={**UNAUTHORIZED, **RATE_LIMITED},
+    openapi_extra={"security": [{"bearerAuth": []}]},
+)
 async def list_playlists(request: Request, user=Depends(get_current_user), limit: int = 20, offset: int = 0):
     rate_limit(request, max_requests=60, window=60)
     items, total = await playlist_svc.list_playlists(user, limit, offset)
@@ -40,7 +63,14 @@ async def list_playlists(request: Request, user=Depends(get_current_user), limit
     return make_cached_response(body, request)
 
 
-@router.get("/playlists/{playlist_id}")
+@router.get(
+    "/playlists/{playlist_id}",
+    response_model=Envelope[PlaylistOut],
+    summary="Get playlist",
+    description="Return a single playlist by ID (must belong to the authenticated user). Cached with ETag. Requires JWT.",
+    responses={**UNAUTHORIZED, **RATE_LIMITED, **NOT_FOUND},
+    openapi_extra={"security": [{"bearerAuth": []}]},
+)
 async def get_playlist(playlist_id: str, request: Request, user=Depends(get_current_user)):
     rate_limit(request, max_requests=60, window=60)
     data = await playlist_svc.get_playlist(playlist_id, user)
@@ -48,25 +78,53 @@ async def get_playlist(playlist_id: str, request: Request, user=Depends(get_curr
     return make_cached_response(body, request)
 
 
-@router.put("/playlists/{playlist_id}")
+@router.put(
+    "/playlists/{playlist_id}",
+    response_model=Envelope[PlaylistOut],
+    summary="Update playlist",
+    description="Replace title and song list of an existing playlist. Requires JWT.",
+    responses={**UNAUTHORIZED, **NOT_FOUND},
+    openapi_extra={"security": [{"bearerAuth": []}]},
+)
 async def update_playlist(playlist_id: str, body: PlaylistCreate, user=Depends(get_current_user)):
     data = await playlist_svc.update_playlist(playlist_id, body.title, body.songIds, user)
     return success_resp(data=data, message="Playlist updated")
 
 
-@router.delete("/playlists/{playlist_id}")
+@router.delete(
+    "/playlists/{playlist_id}",
+    response_model=Envelope[dict],
+    summary="Delete playlist",
+    description="Permanently delete a playlist. Requires JWT.",
+    responses={**UNAUTHORIZED, **NOT_FOUND},
+    openapi_extra={"security": [{"bearerAuth": []}]},
+)
 async def delete_playlist(playlist_id: str, user=Depends(get_current_user)):
     await playlist_svc.delete_playlist(playlist_id, user)
     return success_resp(data={}, message="Playlist deleted")
 
 
-@router.post("/playlists/{playlist_id}/songs/{song_id}")
+@router.post(
+    "/playlists/{playlist_id}/songs/{song_id}",
+    response_model=Envelope[PlaylistOut],
+    summary="Add song to playlist",
+    description="Append a song to the playlist (idempotent — duplicates are ignored). Requires JWT.",
+    responses={**UNAUTHORIZED, **NOT_FOUND},
+    openapi_extra={"security": [{"bearerAuth": []}]},
+)
 async def add_song_to_playlist(playlist_id: str, song_id: str, user=Depends(get_current_user)):
     data = await playlist_svc.add_song(playlist_id, song_id, user)
     return success_resp(data=data, message="Song added to playlist")
 
 
-@router.delete("/playlists/{playlist_id}/songs/{song_id}")
+@router.delete(
+    "/playlists/{playlist_id}/songs/{song_id}",
+    response_model=Envelope[PlaylistOut],
+    summary="Remove song from playlist",
+    description="Remove a song from the playlist. Requires JWT.",
+    responses={**UNAUTHORIZED, **NOT_FOUND},
+    openapi_extra={"security": [{"bearerAuth": []}]},
+)
 async def remove_song_from_playlist(playlist_id: str, song_id: str, user=Depends(get_current_user)):
     data = await playlist_svc.remove_song(playlist_id, song_id, user)
     return success_resp(data=data, message="Song removed from playlist")

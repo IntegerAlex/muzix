@@ -3,9 +3,10 @@ import json
 import time
 from fastapi import APIRouter, Request
 from helpers import success_resp, rate_limit, colors_from_title
+from schemas import Envelope, SongBrief, AlbumOut, ArtistOut, SearchResult, RATE_LIMITED
 from config import INFO_DIR
 
-router = APIRouter(prefix="/local")
+router = APIRouter(prefix="/local", tags=["local"])
 
 _local_cache: dict = {"data": None, "ts": 0.0}
 _CACHE_TTL = 60.0
@@ -77,25 +78,49 @@ def _build_local_artists(songs: list[dict]) -> list[dict]:
     return list(artist_map.values())
 
 
-@router.get("/songs")
+@router.get(
+    "/songs",
+    response_model=Envelope[list[SongBrief]],
+    summary="List local songs",
+    description="Return songs from the local filesystem (dev only, non-production).",
+    responses={**RATE_LIMITED},
+)
 async def local_songs(request: Request):
     rate_limit(request, max_requests=30, window=60)
     return success_resp(data=_load_local_songs(), message="Local songs retrieved")
 
 
-@router.get("/albums")
+@router.get(
+    "/albums",
+    response_model=Envelope[list[AlbumOut]],
+    summary="List local albums",
+    description="Return albums derived from local songs (dev only, non-production).",
+    responses={**RATE_LIMITED},
+)
 async def local_albums(request: Request):
     rate_limit(request, max_requests=30, window=60)
     return success_resp(data=_build_local_albums(_load_local_songs()), message="Local albums retrieved")
 
 
-@router.get("/artists")
+@router.get(
+    "/artists",
+    response_model=Envelope[list[ArtistOut]],
+    summary="List local artists",
+    description="Return artists derived from local songs (dev only, non-production).",
+    responses={**RATE_LIMITED},
+)
 async def local_artists(request: Request):
     rate_limit(request, max_requests=30, window=60)
     return success_resp(data=_build_local_artists(_load_local_songs()), message="Local artists retrieved")
 
 
-@router.get("/search")
+@router.get(
+    "/search",
+    response_model=Envelope[SearchResult],
+    summary="Search local songs",
+    description="Search local songs by title or artist (dev only, non-production).",
+    responses={**RATE_LIMITED},
+)
 async def local_search(request: Request, q: str = ""):
     rate_limit(request, max_requests=30, window=60)
     songs = _load_local_songs()

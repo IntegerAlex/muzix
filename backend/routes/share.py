@@ -1,12 +1,13 @@
 """Share routes: generate share links and resolve share tokens."""
 import os
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from helpers import success_resp, rate_limit_async, get_current_user
+from schemas import Envelope, ShareCreated, ShareResolved, UNAUTHORIZED, RATE_LIMITED, NOT_FOUND, VALIDATION_ERROR
 from services import share as share_svc
 
-router = APIRouter()
+router = APIRouter(tags=["share"])
 
 WEB_URL = os.getenv("WEB_URL", "https://muzix.gossorg.in")
 
@@ -16,8 +17,30 @@ class ShareGenerate(BaseModel):
     content_id: str
     selected_lyrics_lines: list[int] | None = None
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "content_type": "song",
+                    "content_id": "abc-123",
+                    "selected_lyrics_lines": None,
+                }
+            ]
+        }
+    )
 
-@router.post("/generate")
+
+@router.post(
+    "/generate",
+    response_model=Envelope[ShareCreated],
+    summary="Generate share link",
+    description=(
+        "Create a shareable link for a song, album, artist, playlist, or lyrics excerpt. "
+        "Valid for 30 days. Rate-limited to 10 requests per minute. Requires JWT."
+    ),
+    responses={**UNAUTHORIZED, **RATE_LIMITED, **NOT_FOUND, **VALIDATION_ERROR},
+    openapi_extra={"security": [{"bearerAuth": []}]},
+)
 async def generate_share(body: ShareGenerate, request: Request, user=Depends(get_current_user)):
     await rate_limit_async(request, max_requests=10, window=60)
     data = await share_svc.create_share(
@@ -30,7 +53,13 @@ async def generate_share(body: ShareGenerate, request: Request, user=Depends(get
     return success_resp(data=data, message="Share link generated")
 
 
-@router.get("/{share_token}")
+@router.get(
+    "/{share_token}",
+    response_model=Envelope[ShareResolved],
+    summary="Resolve share link",
+    description="Resolve a share token to its content metadata. Returns 404-style empty data if the token is invalid or expired.",
+    responses={**RATE_LIMITED},
+)
 async def resolve_share(share_token: str, request: Request):
     data = await share_svc.get_share_by_token(share_token)
     if data is None:

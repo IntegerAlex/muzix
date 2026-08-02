@@ -2,14 +2,25 @@
 import asyncio
 from fastapi import APIRouter, Depends, Request
 from helpers import success_resp, rate_limit, get_current_user_optional
+from schemas import Envelope, HomeFeed, RATE_LIMITED
 from services import analytics as analytics_svc
 from services import recommendations as rec_svc
 from services import mood as mood_svc
 
-router = APIRouter()
+router = APIRouter(tags=["home"])
 
 
-@router.get("/home")
+@router.get(
+    "/home",
+    response_model=Envelope[HomeFeed],
+    summary="Get home feed",
+    description=(
+        "Aggregated home-screen data: recent activity, top picks (recommendations), "
+        "and current mood. If authenticated, returns personalised results; otherwise "
+        "returns empty lists with a neutral mood. Rate-limited to 30 req/60 s."
+    ),
+    responses={**RATE_LIMITED},
+)
 async def get_home(request: Request, user=Depends(get_current_user_optional)):
     rate_limit(request, max_requests=30, window=60)
     recent = {"items": []}

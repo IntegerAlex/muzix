@@ -9,6 +9,7 @@ import logging
 import orjson
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import Response
 from fastapi.exceptions import HTTPException
 import logfire
@@ -34,7 +35,33 @@ async def lifespan(app: FastAPI):
 
 
 # --- App ---
-app = FastAPI(title="Muzix API", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+app = FastAPI(
+    title="Muzix API",
+    description="Music streaming, discovery and recommendation API.",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan,
+    openapi_tags=[
+        {"name": "health", "description": "Health check"},
+        {"name": "auth", "description": "Registration, login, token refresh, current user"},
+        {"name": "songs", "description": "List and retrieve songs"},
+        {"name": "albums", "description": "List and retrieve albums"},
+        {"name": "artists", "description": "List and retrieve artists"},
+        {"name": "playlists", "description": "Create, list, update, delete playlists; add/remove songs"},
+        {"name": "likes", "description": "Like / unlike songs, get liked song IDs"},
+        {"name": "stream", "description": "Get a presigned audio URL for a song"},
+        {"name": "thumbnails", "description": "Serve album/song thumbnails from R2"},
+        {"name": "search", "description": "Full-text search across songs, albums, artists"},
+        {"name": "telemetry", "description": "Record playback events, manage listening sessions"},
+        {"name": "analytics", "description": "User listening statistics and history"},
+        {"name": "recommendations", "description": "Personalised song recommendations"},
+        {"name": "home", "description": "Aggregated home-screen feed"},
+        {"name": "share", "description": "Generate and resolve share links"},
+        {"name": "local", "description": "Dev-only local asset serving (non-production)"},
+    ],
+)
 
 # --- Logfire ---
 logfire.configure()
@@ -92,6 +119,32 @@ async def generic_exception_handler(request: Request, exc: Exception):
         headers["Access-Control-Allow-Credentials"] = "true"
         headers["Vary"] = "Origin"
     return Response(content=orjson.dumps(body), media_type="application/json", status_code=500, headers=headers)
+
+
+# --- OpenAPI (Bearer auth scheme) ---
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        tags=app.openapi_tags,
+    )
+    schema.setdefault("components", {})["securitySchemes"] = {
+        "bearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "JWT access token obtained from POST /auth/login or POST /auth/register",
+        },
+    }
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = custom_openapi
 
 
 # --- Routes ---
