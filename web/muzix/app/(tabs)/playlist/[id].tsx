@@ -15,6 +15,7 @@ import { usePlaylist, useSongs } from '@/services/data';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore } from '@/store/authStore';
 import { useSharing } from '@/hooks/useSharing';
+import { useHaptics } from '@/hooks/useHaptics';
 import { useToast } from '@/components/Toast';
 import { api } from '@/services/api';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
@@ -57,6 +58,7 @@ export default function PlaylistDetail() {
   const [refreshing, setRefreshing] = useState(false);
   const { share, isSharing, shareError, resetError } = useSharing();
   const { toast } = useToast();
+  const { impact } = useHaptics();
 
   useEffect(() => {
     if (shareError) { toast(shareError, 'error'); resetError(); }
@@ -187,11 +189,16 @@ export default function PlaylistDetail() {
 
   const handleContextAction = useCallback((action: 'queue' | 'next') => {
     if (!contextSong) return;
-    if (action === 'queue') addToQueue(contextSong);
-    else playNextSong(contextSong);
+    if (action === 'queue') {
+      addToQueue(contextSong);
+      impact('medium');
+    } else {
+      playNextSong(contextSong);
+      impact('light');
+    }
     setShowContextMenu(false);
     setContextSong(null);
-  }, [contextSong, addToQueue, playNextSong]);
+  }, [contextSong, addToQueue, playNextSong, impact]);
 
   const ListHeader = useMemo(() => (
     <>

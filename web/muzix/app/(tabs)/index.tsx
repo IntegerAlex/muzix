@@ -1,14 +1,17 @@
 import { memo, useEffect, useMemo, useState, useCallback } from 'react';
 import { Pressable, ScrollView, View, RefreshControl } from 'react-native';
 import * as Location from 'expo-location';
-import { Sun, Moon, Cloud, CloudSun, CloudMoon, CloudRain, CloudLightning, CloudSnow, CloudFog, Music2, Angry, Grinning, Happy as HappyIcon, Kissing, Neutral, Pensive, Relieved, Smile, Wink } from '@/lib/icons';
+import { Sun, Moon, Cloud, CloudSun, CloudMoon, CloudRain, CloudLightning, CloudSnow, CloudFog, Music2, WifiOff, Angry, Grinning, Happy as HappyIcon, Kissing, Neutral, Pensive, Relieved, Smile, Wink } from '@/lib/icons';
 import { Text } from 'tamagui';
 import { SongRow } from '@/components/SongRow';
 import { SectionHeader } from '@/components/SectionHeader';
 import { SongSkeleton } from '@/components/Skeleton';
 import { useHome } from '@/services/data';
+import { getSongsByIds } from '@/services/data';
 import { useSharing } from '@/hooks/useSharing';
 import { useToast } from '@/components/Toast';
+import { useConnectivity } from '@/hooks/useConnectivity';
+import { getDownloadedSongs } from '@/services/audioCache';
 import type { Song } from '@/services/types';
 import { usePlayerStore } from '@/store/playerStore';
 import { AnimatedEntrance } from '@/lib/useEntrance';
@@ -55,6 +58,40 @@ function SectionEmpty({ label }: { label: string }) {
   return (
     <View style={{ paddingHorizontal: SPACING.xl, paddingVertical: SPACING.lg, alignItems: 'center' }}>
       <Text fontSize={13} color={TEXT_MUTED}>{label}</Text>
+    </View>
+  );
+}
+
+function OfflineEmptyView({ downloadedSongs, onShare, isSharing, current }: { downloadedSongs: Song[]; onShare: (song: Song) => void; isSharing: boolean; current: Song | null }) {
+  return (
+    <View style={{ alignItems: 'center', paddingHorizontal: SPACING.xl, paddingTop: 40 }}>
+      <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: 'rgba(99,102,241,0.12)', borderWidth: 1, borderColor: 'rgba(99,102,241,0.25)', alignItems: 'center', justifyContent: 'center' }}>
+        <WifiOff size={32} color="#6366f1" />
+      </View>
+      <Text style={{ fontSize: 20, fontWeight: '700', color: TEXT_PRIMARY, marginTop: 16 }}>You're offline</Text>
+      <Text style={{ fontSize: 14, color: TEXT_SECONDARY, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
+        Connect to the internet to discover new music, or check your downloaded tracks.
+      </Text>
+
+      {downloadedSongs.length > 0 && (
+        <View style={{ alignSelf: 'stretch', marginTop: 24 }}>
+          <SectionHeader title="Downloaded" />
+          <View>
+            {downloadedSongs.map((songItem, i) => (
+              <AnimatedEntrance key={songItem.id} index={i}>
+                <SongRow
+                  song={songItem}
+                  index={i}
+                  queue={downloadedSongs}
+                  isCurrent={current?.id === songItem.id}
+                  onShare={onShare}
+                  isSharing={isSharing}
+                />
+              </AnimatedEntrance>
+            ))}
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -138,9 +175,23 @@ function mapApiSongToSong(item: any): Song {
 
 export default function HomeScreen() {
   const current = usePlayerStore((s) => s.current);
+  const recentlyPlayedIds = usePlayerStore((s) => s.recentlyPlayed);
   const { data: homeData, loading, error, refetch: reloadHome } = useHome();
   const { share, isSharing, shareError, resetError } = useSharing();
   const { toast } = useToast();
+  const { isOffline } = useConnectivity();
+  const [downloadedSongs, setDownloadedSongs] = useState<Song[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isOffline) return;
+    getDownloadedSongs()
+      .then((ids) => {
+        if (!cancelled) setDownloadedSongs(getSongsByIds(ids));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOffline]);
 
   useEffect(() => {
     if (shareError) {
@@ -229,16 +280,20 @@ export default function HomeScreen() {
   })();
 
   const recentSongs = useMemo(() => {
+    if (isOffline) return getSongsByIds(recentlyPlayedIds).slice(0, 5);
     if (!homeData?.recentActivity) return [];
     return homeData.recentActivity
       .filter((item) => item.song)
       .map((item) => mapApiSongToSong(item.song!));
-  }, [homeData?.recentActivity]);
+  }, [homeData?.recentActivity, isOffline, recentlyPlayedIds]);
 
   const topPicks = useMemo(() => {
+    if (isOffline) return downloadedSongs;
     if (!homeData?.topPicks) return [];
     return homeData.topPicks.map(mapApiSongToSong);
-  }, [homeData?.topPicks]);
+  }, [homeData?.topPicks, isOffline, downloadedSongs]);
+
+  const showOfflineEmpty = isOffline && recentSongs.length === 0;
 
   const mood = homeData?.mood ?? { label: 'Neutral', color: '#6b7280' };
 
@@ -254,7 +309,17 @@ export default function HomeScreen() {
           {greeting}
         </Text>
 
-        {error && !recentSongs.length ? (
+        {isOffline && !showOfflineEmpty && (
+          <View style={{ marginHorizontal: SPACING.xl, marginTop: SPACING.md, backgroundColor: 'rgba(99,102,241,0.12)', borderColor: '#6366f1', borderWidth: 1, borderRadius: RADIUS.md, padding: SPACING.md }}>
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#a5b4fc' }}>
+              Offline mode — showing downloaded and recently played tracks.
+            </Text>
+          </View>
+        )}
+
+        {showOfflineEmpty ? (
+          <OfflineEmptyView downloadedSongs={downloadedSongs} onShare={handleShare} isSharing={isSharing} current={current} />
+        ) : !isOffline && error && !recentSongs.length ? (
           <ErrorView message={error} onRetry={onRefresh} />
         ) : (
           <>
@@ -280,9 +345,9 @@ export default function HomeScreen() {
               </>
             )}
 
-            <SectionHeader title="Top picks for you" />
+            <SectionHeader title={isOffline ? 'Downloaded' : 'Top picks for you'} />
             <View style={{ paddingHorizontal: SPACING.xl }}>
-              {loading ? (
+              {loading && !isOffline ? (
                 <>
                   {[1, 2, 3, 4, 5].map((i) => <SongSkeleton key={i} />)}
                 </>
@@ -300,7 +365,7 @@ export default function HomeScreen() {
                   </AnimatedEntrance>
                 ))
               ) : (
-                <SectionEmpty label="No recommendations available" />
+                <SectionEmpty label={isOffline ? 'No downloaded tracks yet. Download songs while online to play them here.' : 'No recommendations available'} />
               )}
             </View>
           </>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, type TextInputAutoComplete, type TextInputTextContentType, Image } from 'react-native';
+import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Image, type TextInputProps } from 'react-native';
 import { View, Text } from 'tamagui';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
@@ -9,6 +9,9 @@ import { AnimatedBackdrop } from '@/components/AnimatedBackdrop';
 import { BG, SURFACE, SURFACE_ICON, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS, BORDER, DANGER, SURFACE_ELEVATED } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
+
+type TextInputAutoComplete = TextInputProps['autoComplete'];
+type TextInputTextContentType = TextInputProps['textContentType'];
 
 function Field({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, autoComplete, autoFocus, textContentType, icon }: {
   label: string;
@@ -84,11 +87,11 @@ export default function LoginScreen() {
     setError('');
     setBusy(true);
     try {
-      const { token, user } = await apiLogin(email, password);
-      setAuth(token, user);
+      const { token, refreshToken, user } = await apiLogin(email, password);
+      setAuth(token, refreshToken, user);
       router.replace('/');
     } catch (e) {
-      const msg = e?.message ?? 'Login failed';
+      const msg = e instanceof Error ? e.message : 'Login failed';
       setError(msg);
       toast(msg);
     } finally {
@@ -108,7 +111,6 @@ export default function LoginScreen() {
             <Image
               source={require('@/assets/images/logo.png')}
               style={{ width: 64, height: 64, borderRadius: 18, marginBottom: SPACING.lg }}
-              contentFit="contain"
             />
             <Text style={{ fontSize: 24, fontWeight: '700', color: TEXT_PRIMARY, letterSpacing: -0.3 }}>
               Sign in to Muzix

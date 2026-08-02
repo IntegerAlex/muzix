@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, type TextInputAutoComplete, type TextInputTextContentType, Image } from 'react-native';
+import { Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Image, type TextInputProps } from 'react-native';
 import { View, Text } from 'tamagui';
 import { router } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
@@ -9,6 +9,9 @@ import { AnimatedBackdrop } from '@/components/AnimatedBackdrop';
 import { BG, SURFACE, SURFACE_ELEVATED, SURFACE_ICON, ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS, BORDER, DANGER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
+
+type TextInputAutoComplete = TextInputProps['autoComplete'];
+type TextInputTextContentType = TextInputProps['textContentType'];
 
 interface FieldProps {
   label: string;
@@ -24,7 +27,7 @@ interface FieldProps {
   error?: string;
 }
 
-function Field({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, autoFocus, error }: FieldProps) {
+function Field({ label, value, onChangeText, placeholder, secureTextEntry, keyboardType, autoCapitalize, autoComplete, autoFocus, textContentType, error }: FieldProps) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -101,11 +104,11 @@ export default function RegisterScreen() {
     setBusy(true);
     setServerError(null);
     try {
-      const { token, user } = await apiRegister(email, password, displayName);
-      setAuth(token, user);
+      const { token, refreshToken, user } = await apiRegister(email, password, displayName);
+      setAuth(token, refreshToken, user);
       router.replace('/');
     } catch (e) {
-      const msg = e?.message ?? 'Registration failed';
+      const msg = e instanceof Error ? e.message : 'Registration failed';
       if (msg.toLowerCase().includes('email') && msg.toLowerCase().includes('regist')) {
         setErrors((p) => ({ ...p, email: msg }));
       } else if (msg.toLowerCase().includes('display') || msg.toLowerCase().includes('name')) {
@@ -133,7 +136,6 @@ export default function RegisterScreen() {
             <Image
               source={require('@/assets/images/logo.png')}
               style={{ width: 64, height: 64, borderRadius: 18, marginBottom: SPACING.lg }}
-              contentFit="contain"
             />
             <Text style={{ fontSize: 24, fontWeight: '700', color: TEXT_PRIMARY, letterSpacing: -0.3 }}>
               Create your account
@@ -178,7 +180,7 @@ export default function RegisterScreen() {
               onChangeText={(t) => { setPassword(t); setErrors((p) => ({ ...p, password: '', confirm: '' })); setServerError(null); }}
               placeholder="At least 6 characters"
               secureTextEntry
-              autoComplete="newPassword"
+              autoComplete="new-password"
               textContentType="newPassword"
               error={errors.password}
             />
@@ -188,7 +190,7 @@ export default function RegisterScreen() {
               onChangeText={(t) => { setConfirm(t); setErrors((p) => ({ ...p, confirm: '' })); setServerError(null); }}
               placeholder="Repeat your password"
               secureTextEntry
-              autoComplete="newPassword"
+              autoComplete="new-password"
               textContentType="newPassword"
               error={errors.confirm}
             />

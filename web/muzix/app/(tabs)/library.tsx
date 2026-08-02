@@ -1,12 +1,15 @@
 import { Pressable, ScrollView, View, RefreshControl, Modal, TextInput, Platform } from 'react-native';
 import { Link } from 'expo-router';
-import { useState, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { Text } from 'tamagui';
-import { Music, Plus, ListMusic, User } from '@/lib/icons';
+import { Music, Plus, ListMusic, User, Cloud } from '@/lib/icons';
 import { Artwork } from '@/components/Artwork';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Skeleton } from '@/components/Skeleton';
-import { useAlbums, useArtists, usePlaylists } from '@/services/data';
+import { SongRow } from '@/components/SongRow';
+import { useAlbums, useArtists, usePlaylists, useSongs, getSongsByIds } from '@/services/data';
+import { getDownloadedSongs, getCachedAudioSize } from '@/services/audioCache';
+import { useConnectivity } from '@/hooks/useConnectivity';
 import { AnimatedEntrance } from '@/lib/useEntrance';
 import { RADIUS } from '@/lib/sizing';
 import { SPACING } from '@/lib/spacing';
@@ -14,6 +17,7 @@ import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, SURFACE_ELEVATED,
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { useResponsive } from '@/lib/useResponsive';
+import type { Song } from '@/services/types';
 
 const PALETTE: [string, string][] = [
   ['#7c3aed', '#7c3aed'],
@@ -60,12 +64,26 @@ export default function LibraryScreen() {
   const { data: albums, loading: albumsLoading, error: albumsError, refetch: reloadAlbums } = useAlbums();
   const { data: artists, loading: artistsLoading, error: artistsError, refetch: reloadArtists } = useArtists();
   const { data: playlists, loading: playlistsLoading, error: playlistsError, refetch: reloadPlaylists } = usePlaylists();
+  const { data: songs } = useSongs();
+  const { isOffline } = useConnectivity();
 
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [downloadedSongs, setDownloadedSongs] = useState<Song[]>([]);
+  const [downloadsSize, setDownloadsSize] = useState(0);
   const token = useAuthStore((s) => s.token);
+
+  useEffect(() => {
+    getDownloadedSongs().then((ids) => {
+      if (ids.length > 0) {
+        const resolved = getSongsByIds(ids);
+        setDownloadedSongs(resolved);
+      }
+      getCachedAudioSize().then(setDownloadsSize).catch(() => {});
+    }).catch(() => {});
+  }, [isOffline]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -86,7 +104,7 @@ export default function LibraryScreen() {
 
   const loading = albumsLoading || artistsLoading || playlistsLoading;
   const error = albumsError || artistsError || playlistsError;
-  const isEmpty = !loading && playlists.length === 0 && albums.length === 0 && artists.length === 0;
+  const isEmpty = !loading && !isOffline && playlists.length === 0 && albums.length === 0 && artists.length === 0;
 
   const { isDesktop, isTablet } = useResponsive();
   const isWide = isDesktop || isTablet;
@@ -236,6 +254,96 @@ export default function LibraryScreen() {
 
       {error ? (
         <ErrorView message={error} onRetry={onRefresh} />
+      ) : isOffline ? (
+        <>
+          {downloadedSongs.length > 0 && (
+            <>
+              <SectionHeader title="Downloaded" />
+              <View style={{ paddingHorizontal: SPACING.xl, gap: SPACING.sm }}>
+                <Text style={{ fontSize: 13, color: TEXT_MUTED, marginBottom: SPACING.sm }}>
+                  {downloadsSize > 0 ? `${(downloadsSize / (1024 * 1024)).toFixed(1)} MB cached` : 'Available offline'}
+                </Text>
+                {downloadedSongs.map((song, i) => (
+                  <SongRow key={song.id} song={song} index={i} queue={downloadedSongs} isCurrent={false} />
+                ))}
+              </View>
+            </>
+          )}
+          {albums.length > 0 && (
+            <>
+              <SectionHeader title="Albums" />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SPACING.xl, gap: SPACING.md }}>
+                {albums.map((al, i) => (
+                  <GridItem key={al.id} index={i}>
+                    <Link href={`/album/${al.id}`} asChild>
+                      <Pressable accessibilityLabel={`${al.title} by ${al.artist}`} accessibilityRole="button">
+                        <Artwork colors={pickColors(i + 5, al.colors)} style={{ height: 160, width: '100%' }} radius={RADIUS.lg} />
+                         <Text style={{ marginTop: SPACING.md, fontSize: 14, fontWeight: '700', color: TEXT_PRIMARY }} numberOfLines={1}>
+                          {al.title}
+                        </Text>
+                        <Text style={{ marginTop: SPACING.xs, fontSize: 12, fontWeight: '500', color: TEXT_SECONDARY }} numberOfLines={1}>
+                          {al.artist}
+                        </Text>
+                      </Pressable>
+                    </Link>
+                  </GridItem>
+                ))}
+              </View>
+            </>
+          )}
+          {artists.length > 0 && (
+            <>
+              <SectionHeader title="Artists" />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SPACING.xl, gap: SPACING.md }}>
+                {artists.map((a, i) => (
+                  <GridItem key={a.id} index={i}>
+                    <Link href={`/artist/${a.id}`} asChild>
+                      <Pressable accessibilityLabel={a.name} accessibilityRole="button">
+                         <Artwork colors={pickColors(i + 3, a.colors)} style={{ height: 160, width: '100%' }} radius={80} />
+                         <Text style={{ marginTop: SPACING.md, fontSize: 14, fontWeight: '700', color: TEXT_PRIMARY }} numberOfLines={1}>
+                          {a.name}
+                        </Text>
+                      </Pressable>
+                    </Link>
+                  </GridItem>
+                ))}
+              </View>
+            </>
+          )}
+          {playlists.length > 0 && (
+            <>
+              <SectionHeader title="Playlists" />
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SPACING.xl, gap: SPACING.md }}>
+                {playlists.map((p, i) => (
+                  <GridItem key={p.id} index={i}>
+                    <Link href={`/playlist/${p.id}`} asChild>
+                      <Pressable accessibilityLabel={p.title} accessibilityRole="button">
+                        <Artwork colors={pickColors(i, p.colors)} style={{ height: 160, width: '100%' }} radius={RADIUS.lg} />
+                        <Text style={{ marginTop: SPACING.md, fontSize: 14, fontWeight: '700', color: TEXT_PRIMARY }} numberOfLines={1}>
+                          {p.title}
+                        </Text>
+                        <Text style={{ marginTop: SPACING.xs, fontSize: 12, fontWeight: '500', color: TEXT_SECONDARY }}>
+                          {p.songIds.length} songs
+                        </Text>
+                      </Pressable>
+                    </Link>
+                  </GridItem>
+                ))}
+              </View>
+            </>
+          )}
+          {downloadedSongs.length === 0 && albums.length === 0 && artists.length === 0 && playlists.length === 0 && (
+            <View style={{ alignItems: 'center', paddingTop: 80, paddingHorizontal: 40 }}>
+              <Cloud size={56} color={TEXT_MUTED} strokeWidth={1.5} />
+              <Text style={{ marginTop: SPACING.xxl, textAlign: 'center', fontSize: 18, fontWeight: '700', color: TEXT_PRIMARY }}>
+                You're offline
+              </Text>
+              <Text style={{ marginTop: SPACING.sm, textAlign: 'center', fontSize: 14, color: TEXT_MUTED }}>
+                Download songs to listen offline.
+              </Text>
+            </View>
+          )}
+        </>
       ) : isEmpty && (filtered ? activeCategory === 'all' : true) ? (
         <View style={{ alignItems: 'center', paddingTop: 80, paddingHorizontal: 40 }}>
           <Music size={56} color={TEXT_MUTED} strokeWidth={1.5} />

@@ -1,12 +1,12 @@
-import { useEffect, useState, useCallback, Platform } from 'react';
-import { View, Text, Pressable, ActivityIndicator, ScrollView, StyleSheet, Linking } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { View, Text, Pressable, ActivityIndicator, ScrollView, StyleSheet, Linking, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { AlertTriangle, Music, Album, User, ListMusic } from '@/lib/icons';
 import { BG, SURFACE, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, DANGER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
+import { API_URL } from '@/lib/config';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8000";
 const WEB_URL = "https://muzix.gossorg.in";
 
 interface ShareData {

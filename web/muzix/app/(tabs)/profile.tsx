@@ -2,17 +2,26 @@ import { Pressable, ScrollView, RefreshControl } from 'react-native';
 import { useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { View, Text } from 'tamagui';
 import { router } from 'expo-router';
-import { LogOut, Music, Heart, ListMusic, Play, Clock } from '@/lib/icons';
+import { LogOut, Music, Heart, ListMusic, Play, Clock, Cloud, Trash2 } from '@/lib/icons';
 import { Artwork } from '@/components/Artwork';
 import { SongSkeleton } from '@/components/Skeleton';
 import { useAuthStore } from '@/store/authStore';
 import { usePlayerStore } from '@/store/playerStore';
 import { api } from '@/services/api';
-import { getSongs } from '@/services/data';
+import { getSongs, getSongsByIds } from '@/services/data';
+import { getCachedAudioSize, getDownloadedSongs, removeCachedAudio } from '@/services/audioCache';
 import type { Song } from '@/services/types';
 import { BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER, SURFACE, SURFACE_ELEVATED, SURFACE_ICON, DANGER } from '@/lib/colors';
 import { SPACING } from '@/lib/spacing';
 import { RADIUS } from '@/lib/sizing';
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
 
 interface Stats {
   totalPlays: number;
@@ -228,12 +237,32 @@ function SkeletonSection({ count = 3 }: { count?: number }) {
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
   const recentlyPlayed = usePlayerStore((s) => s.recentlyPlayed);
+  const playSong = usePlayerStore((s) => s.playSong);
+  const current = usePlayerStore((s) => s.current);
   const [stats, setStats] = useState<Stats | null>(null);
   const [topSongs, setTopSongs] = useState<Song[]>([]);
   const [recentSongs, setRecentSongs] = useState<Song[]>([]);
   const [likedList, setLikedList] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [downloadedSongs, setDownloadedSongs] = useState<Song[]>([]);
+  const [downloadsSize, setDownloadsSize] = useState(0);
+
+  useEffect(() => {
+    getDownloadedSongs().then((ids) => {
+      if (ids.length > 0) {
+        const resolved = getSongsByIds(ids);
+        setDownloadedSongs(resolved);
+      }
+      getCachedAudioSize().then(setDownloadsSize).catch(() => {});
+    }).catch(() => {});
+  }, []);
+
+  const handleClearDownloads = useCallback(async () => {
+    await Promise.all(downloadedSongs.map((song) => removeCachedAudio(song.id)));
+    setDownloadedSongs([]);
+    setDownloadsSize(0);
+  }, [downloadedSongs]);
 
   const loadProfile = useCallback(async (recentIds: string[]) => {
     const token = useAuthStore.getState().token;
@@ -371,6 +400,62 @@ export default function ProfileScreen() {
                 {derivedData.likedSlice.map((song) => (
                   <SongRow key={song.id} song={song} />
                 ))}
+              </ProfileSection>
+            )}
+
+            {downloadedSongs.length > 0 && (
+              <ProfileSection icon={Cloud} title="Downloads" color="#06b6d4" count={downloadedSongs.length}>
+                <View style={{ paddingVertical: SPACING.xs, paddingHorizontal: SPACING.lg }}>
+                  <Text style={{ fontSize: 12, color: TEXT_MUTED }}>
+                    {formatBytes(downloadsSize)} · {downloadedSongs.length} songs
+                  </Text>
+                </View>
+                {downloadedSongs.map((song) => (
+                  <Pressable
+                    key={song.id}
+                    onPress={() => playSong(song)}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: SPACING.md,
+                      paddingVertical: SPACING.sm,
+                      paddingHorizontal: SPACING.lg,
+                      opacity: pressed ? 0.6 : 1,
+                      borderLeftWidth: current?.id === song.id ? 2 : 0,
+                      borderLeftColor: ACCENT,
+                    })}
+                    accessibilityLabel={`Play ${song.title} by ${song.artist}`}
+                    accessibilityRole="button"
+                  >
+                    <Artwork colors={song.colors} style={{ width: 40, height: 40, borderRadius: 8 }} radius={8} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: TEXT_PRIMARY }} numberOfLines={1}>
+                        {song.title}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: TEXT_SECONDARY }} numberOfLines={1}>
+                        {song.artist}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ))}
+                <Pressable
+                  onPress={handleClearDownloads}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: SPACING.sm,
+                    paddingVertical: SPACING.md,
+                    opacity: pressed ? 0.6 : 1,
+                    borderTopWidth: 1,
+                    borderTopColor: BORDER,
+                  })}
+                  accessibilityLabel="Clear downloads"
+                  accessibilityRole="button"
+                >
+                  <Trash2 size={14} color={DANGER} />
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: DANGER }}>Clear Downloads</Text>
+                </Pressable>
               </ProfileSection>
             )}
           </>
