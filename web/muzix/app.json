@@ -57,7 +57,8 @@
           "project": "muzix",
           "organization": "payquill"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

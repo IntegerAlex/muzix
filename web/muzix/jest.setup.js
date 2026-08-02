@@ -89,7 +89,7 @@ jest.mock('expo-file-system', () => ({
   downloadAsync: jest.fn().mockResolvedValue({ uri: '/tmp/test.mp3' }),
 }));
 
-jest.mock('@/services/playerService', () => ({
+jest.mock('@/services/playerService.web', () => ({
   setupPlayer: jest.fn(),
   addQueue: jest.fn(),
   play: jest.fn(),
