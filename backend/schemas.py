@@ -134,6 +134,10 @@ CONFLICT = {
 class HealthStatus(BaseModel):
     status: str = Field(default="ok", examples=["ok"])
     time: str = Field(description="ISO 8601 UTC timestamp", examples=["2025-01-15T12:00:00Z"])
+    recommendations: "ModelStatusOut | None" = Field(
+        default=None,
+        description="Recommendation model readiness: trained flag, last-fit time, and matrix dimensions. Present once the model has been fitted (or after an empty fit).",
+    )
 
 
 # ── Auth / User ─────────────────────────────────────────────────────────────

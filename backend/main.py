@@ -5,6 +5,7 @@ Run locally:
     uv run python migrate.py
     uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 """
+import asyncio
 import logging
 import orjson
 from contextlib import asynccontextmanager
@@ -16,6 +17,8 @@ import logfire
 
 logger = logging.getLogger("muzix")
 
+STARTUP_TRAIN_TIMEOUT_S = 20
+
 from config import AUDIO_DIR, THUMB_DIR
 from middleware import SecurityMiddleware
 from helpers import success_resp
@@ -26,9 +29,29 @@ from db import engine
 async def lifespan(app: FastAPI):
     from migrate import migrate as run_migrate
     from services.recommendations import train_model
+
+    # Migrations must complete before DB-backed routes can serve (they would
+    # otherwise raise TableNotFoundError). With the WHERE fts IS NULL backfill
+    # guard in migrate.py this is O(1) DDL on restart — fast enough to block.
     await run_migrate()
-    await train_model()
+
+    # Recommendation training is the real startup bottleneck (ALS fit on the
+    # interaction matrix can take tens of seconds). Run it in the background,
+    # time-boxed, so the app reaches "startup complete" immediately. Existing
+    # fallbacks (get_recommendations -> _get_cached_popular) serve until warm.
+    async def _train():
+        try:
+            await asyncio.wait_for(train_model(), timeout=STARTUP_TRAIN_TIMEOUT_S)
+        except asyncio.TimeoutError:
+            logger.warning("Recommendation training timed out; serving fallbacks until trained")
+
+    train_task = asyncio.create_task(_train())
     yield
+    train_task.cancel()
+    try:
+        await train_task
+    except asyncio.CancelledError:
+        pass
     await engine.dispose()
     from services.redis_client import redis
     await redis.close()

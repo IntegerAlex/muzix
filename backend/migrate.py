@@ -19,11 +19,37 @@ from db import _async_url
 
 load_dotenv()
 
+# Bump when the schema changes. migrate() runs all DDL below only when the
+# recorded version is older, then records the new version atomically — so a
+# normal restart costs one round-trip (~1s) instead of a full DDL pass.
+MIGRATION_VERSION = 2
+
+
+async def _current_version(conn) -> int:
+    """Return the recorded schema version (0 when never migrated)."""
+    await conn.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+    )
+    row = (await conn.execute(text("SELECT MAX(version) FROM schema_migrations"))).scalar()
+    return row or 0
+
 
 async def migrate() -> None:
     url = _async_url(os.getenv("DATABASE_URL", ""))
     engine = create_async_engine(url, echo=False)
     async with engine.begin() as conn:
+        current = await _current_version(conn)
+        if current >= MIGRATION_VERSION:
+            print(f"Migration up-to-date (version {current}). Skipping.")
+            return
+
         # ----- users (must be first — referenced by FKs) -----
         await conn.execute(
             text(
@@ -108,17 +134,19 @@ async def migrate() -> None:
                 """
             )
         )
-        for col, ddl in [
-            ("artist_id", "TEXT"),
-            ("album_id", "TEXT"),
-            ("track", "INTEGER"),
-            ("genre", "TEXT NOT NULL DEFAULT ''"),
-            ("lyrics", "TEXT"),
-            ("colors", "TEXT[] NOT NULL DEFAULT '{}'"),
-        ]:
-            await conn.execute(
-                text(f"ALTER TABLE songs ADD COLUMN IF NOT EXISTS {col} {ddl};")
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE songs
+                    ADD COLUMN IF NOT EXISTS artist_id TEXT,
+                    ADD COLUMN IF NOT EXISTS album_id TEXT,
+                    ADD COLUMN IF NOT EXISTS track INTEGER,
+                    ADD COLUMN IF NOT EXISTS genre TEXT NOT NULL DEFAULT '',
+                    ADD COLUMN IF NOT EXISTS lyrics TEXT,
+                    ADD COLUMN IF NOT EXISTS colors TEXT[] NOT NULL DEFAULT '{}';
+                """
             )
+        )
         # Convert computed fts to plain TSVECTOR if it still exists as computed
         await conn.execute(text("""
             DO $$ BEGIN
@@ -307,14 +335,25 @@ async def migrate() -> None:
             FOR EACH ROW EXECUTE FUNCTION update_artist_fts();
         """))
 
-        # Backfill fts for existing rows
-        await conn.execute(text("UPDATE songs SET fts = to_tsvector('english', coalesce(title,'') || ' ' || coalesce(artist,'') || ' ' || coalesce(album,''));"))
+        # Backfill fts only for rows whose fts is stale / NULL. Rows are also
+        # maintained by the triggers above, so this is a no-op on restarts of a
+        # populated DB — avoiding a full-table to_tsvector() scan on every boot.
+        await conn.execute(text("""
+            UPDATE songs SET fts = to_tsvector('english',
+                coalesce(title, '') || ' ' ||
+                coalesce(artist, '') || ' ' ||
+                coalesce(album, '')
+            ) WHERE fts IS NULL;
+        """))
         await conn.execute(text("""
             UPDATE albums a SET fts = to_tsvector('english',
                 coalesce(a.title, '') || ' ' || coalesce(ar.name, '')
-            ) FROM artists ar WHERE ar.id = a.artist_id;
+            ) FROM artists ar WHERE ar.id = a.artist_id AND a.fts IS NULL;
         """))
-        await conn.execute(text("UPDATE artists SET fts = to_tsvector('english', coalesce(name,''));"))
+        await conn.execute(text("""
+            UPDATE artists SET fts = to_tsvector('english', coalesce(name, ''))
+            WHERE fts IS NULL;
+        """))
 
         # ----- playlists -----
         await conn.execute(
@@ -507,8 +546,14 @@ async def migrate() -> None:
             text("CREATE INDEX IF NOT EXISTS idx_shares_user ON shares(user_id);")
         )
 
+        # Record the applied version atomically with all DDL above.
+        await conn.execute(
+            text("INSERT INTO schema_migrations (version) VALUES (:v)"),
+            {"v": MIGRATION_VERSION},
+        )
+
     await engine.dispose()
-    print("Migration complete: all tables ready.")
+    print(f"Migration complete: all tables ready (version {MIGRATION_VERSION}).")
 
 
 if __name__ == "__main__":
