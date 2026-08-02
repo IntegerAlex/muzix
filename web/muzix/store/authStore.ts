@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { safeStorage } from './storage';
+import { authStorage, type Tokens } from './authStorage';
 import { type User } from '@/services/api';
+import { api } from '@/services/api';
 
 let _playerStoreRef: (() => any) | null = null;
 function getPlayerStore() {
@@ -11,73 +11,132 @@ function getPlayerStore() {
   return _playerStoreRef();
 }
 
-function safeRemoveItem(key: string) {
-  try {
-    safeStorage.removeItem(key);
-  } catch {}
-}
-
 const TOKEN_EXPIRY_BUFFER_MS = 60_000;
 
 interface AuthState {
   token: string | null;
+  refreshToken: string | null;
   user: User | null;
   loading: boolean;
   tokenExpiresAt: number | null;
-  setAuth: (token: string, user: User) => void;
-  logout: () => void;
-  hydrate: () => void;
+  setAuth: (token: string, refreshToken: string, user: User) => void;
+  logout: () => Promise<void>;
+  hydrate: () => Promise<void>;
+  refreshTokens: () => Promise<{ token: string; refreshToken: string; expiresAt: number } | null>;
   isTokenExpired: () => boolean;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      token: null,
-      user: null,
-      loading: true,
-      tokenExpiresAt: null,
-      setAuth: (token, user) => {
-        const expiresIn = parseJwtExpiry(token);
-        set({ token, user, loading: false, tokenExpiresAt: expiresIn });
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  token: null,
+  refreshToken: null,
+  user: null,
+  loading: true,
+  tokenExpiresAt: null,
+
+  setAuth: (token: string, refreshToken: string, user: User) => {
+    const expiresAt = parseJwtExpiry(token);
+    authStorage.saveTokens(token, refreshToken, expiresAt ?? Date.now());
+    set({ token, refreshToken, user, loading: false, tokenExpiresAt: expiresAt });
+    getPlayerStore().getState().syncLikes();
+    getPlayerStore().getState().syncRecent();
+  },
+
+  logout: async () => {
+    try {
+      await authStorage.clearTokens();
+    } catch {}
+    const playerState = getPlayerStore().getState();
+    playerState.setConnectionStatus?.('online');
+    set({ token: null, refreshToken: null, user: null, loading: false, tokenExpiresAt: null });
+  },
+
+  hydrate: async () => {
+    set({ loading: true });
+    let tokens: Tokens | null = null;
+    try {
+      tokens = await authStorage.getTokens();
+    } catch {
+      authStorage.clearTokens();
+      set({ loading: false });
+      return;
+    }
+
+    if (!tokens) {
+      set({ loading: false });
+      return;
+    }
+
+    const now = Date.now();
+    if (tokens.expiresAt && now < tokens.expiresAt - TOKEN_EXPIRY_BUFFER_MS) {
+      set({
+        token: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        tokenExpiresAt: tokens.expiresAt,
+        user: null,
+        loading: false,
+      });
+      api.me(tokens.accessToken).then((user) => {
+        set({ user });
         getPlayerStore().getState().syncLikes();
         getPlayerStore().getState().syncRecent();
-      },
-      logout: () => {
-        safeRemoveItem('auth-storage');
-        const playerState = getPlayerStore().getState();
-        playerState.setConnectionStatus?.('online');
-        set({ token: null, user: null, loading: false, tokenExpiresAt: null });
-      },
-      hydrate: () => {
-        set({ loading: false });
-        setTimeout(() => {
-          const { token, tokenExpiresAt } = useAuthStore.getState();
-          if (token && tokenExpiresAt && Date.now() > tokenExpiresAt) {
-            if (typeof navigator !== 'undefined' && navigator.onLine) {
-              useAuthStore.getState().logout();
-            }
-            return;
-          }
-          if (token) {
-            getPlayerStore().getState().syncLikes();
-            getPlayerStore().getState().syncRecent();
-          }
-        }, 0);
-      },
-      isTokenExpired: () => {
-        const { tokenExpiresAt } = get();
-        if (!tokenExpiresAt) return false;
-        return Date.now() > tokenExpiresAt - TOKEN_EXPIRY_BUFFER_MS;
-      },
-    }),
-    {
-      name: 'auth-storage',
-      storage: createJSONStorage(() => safeStorage),
-      onRehydrateStorage: () => (state) => state?.hydrate(),
+      }).catch(() => {
+        getPlayerStore().getState().syncLikes();
+        getPlayerStore().getState().syncRecent();
+      });
+      return;
     }
-  )
-);
+
+    const { refreshToken } = tokens;
+    if (!refreshToken) {
+      authStorage.clearTokens();
+      set({ token: null, refreshToken: null, user: null, loading: false, tokenExpiresAt: null });
+      return;
+    }
+
+    const refreshed = await get().refreshTokens();
+    if (refreshed) {
+      getPlayerStore().getState().syncLikes();
+      getPlayerStore().getState().syncRecent();
+    } else {
+      authStorage.clearTokens();
+      set({ token: null, refreshToken: null, user: null, loading: false, tokenExpiresAt: null });
+    }
+  },
+
+  refreshTokens: async () => {
+    const { refreshToken } = get();
+    if (!refreshToken) return null;
+    try {
+      const data = await api.refresh(refreshToken);
+      const expiresAt = parseJwtExpiry(data.token) ?? Date.now();
+      authStorage.saveTokens(data.token, data.refreshToken, expiresAt);
+      set({
+        token: data.token,
+        refreshToken: data.refreshToken,
+        tokenExpiresAt: expiresAt,
+        user: data.user,
+      });
+      return { token: data.token, refreshToken: data.refreshToken, expiresAt };
+    } catch {
+      return null;
+    }
+  },
+
+  isTokenExpired: () => {
+    const { tokenExpiresAt } = get();
+    if (!tokenExpiresAt) return false;
+    return Date.now() > tokenExpiresAt - TOKEN_EXPIRY_BUFFER_MS;
+  },
+}));
+
+function parseJwtExpiry(token: string): number | null {
+  try {
+    const payload = JSON.parse(base64Decode(token.split('.')[1]));
+    return payload.exp ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
 
 function base64Decode(str: string): string {
   if (typeof atob !== 'undefined') return atob(str);
@@ -95,14 +154,3 @@ function base64Decode(str: string): string {
   }
   return output;
 }
-
-function parseJwtExpiry(token: string): number | null {
-  try {
-    const payload = JSON.parse(base64Decode(token.split('.')[1]));
-    return payload.exp ? payload.exp * 1000 : null;
-  } catch {
-    return null;
-  }
-}
-
-

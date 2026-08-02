@@ -11,15 +11,36 @@ const RETRY_DELAYS = [1_000, 2_000, 4_000];
 
 const inFlight = new Map<string, Promise<unknown>>();
 
-let _authErrorHandled = false;
-function handleAuthError() {
-  if (_authErrorHandled) return;
-  _authErrorHandled = true;
+let _refreshInProgress: Promise<boolean> | null = null;
+
+async function handleAuthError(): Promise<boolean> {
+  const { refreshToken } = useAuthStore.getState();
+  if (_refreshInProgress) {
+    return _refreshInProgress;
+  }
+  if (!refreshToken) {
+    doLogout();
+    return false;
+  }
+
+  _refreshInProgress = api.refresh(refreshToken).then((data) => {
+    useAuthStore.getState().setAuth(data.token, data.refreshToken, data.user);
+    return true;
+  }).catch(() => {
+    doLogout();
+    return false;
+  }).finally(() => {
+    _refreshInProgress = null;
+  });
+
+  return _refreshInProgress;
+}
+
+function doLogout() {
   const { token } = useAuthStore.getState();
   if (token) {
     useAuthStore.getState().logout();
     try {
-      // Lazy import to avoid circular dependency at module load time
       const { router } = require('expo-router');
       router.replace('/login');
     } catch {
@@ -28,7 +49,6 @@ function handleAuthError() {
       }
     }
   }
-  setTimeout(() => { _authErrorHandled = false; }, 5000);
 }
 
 export type ErrorKind = 'NetworkError' | 'AuthError' | 'ServerError' | 'ValidationError';
@@ -110,6 +130,7 @@ interface RequestOptions {
   body?: string;
   headers?: Record<string, string>;
   skipRetry?: boolean;
+  isRetry?: boolean;
 }
 
 async function requestRaw<T>(path: string, options?: RequestOptions): Promise<T> {
@@ -127,8 +148,14 @@ async function requestRaw<T>(path: string, options?: RequestOptions): Promise<T>
 
   if (!res.ok) {
     const msg = await parseErrorBody(res);
-    if (res.status === 401) {
-      handleAuthError();
+    if (res.status === 401 && !options?.isRetry) {
+      const refreshed = await handleAuthError();
+      if (refreshed) {
+        const newToken = useAuthStore.getState().token;
+        if (newToken) {
+          return requestRaw<T>(path, { ...options, isRetry: true, headers: { ...options?.headers, Authorization: `Bearer ${newToken}` } });
+        }
+      }
     }
     apiError(path, res.status);
     const requestId = res.headers.get('x-request-id');
@@ -238,6 +265,7 @@ export interface User {
 
 export interface AuthResponse {
   token: string;
+  refreshToken: string;
   user: User;
 }
 
@@ -372,6 +400,11 @@ export const api = {
     request<AuthResponse>(`/auth/register`, { method: 'POST', body: JSON.stringify({ email, password, displayName: displayName ?? '' }) }),
   login: (email: string, password: string) =>
     request<AuthResponse>(`/auth/login`, { method: 'POST', body: JSON.stringify({ email, password }) }),
+  refresh: (refreshToken: string) =>
+    request<AuthResponse>(`/auth/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    }),
   me: (token: string) => requestAuthed<User>(`/auth/me`, token),
 
   like: (songId: string, token: string) => requestAuthed<{ status: string }>(`/likes/${songId}`, token, { method: 'POST' }),
@@ -392,7 +425,7 @@ export const api = {
    topSongs: (period: string, limit: number, token: string) =>
      requestAuthed<{ period: string; items: SkipRateItem[] }>(`/analytics/user/top-songs?period=${period}&limit=${limit}`, token),
    recommendations: (limit: number, token: string) =>
-     requestAuthed<{ items: Song[]; meta: { trained: boolean; lastTrainedAt: string | null } }>(`/recommendations/user/top-picks?limit=${limit}`, token),
+     requestAuthed<{ items: ApiSong[]; meta: { trained: boolean; lastTrainedAt: string | null } }>(`/recommendations/user/top-picks?limit=${limit}`, token),
    userStats: (period: string, token: string) =>
      requestAuthed<{ period: string; totalListeningMs: number; totalListeningHours: number; totalPlays: number; uniqueSongs: number; uniqueArtists: number; sessions: number; avgSessionMs: number }>(`/analytics/user/stats?period=${period}`, token),
    recentActivity: (limit: number, token: string) =>
