@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, createContext, useContext } from 'react';
 import { View, Text, Platform } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
+import { registerToast } from '@/lib/toastBridge';
 
 interface Toast {
   id: number;
@@ -30,6 +31,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
   }, []);
+
+  useEffect(() => {
+    return registerToast(toast);
+  }, [toast]);
 
   return (
     <ToastContext.Provider value={{ toast }}>

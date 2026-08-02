@@ -1,18 +1,26 @@
 import { safeStorage } from '@/store/storage';
+import { API_URL } from '@/lib/config';
+import { isOnline } from '@/services/networkStatus';
+import { showToast } from '@/lib/toastBridge';
 
 const QUEUE_KEY = 'muzix-offline-queue';
 const MAX_QUEUE_SIZE = 50;
+const REQUEST_TIMEOUT = 10_000;
+
+class AuthExpiredError extends Error {
+  constructor() {
+    super('Session expired');
+    this.name = 'AuthExpiredError';
+  }
+}
 
 interface QueuedRequest {
   id: string;
-  url: string;
+  path: string;
   method: string;
-  headers: Record<string, string>;
   body?: string;
   timestamp: number;
 }
-
-let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function loadQueue(): Promise<QueuedRequest[]> {
   try {
@@ -29,24 +37,65 @@ async function saveQueue(queue: QueuedRequest[]) {
   } catch {}
 }
 
-export async function enqueueRequest(url: string, method: string, headers: Record<string, string>, body?: string): Promise<void> {
+export async function enqueueRequest(path: string, method: string, body?: string): Promise<void> {
   const queue = await loadQueue();
   if (queue.length >= MAX_QUEUE_SIZE) {
     queue.shift();
   }
   queue.push({
     id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    url,
+    path,
     method,
-    headers,
     body,
     timestamp: Date.now(),
   });
   await saveQueue(queue);
 }
 
+async function sendRequest(req: QueuedRequest): Promise<void> {
+  const { useAuthStore } = await import('@/store/authStore');
+  const token = useAuthStore.getState().token;
+
+  const startFetch = (authToken: string | null) => {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), REQUEST_TIMEOUT);
+    return {
+      promise: fetch(`${API_URL}${req.path}`, {
+        method: req.method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: req.body,
+        signal: c.signal,
+      }),
+      abort: () => clearTimeout(t),
+    };
+  };
+  const first = startFetch(token);
+  let res = await first.promise;
+  first.abort();
+  if (res.status === 401) {
+    const { refreshTokens } = useAuthStore.getState();
+    const refreshed = await refreshTokens();
+    if (!refreshed) throw new AuthExpiredError();
+    const newToken = useAuthStore.getState().token;
+    const retry = startFetch(newToken);
+    res = await retry.promise;
+    retry.abort();
+    if (res.status === 401) throw new AuthExpiredError();
+  }
+  if (!res.ok) throw new Error(`API ${res.status}`);
+}
+
+async function clearQueue(): Promise<void> {
+  try {
+    await safeStorage.removeItem(QUEUE_KEY);
+  } catch {}
+}
+
 export async function retryQueuedRequests(): Promise<void> {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+  if (!isOnline()) return;
 
   const queue = await loadQueue();
   if (queue.length === 0) return;
@@ -54,30 +103,19 @@ export async function retryQueuedRequests(): Promise<void> {
   const remaining: QueuedRequest[] = [];
   for (const req of queue) {
     try {
-      await fetch(req.url, {
-        method: req.method,
-        headers: req.headers,
-        body: req.body,
-      });
-    } catch {
+      await sendRequest(req);
+    } catch (err) {
+      if (err instanceof AuthExpiredError) {
+        await clearQueue();
+        const { useAuthStore } = await import('@/store/authStore');
+        useAuthStore.getState().logout();
+        showToast('Session expired. Please log in again.', 'error');
+        return;
+      }
       remaining.push(req);
     }
   }
   await saveQueue(remaining);
-}
-
-export function startRetryLoop(intervalMs = 30_000) {
-  if (retryTimer) return;
-  retryTimer = setInterval(() => {
-    retryQueuedRequests();
-  }, intervalMs);
-}
-
-export function stopRetryLoop() {
-  if (retryTimer) {
-    clearInterval(retryTimer);
-    retryTimer = null;
-  }
 }
 
 export async function getPendingCount(): Promise<number> {
