@@ -3,9 +3,10 @@ import { Platform } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/services/api';
-import { downloadToCache, getCachedAudioPath } from '@/services/cache';
+import { downloadToCache, getCachedAudioPath } from '@/services/audioCache';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore } from '@/store/authStore';
+import { API_URL } from '@/lib/config';
 import * as playTimeTracker from '@/services/playTimeTracker';
 import { trackPlay } from '@/services/metrics';
 
@@ -41,7 +42,7 @@ async function flushEvents() {
   const eventsToSend = EVENT_BUFFER.splice(0, EVENT_BUFFER.length);
   try {
     const token = useAuthStore.getState().token;
-    await fetch(`${process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000'}/telemetry/events`, {
+    await fetch(`${API_URL}/telemetry/events`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -77,7 +78,7 @@ function recordSessionStart() {
   if (sessionStarted) return;
   sessionStarted = true;
   const token = useAuthStore.getState().token;
-  fetch(`${process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000'}/telemetry/session/start`, {
+  fetch(`${API_URL}/telemetry/session/start`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -89,7 +90,7 @@ function recordSessionStart() {
 
 function recordSessionEnd(exitReason = 'user_close') {
   const token = useAuthStore.getState().token;
-  fetch(`${process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000'}/telemetry/session/end`, {
+  fetch(`${API_URL}/telemetry/session/end`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -101,14 +102,36 @@ function recordSessionEnd(exitReason = 'user_close') {
 }
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-  window.addEventListener('beforeunload', () => {
+  const persistPendingEvents = () => {
     playTimeTracker.flushDelta();
+    try {
+      const pending = EVENT_BUFFER.splice(0, EVENT_BUFFER.length);
+      if (pending.length > 0) {
+        const key = 'muzix-telemetry-pending';
+        const existing = JSON.parse(localStorage.getItem(key) ?? '[]');
+        localStorage.setItem(key, JSON.stringify([...existing, ...pending].slice(-100)));
+      }
+    } catch {}
+  };
+  window.addEventListener('beforeunload', () => {
     recordSessionEnd('user_close');
+    persistPendingEvents();
   });
   window.addEventListener('pagehide', () => {
-    playTimeTracker.flushDelta();
     recordSessionEnd('background');
+    persistPendingEvents();
   });
+}
+
+if (typeof window !== 'undefined') {
+  try {
+    const key = 'muzix-telemetry-pending';
+    const pending = JSON.parse(localStorage.getItem(key) ?? '[]');
+    if (Array.isArray(pending) && pending.length > 0) {
+      EVENT_BUFFER.push(...pending.slice(-BUFFER_MAX_SIZE));
+      localStorage.removeItem(key);
+    }
+  } catch {}
 }
 
 const preloadCache = new Map<string, HTMLAudioElement>();
@@ -176,9 +199,16 @@ export function PlayerBridge() {
       try {
         let playUri: string;
         if (IS_WEB) {
-          const token = useAuthStore.getState().token;
-          const { url } = await api.stream(current.id, token ?? undefined);
-          playUri = url;
+          const cached = await getCachedAudioPath(current.id);
+          if (cancelled) return;
+          if (cached) {
+            playUri = cached;
+          } else {
+            const token = useAuthStore.getState().token;
+            const { url } = await api.stream(current.id, token ?? undefined);
+            if (cancelled) return;
+            playUri = await downloadToCache(current.id, url);
+          }
         } else {
           const cached = await getCachedAudioPath(current.id);
           if (cancelled) return;
@@ -219,8 +249,6 @@ export function PlayerBridge() {
         if (err instanceof ApiError && err.status === 401) {
           setPlaying(false);
           setLoading(null);
-          useAuthStore.getState().logout();
-          router.replace('/login');
           return;
         }
         if (retryCountRef.current < MAX_RETRIES) {
