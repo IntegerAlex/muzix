@@ -20,6 +20,7 @@
         "backgroundColor": "#0a0a0a"
       },
       "package": "com.muzix.app",
+      "usesCleartextTraffic": true,
       "permissions": [
         "INTERNET",
         "WAKE_LOCK",
