@@ -1,5 +1,3 @@
-import '@tamagui/core/reset.css';
-
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NAV_THEME } from '@/lib/theme';
 import { ThemeProvider } from 'expo-router/react-navigation';
@@ -15,6 +13,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useConnectivity } from '@/hooks/useConnectivity';
 import { initCatalog } from '@/services/catalogDb';
 import { initPlayer } from '@/store/initPlayer';
+import { initAudioSession, requestNotificationPermission } from '@/services/audioSession';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { QueuePanel } from '@/components/QueuePanel';
 import { usePlayerStore } from '@/store/playerStore';
@@ -83,6 +82,8 @@ function RootLayoutInner() {
         await useAuthStore.getState().hydrate();
         await initCatalog();
         await initPlayer();
+        await initAudioSession();
+        await requestNotificationPermission();
         await import('@/services/offlineQueue').then((m) => m.retryQueuedRequests()).catch(() => {});
       })(),
       new Promise<void>((_, reject) => setTimeout(() => reject(new Error('catalog init timeout')), 2500)),

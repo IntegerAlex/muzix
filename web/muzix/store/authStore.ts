@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { authStorage, type Tokens } from './authStorage';
 import { type User } from '@/services/api';
 import { api } from '@/services/api';
+import { clearActiveLockScreenControls } from '@/services/audioSession';
 
 let _playerStoreRef: (() => any) | null = null;
 function getPlayerStore() {
@@ -45,6 +46,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     try {
       await authStorage.clearTokens();
     } catch {}
+    clearActiveLockScreenControls();
     const playerState = getPlayerStore().getState();
     playerState.setConnectionStatus?.('online');
     set({ token: null, refreshToken: null, user: null, loading: false, tokenExpiresAt: null });

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { useAudioPlayer, useAudioPlayerStatus, type AudioPlayer } from 'expo-audio';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/services/api';
 import { downloadToCache, getCachedAudioPath } from '@/services/audioCache';
@@ -9,9 +9,15 @@ import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/lib/config';
 import * as playTimeTracker from '@/services/playTimeTracker';
 import { trackPlay } from '@/services/metrics';
+import {
+  activateLockScreen,
+  updateLockScreenMetadata,
+  clearLockScreenControls,
+  useAppStateAudioSync,
+  setActivePlayer,
+} from '@/services/audioSession';
 
 const IS_WEB = Platform.OS === 'web';
-const RNTP_OWNS_AUDIO = false;
 
 const SESSION_ID = Math.random().toString(36).substring(2, 15);
 
@@ -134,35 +140,12 @@ if (typeof window !== 'undefined') {
   } catch {}
 }
 
-const preloadCache = new Map<string, HTMLAudioElement>();
-
-function preloadNextTrack(url: string) {
-  if (!IS_WEB) return;
-  if (preloadCache.has(url)) return;
-  try {
-    const audio = new Audio();
-    audio.preload = 'auto';
-    audio.src = url;
-    audio.load();
-    preloadCache.set(url, audio);
-    if (preloadCache.size > 3) {
-      const oldest = preloadCache.keys().next().value;
-      if (oldest) preloadCache.delete(oldest);
-    }
-  } catch {}
-}
-
-function releasePreloaded(url: string) {
-  const audio = preloadCache.get(url);
-  if (audio) {
-    audio.pause();
-    audio.src = '';
-    preloadCache.delete(url);
-  }
-}
-
 export function PlayerBridge() {
-  const player = useAudioPlayer(null, { updateInterval: 250 });
+  const player = useAudioPlayer(null, {
+    updateInterval: 250,
+    preferredForwardBufferDuration: 15,
+    keepAudioSessionActive: true,
+  });
   const status = useAudioPlayerStatus(player);
 
   const current = usePlayerStore((s) => s.current);
@@ -175,21 +158,35 @@ export function PlayerBridge() {
   const setLoading = usePlayerStore((s) => s.setLoading);
   const setSeekPosition = usePlayerStore((s) => s.setSeekPosition);
 
+  useAppStateAudioSync(
+    IS_WEB ? null : player,
+    () => status.playing,
+    (v: boolean) => usePlayerStore.getState().setPlaying(v),
+  );
+
   const currentUrlRef = useRef<string | null>(null);
   const retryCountRef = useRef(0);
   const bufferedTrackRef = useRef<string | null>(null);
   const bufferedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const positionTrackRef = useRef<string | null>(null);
+  const lockScreenActiveRef = useRef(false);
   const MAX_RETRIES = 3;
 
   useEffect(() => {
+    setActivePlayer(player);
     recordSessionStart();
     playTimeTracker.startPeriodicFlush();
-    return () => { playTimeTracker.stopPeriodicFlush(); };
-  }, []);
+    return () => {
+      playTimeTracker.stopPeriodicFlush();
+      if (lockScreenActiveRef.current) {
+        clearLockScreenControls(player);
+        lockScreenActiveRef.current = false;
+      }
+      setActivePlayer(null);
+    };
+  }, [player]);
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO) return;
     if (!current) return;
     let cancelled = false;
     retryCountRef.current = 0;
@@ -223,12 +220,27 @@ export function PlayerBridge() {
         }
         if (cancelled) return;
 
-        if (currentUrlRef.current && IS_WEB) releasePreloaded(currentUrlRef.current);
         currentUrlRef.current = playUri;
 
         player.replace({ uri: playUri });
         player.volume = volume;
         player.play();
+        if (!lockScreenActiveRef.current) {
+          activateLockScreen(player, {
+            title: current.title,
+            artist: current.artist,
+            albumTitle: current.album,
+            artworkUrl: current.imageUrl,
+          });
+          lockScreenActiveRef.current = true;
+        } else {
+          updateLockScreenMetadata(player, {
+            title: current.title,
+            artist: current.artist,
+            albumTitle: current.album,
+            artworkUrl: current.imageUrl,
+          });
+        }
         setPlaying(true);
         trackPlay();
         playTimeTracker.startPlaying(current.id);
@@ -272,7 +284,7 @@ export function PlayerBridge() {
   }, [current?.id, player, setLoading, setPlaying]);
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO || !current || bufferedTrackRef.current !== current.id) return;
+    if (!current || bufferedTrackRef.current !== current.id) return;
     if (status.currentTime > 0) {
       if (bufferedTimeoutRef.current) clearTimeout(bufferedTimeoutRef.current);
       bufferedTimeoutRef.current = null;
@@ -282,7 +294,7 @@ export function PlayerBridge() {
   }, [status.currentTime, current?.id]);
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO || !current) return;
+    if (!current) return;
     if (positionTrackRef.current !== current.id) {
       usePlayerStore.getState().setPlaybackPosition(0, 0);
       return;
@@ -294,7 +306,6 @@ export function PlayerBridge() {
   }, [status.currentTime, status.duration, current?.id]);
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO) return;
     if (!current) return;
     try {
       if (isPlaying && !status.playing) {
@@ -311,7 +322,7 @@ export function PlayerBridge() {
 
   const prevIsPlayingRef = useRef(isPlaying);
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO || !current) return;
+    if (!current) return;
     if (prevIsPlayingRef.current !== isPlaying) {
       if (isPlaying) {
         playTimeTracker.startPlaying(current.id);
@@ -343,7 +354,7 @@ export function PlayerBridge() {
   };
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO || positionTrackRef.current !== current?.id) return;
+    if (positionTrackRef.current !== current?.id) return;
     if (status.didJustFinish && current && !didJustFinishRef.current) {
       handleTrackComplete();
     } else if (!status.didJustFinish) {
@@ -352,7 +363,7 @@ export function PlayerBridge() {
   }, [status.didJustFinish, current]);
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO || !current || positionTrackRef.current !== current.id) return;
+    if (!current || positionTrackRef.current !== current.id) return;
     if (!status.duration || status.duration <= 0) return;
     const curr = status.currentTime;
     if (curr < prevTimeRef.current - 0.5) {
@@ -365,7 +376,7 @@ export function PlayerBridge() {
   }, [status.currentTime, status.duration, current?.id, isPlaying]);
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO || seekPosition == null || !current) return;
+    if (seekPosition == null || !current) return;
     const clampedFraction = Math.max(0, Math.min(seekPosition, 1));
     const durationSec = status.duration > 0 ? status.duration : (current.durationMs ?? 0) / 1000;
     playTimeTracker.flushDelta(current.id);
@@ -376,7 +387,7 @@ export function PlayerBridge() {
   }, [seekPosition, current, player, status.duration, setSeekPosition]);
 
   useEffect(() => {
-    if (RNTP_OWNS_AUDIO || !IS_WEB) return;
+    if (!IS_WEB) return;
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
     const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.maxTouchPoints > 0 && /Macintosh/.test(ua));
     if (isIOS) return;
@@ -384,17 +395,6 @@ export function PlayerBridge() {
       player.volume = volume;
     } catch {}
   }, [volume, player, current?.id]);
-
-  useEffect(() => {
-    if (RNTP_OWNS_AUDIO || IS_WEB || !current || !status.duration) return;
-    if (status.currentTime >= status.duration * 0.8) {
-      const nextIdx = currentIndex + 1;
-      if (nextIdx < queue.length) {
-        const nextSong = queue[nextIdx];
-        if (nextSong?.audioUrl) preloadNextTrack(nextSong.audioUrl as string);
-      }
-    }
-  }, [status.currentTime, status.duration, current, queue, currentIndex]);
 
   return null;
 }
