@@ -1442,6 +1442,41 @@ wheels = [
 ]
 
 [[package]]
+name = "lyricsgenius"
+version = "3.7.3"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version < '3.11'",
+]
+dependencies = [
+    { name = "beautifulsoup4", marker = "python_full_version < '3.11'" },
+    { name = "requests", marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a0/cf/87ec19a70b76712d99e4b821d5fe924a437f9d04666955062f430e84d8c1/lyricsgenius-3.7.3.tar.gz", hash = "sha256:f4603cb20e99e2b791055a3a9441d2900c89e1bc23a1aff5cc8df949c3c6a630", size = 518687, upload-time = "2025-10-26T05:51:41.426Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d8/81/a2673b0410c4fb9acdd027e229660cc96355c529937c746c7bcd5250e7a5/lyricsgenius-3.7.3-py3-none-any.whl", hash = "sha256:81a71555d45c64ab6b99de529ccfca0ff4dbe69305fe3e9c961a4faed2095f48", size = 48686, upload-time = "2025-10-26T05:51:39.741Z" },
+]
+
+[[package]]
+name = "lyricsgenius"
+version = "3.12.2"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
+    "python_full_version == '3.12.*'",
+    "python_full_version == '3.11.*'",
+]
+dependencies = [
+    { name = "beautifulsoup4", marker = "python_full_version >= '3.11'" },
+    { name = "requests", marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/54/63/21b4712997061c2207cd3a78ee2365f32fa50750f306d6756a3c1e846ca7/lyricsgenius-3.12.2.tar.gz", hash = "sha256:9a2a26c98e93b98ed3b65364e8e10627bb6e600c26e36ee8d0edb4bbd5b9ea2c", size = 518476, upload-time = "2026-05-22T13:57:58.207Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/88/2e/a084420f5e3c39817a6c501ecbe78c68cb5a83f05f26580acf8b453ee3c0/lyricsgenius-3.12.2-py3-none-any.whl", hash = "sha256:9d74e0245d70c67986cf772a996c04ac2f4125efff7154f901ae48385b4b3ad6", size = 50652, upload-time = "2026-05-22T13:57:56.835Z" },
+]
+
+[[package]]
 name = "markdown-it-py"
 version = "4.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1707,6 +1742,8 @@ dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "intelliscrape" },
     { name = "logfire", extra = ["fastapi"] },
+    { name = "lyricsgenius", version = "3.7.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "lyricsgenius", version = "3.12.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "mutagen" },
     { name = "orjson" },
     { name = "pyjwt" },
@@ -1728,6 +1765,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.0" },
     { name = "intelliscrape", specifier = ">=2.5.0" },
     { name = "logfire", extras = ["fastapi"], specifier = ">=3.0.0" },
+    { name = "lyricsgenius", specifier = ">=3.7.3" },
     { name = "mutagen", specifier = ">=1.47.0" },
     { name = "orjson", specifier = ">=3.11.9" },
     { name = "pyjwt", specifier = ">=2.8.0" },

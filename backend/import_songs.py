@@ -27,6 +27,7 @@ from pathlib import Path
 import boto3
 import requests
 from botocore.client import Config
+from botocore.exceptions import ClientError
 from dotenv import load_dotenv
 from lyricsgenius import Genius
 from sqlalchemy import text
@@ -60,6 +61,23 @@ r2 = boto3.client(
 )
 
 MAX_WORKERS = 4
+MAX_SONGS = 50
+GENIUS_MIN_INTERVAL = 40.0  # Genius caps ~100 req/hr -> stay at <=90/hr
+genre = "Pop"
+
+_genius_lock = threading.Lock()
+_genius_last = 0.0
+
+
+def _genius_wait():
+    """Space Genius API calls so we stay comfortably under the 100/hr cap."""
+    global _genius_last
+    with _genius_lock:
+        now = time.time()
+        wait = GENIUS_MIN_INTERVAL - (now - _genius_last)
+        if wait > 0:
+            time.sleep(wait)
+        _genius_last = time.time()
 
 
 def log(severity: str, msg: str):
@@ -73,6 +91,7 @@ def log(severity: str, msg: str):
 # ---------------------------------------------------------------------------
 
 def fetch_artist_songs() -> list[dict]:
+    global genre
     token = os.getenv("GENIUS_API_TOKEN")
     if not token:
         log("ERROR", "GENIUS_API_TOKEN not set")
@@ -85,6 +104,7 @@ def fetch_artist_songs() -> list[dict]:
     genius.excluded_terms = ["(Remix)", "(Live)", "(Instrumental)", "(Sped Up)", "(Slowed)"]
 
     log("INFO", f"Searching Genius for '{ARTIST_NAME}'...")
+    _genius_wait()
     artist = genius.search_artist(ARTIST_NAME, max_songs=0)
     artist_id = artist.api_path.split("/")[-1] if artist.api_path else "?"
     log("OK", f"Found: {artist.name} (id={artist_id})")
@@ -177,17 +197,19 @@ def fetch_artist_songs() -> list[dict]:
     raw_songs = []
     page = 1
     while True:
+        _genius_wait()
         result = genius.artist_songs(artist_id, per_page=50, page=page, sort="popularity")
         batch = result.get("songs", []) if isinstance(result, dict) else (result or [])
         if not batch:
             break
         raw_songs.extend(batch)
         log("INFO", f"  Page {page}: {len(batch)} songs (total: {len(raw_songs)})")
-        if len(batch) < 50:
+        if len(batch) < 50 or len(raw_songs) >= MAX_SONGS:
             break
         page += 1
 
-    log("OK", f"Got {len(raw_songs)} song entries")
+    raw_songs = raw_songs[:MAX_SONGS]
+    log("OK", f"Got {len(raw_songs)} song entries (capped at {MAX_SONGS})")
 
     # Fetch lyrics from LRCLIB (sequential, rate-limited)
     log("INFO", f"Fetching synced lyrics from LRCLIB for {len(raw_songs)} songs...")
@@ -343,18 +365,27 @@ def download_song(song: dict, idx: int, total: int) -> dict | None:
 
     if not audio_path.exists():
         log("INFO", f"[{idx}/{total}] Downloading: {vid_id} ({duration}s)")
-        r = subprocess.run(
-            [
-                "yt-dlp",
-                "--extract-audio", "--audio-format", "m4a",
-                "--postprocessor-args", "ffmpeg:-c:a aac -b:a 96k",
-                "-o", str(AUDIO_DIR / "%(id)s.%(ext)s"),
-                "--no-playlist", "--no-warnings", "--quiet",
-                f"https://www.youtube.com/watch?v={vid_id}",
-            ],
-            timeout=300, check=False,
-        )
-        if r.returncode != 0 or not audio_path.exists():
+        # yt-dlp occasionally trips YouTube's bot detection (HTTP 403). Retry
+        # the whole download with backoff so transient blocks don't drop songs.
+        for attempt in range(1, 6):
+            r = subprocess.run(
+                [
+                    "yt-dlp",
+                    "--extract-audio", "--audio-format", "m4a",
+                    "--postprocessor-args", "ffmpeg:-c:a aac -b:a 96k",
+                    "--retries", "5", "--retry-sleep", "3",
+                    "-o", str(AUDIO_DIR / "%(id)s.%(ext)s"),
+                    "--no-playlist", "--no-warnings", "--quiet",
+                    f"https://www.youtube.com/watch?v={vid_id}",
+                ],
+                timeout=300, check=False,
+            )
+            if r.returncode == 0 and audio_path.exists():
+                break
+            if attempt < 5:
+                log("WARN", f"[{idx}/{total}] Download attempt {attempt} failed for {vid_id}, retrying...")
+                time.sleep(5 * attempt)
+        else:
             log("ERROR", f"[{idx}/{total}] Download failed: {vid_id}")
             return None
 
@@ -402,6 +433,11 @@ def download_song(song: dict, idx: int, total: int) -> dict | None:
 # ---------------------------------------------------------------------------
 
 def upload_r2(local_path: Path, key: str, content_type: str):
+    try:
+        r2.head_object(Bucket=R2_BUCKET, Key=key)
+        return
+    except ClientError:
+        pass
     with open(local_path, "rb") as f:
         r2.put_object(Bucket=R2_BUCKET, Key=key, Body=f, ContentType=content_type)
 

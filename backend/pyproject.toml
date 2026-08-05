@@ -19,6 +19,7 @@ dependencies = [
     "scipy>=1.14.0",
     "intelliscrape>=2.5.0",
     "logfire[fastapi]>=3.0.0",
+    "lyricsgenius>=3.7.3",
 ]
 
 [tool.setuptools]
