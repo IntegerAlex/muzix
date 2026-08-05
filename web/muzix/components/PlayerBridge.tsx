@@ -19,6 +19,8 @@ import {
 
 const IS_WEB = Platform.OS === 'web';
 
+let _globalPlayer: AudioPlayer | null = null;
+
 const SESSION_ID = Math.random().toString(36).substring(2, 15);
 
 interface TelemetryEvent {
@@ -173,9 +175,14 @@ export function PlayerBridge() {
   const MAX_RETRIES = 3;
 
   useEffect(() => {
+    if (_globalPlayer && _globalPlayer !== player) {
+      try { _globalPlayer.release(); } catch {}
+    }
+    _globalPlayer = player;
     setActivePlayer(player);
     recordSessionStart();
     playTimeTracker.startPeriodicFlush();
+    try { player.pause(); } catch {}
     return () => {
       playTimeTracker.stopPeriodicFlush();
       if (lockScreenActiveRef.current) {
@@ -305,16 +312,31 @@ export function PlayerBridge() {
     );
   }, [status.currentTime, status.duration, current?.id]);
 
+  const externalPauseRef = useRef(false);
+  const prevStatusPlayingRef = useRef(status.playing);
+  useEffect(() => {
+    if (prevStatusPlayingRef.current !== status.playing) {
+      if (!status.playing && isPlaying) {
+        externalPauseRef.current = true;
+        usePlayerStore.getState().setPlaying(false);
+      }
+      prevStatusPlayingRef.current = status.playing;
+    }
+  }, [status.playing, isPlaying]);
+
   useEffect(() => {
     if (!current) return;
     try {
       if (isPlaying && !status.playing) {
-        if (status.didJustFinish && status.duration && status.currentTime >= status.duration - 0.05) {
+        if (externalPauseRef.current) {
+          externalPauseRef.current = false;
+        } else if (status.didJustFinish && status.duration && status.currentTime >= status.duration - 0.05) {
           player.seekTo(0);
           didJustFinishRef.current = false;
           prevTimeRef.current = 0;
+        } else {
+          player.play();
         }
-        player.play();
       }
       if (!isPlaying && status.playing) player.pause();
     } catch {}
