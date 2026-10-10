@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Platform } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Modal, TouchableOpacity, Platform, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +12,7 @@ import Animated, {
   withTiming,
   withSpring,
   Easing,
+  runOnJS,
 } from 'react-native-reanimated';
 import {
   Pause, Play, SkipBack, SkipForward, ChevronDown,
@@ -76,7 +78,38 @@ export function NowPlaying() {
   const pulse = useSharedValue(1);
   const [scrubbing, setScrubbing] = useState(false);
   const [scrubValue, setScrubValue] = useState(0);
-  const [selectedLyrics, setSelectedLyrics] = useState<string[]>([]);
+
+  // Sheet motion: slide-up entrance on open + drag-down to dismiss.
+  // The gesture lives on the grabber handle only, so it never fights the
+  // inner ScrollView.
+  const dragY = useSharedValue(0);
+  const enterY = useSharedValue(0);
+  useEffect(() => {
+    if (showNowPlaying) {
+      enterY.value = Dimensions.get('window').height;
+      dragY.value = 0;
+      enterY.value = withSpring(0, { damping: 28, stiffness: 260 });
+    }
+  }, [showNowPlaying, enterY, dragY]);
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: enterY.value + dragY.value }],
+  }));
+  const dismissSheet = useCallback(() => setShowNowPlaying(false), [setShowNowPlaying]);
+  const sheetPan = useMemo(
+    () =>
+      Gesture.Pan()
+        .onUpdate((e) => {
+          dragY.value = Math.max(0, e.translationY);
+        })
+        .onEnd((e) => {
+          if (e.translationY > 120 || e.velocityY > 800) {
+            runOnJS(dismissSheet)();
+          } else {
+            dragY.value = withSpring(0, { damping: 22, stiffness: 260 });
+          }
+        }),
+    [dragY, dismissSheet]
+  );  const [selectedLyrics, setSelectedLyrics] = useState<string[]>([]);
   const [previewUri, setPreviewUri] = useState<string | null>(null);
   const [shareSuccess, setShareSuccess] = useState(false);
   const { imageRef, generate, isGenerating, shareError } = useLyricsSharing();
@@ -202,10 +235,15 @@ export function NowPlaying() {
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)' }}
           onPress={() => setShowNowPlaying(false)}
         />
-        <View style={{
+        <Animated.View style={[{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
           paddingTop: insets.top, paddingBottom: insets.bottom,
-        }}>
+        }, sheetStyle]}>
+          <GestureDetector gesture={sheetPan}>
+            <View style={{ alignItems: 'center', paddingTop: 8 }} accessible accessibilityLabel="Drag down to dismiss" accessibilityRole="adjustable">
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)' }} />
+            </View>
+          </GestureDetector>
           <View style={{ flexDirection: 'row', alignItems: 'center', position: 'relative', paddingHorizontal: SPACING.xl, paddingVertical: SPACING.sm }}>
             <Pressable
               style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 9999, backgroundColor: SURFACE_ICON, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm }}
@@ -231,7 +269,7 @@ export function NowPlaying() {
 
           <View style={{ flex: 1, flexDirection: 'row', paddingHorizontal: SPACING.xl }}>
             <View style={{ flex: 0.4, justifyContent: 'center', alignItems: 'center', paddingRight: SPACING.xl }}>
-              <Animated.View style={pulseStyle}>
+              <Animated.View style={pulseStyle} sharedTransitionTag="muzix-artwork">
                 <Artwork
                   source={current.imageUrl ? { uri: current.imageUrl } : undefined}
                   colors={current.colors}
@@ -373,7 +411,7 @@ export function NowPlaying() {
                 )}
               </ScrollView>
             </View>
-          </View>
+          </Animated.View>
         </View>
         {current && (
           <LyricsImageGenerator
@@ -542,8 +580,8 @@ export function NowPlaying() {
         accessibilityLabel="Dismiss now playing"
         accessibilityRole="button"
       />
-      <View
-        style={{
+      <Animated.View
+        style={[{ 
           position: 'absolute',
           top: 0,
           left: 0,
@@ -552,8 +590,13 @@ export function NowPlaying() {
           pointerEvents: 'box-none',
           paddingTop: insets.top,
           paddingBottom: insets.bottom,
-        }}
+        }, sheetStyle]}
       >
+        <GestureDetector gesture={sheetPan}>
+          <View style={{ alignItems: 'center', paddingTop: 8 }} accessible accessibilityLabel="Drag down to dismiss" accessibilityRole="adjustable">
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)' }} />
+          </View>
+        </GestureDetector>
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingHorizontal: SPACING.xxl, paddingTop: SPACING.sm, paddingBottom: SPACING.xxxl }}
@@ -586,7 +629,7 @@ export function NowPlaying() {
           </View>
 
           <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-            <Animated.View style={pulseStyle}>
+            <Animated.View style={pulseStyle} sharedTransitionTag="muzix-artwork">
               <Artwork
                 source={current.imageUrl ? { uri: current.imageUrl } : undefined}
                 colors={current.colors}
@@ -828,7 +871,7 @@ export function NowPlaying() {
             </View>
           )}
         </ScrollView>
-      </View>
+      </Animated.View>
       {current && (
         <LyricsImageGenerator
           ref={imageRef}
