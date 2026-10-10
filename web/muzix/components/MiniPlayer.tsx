@@ -122,7 +122,9 @@ export function MiniPlayer() {
               accessibilityLabel={`Now playing: ${current.title} by ${current.artist}`}
               accessibilityRole="button"
             >
-              <Artwork source={current.imageUrl ? { uri: current.imageUrl } : undefined} colors={current.colors} style={{ height: 44, width: 44 }} radius={8} />
+              <Animated.View sharedTransitionTag="muzix-artwork">
+                <Artwork source={current.imageUrl ? { uri: current.imageUrl } : undefined} colors={current.colors} style={{ height: 44, width: 44 }} radius={8} />
+              </Animated.View>
               <View>
                 <Text fontSize={13} fontWeight="600" color="white" numberOfLines={1}>
                   {current.title}
@@ -212,7 +214,9 @@ export function MiniPlayer() {
               accessibilityLabel={`Now playing: ${current.title} by ${current.artist}`}
               accessibilityRole="button"
             >
-              <Artwork source={current.imageUrl ? { uri: current.imageUrl } : undefined} colors={current.colors} style={{ height: 44, width: 44 }} radius={8} />
+              <Animated.View sharedTransitionTag="muzix-artwork">
+                <Artwork source={current.imageUrl ? { uri: current.imageUrl } : undefined} colors={current.colors} style={{ height: 44, width: 44 }} radius={8} />
+              </Animated.View>
               <View style={{ flex: 1 }}>
                 <Text fontSize={13} fontWeight="600" color="white" numberOfLines={1}>
                   {current.title}
