@@ -432,14 +432,35 @@ def download_song(song: dict, idx: int, total: int) -> dict | None:
 # Step 3: Upload to R2
 # ---------------------------------------------------------------------------
 
-def upload_r2(local_path: Path, key: str, content_type: str):
+def upload_r2(local_path: Path, key: str, content_type: str) -> bool:
+    """Upload a file to R2 and verify it landed.
+
+    Returns True only if the object exists afterwards. Previously a failed put
+    (or one rejected as SlowDown/AccessDenied) was swallowed, and callers wrote
+    the DB row anyway — which is why backfill_r2.py had to exist.
+    """
+    expected = local_path.stat().st_size if local_path.exists() else None
     try:
         r2.head_object(Bucket=R2_BUCKET, Key=key)
-        return
+        return True
     except ClientError:
         pass
+
     with open(local_path, "rb") as f:
         r2.put_object(Bucket=R2_BUCKET, Key=key, Body=f, ContentType=content_type)
+
+    # Verify the object is really there before claiming success.
+    try:
+        head = r2.head_object(Bucket=R2_BUCKET, Key=key)
+        if expected is not None:
+            actual = int(head.get("ContentLength", 0))
+            if actual < expected:
+                log("WARN", f"  R2 size mismatch for {key}: {actual} < {expected}")
+                return False
+        return True
+    except Exception as e:
+        log("ERROR", f"  R2 verify failed for {key}: {e}")
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -579,17 +600,30 @@ def main():
     log("INFO", "")
     log("INFO", f"STEP 3/4: Upload to R2 ({len(downloaded)} files)")
     ok = 0
+    uploaded: list[dict] = []
     for i, s in enumerate(downloaded, 1):
         try:
-            upload_r2(s["audio_path"], f"audio/{s['vid_id']}.m4a", "audio/mp4")
-            if s["thumb_path"]:
+            audio_ok = upload_r2(s["audio_path"], f"audio/{s['vid_id']}.m4a", "audio/mp4")
+            thumb_ok = (
                 upload_r2(s["thumb_path"], f"thumbnails/{s['vid_id']}.jpg", "image/jpeg")
-            ok += 1
+                if s["thumb_path"] else True
+            )
+            # Only insert the DB row when the artifacts are actually in R2.
+            # Otherwise the catalog claims a song exists that cannot stream.
+            if audio_ok and thumb_ok:
+                uploaded.append(s)
+                ok += 1
+            else:
+                log("ERROR", f"  R2 upload incomplete for {s['vid_id']} — skipping DB row")
             if i % 10 == 0 or i == len(downloaded):
                 log("OK", f"  R2 progress: {i}/{len(downloaded)}")
         except Exception as e:
             log("ERROR", f"  R2 upload failed for {s['vid_id']}: {e}")
     log("OK", f"Uploaded {ok}/{len(downloaded)} songs to R2")
+    downloaded = uploaded
+    if not downloaded:
+        log("ERROR", "No songs successfully uploaded to R2. Aborting.")
+        sys.exit(1)
 
     # Step 4: DB
     log("INFO", "")
