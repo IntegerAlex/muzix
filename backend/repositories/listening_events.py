@@ -274,6 +274,48 @@ async def get_genres_since(user_id: str, since: datetime) -> list[str]:
         return [row[0] for row in result.all()]
 
 
+async def get_mood_signals(user_id: str, since: datetime) -> list[dict]:
+    """Return per-event mood signals for fusion in compute_mood().
+
+    One row per listening event (play/pause/complete/seek/skip) since `since`,
+    newest first, each carrying the song's stored scores (all nullable until
+    analyze_lyrics.py / analyze_audio.py have run for that track).
+    """
+    async with SessionLocal() as session:
+        stmt = (
+            select(
+                ListeningEvent.event_type,
+                ListeningEvent.started_at,
+                ListeningEvent.completion_percentage,
+                Song.genre,
+                Song.audio_energy,
+                Song.audio_valence,
+                Song.danceability,
+                Song.lyrics_valence,
+            )
+            .outerjoin(Song, ListeningEvent.song_id == Song.id)
+            .where(
+                ListeningEvent.user_id == user_id,
+                ListeningEvent.started_at >= since,
+            )
+            .order_by(ListeningEvent.started_at.desc())
+        )
+        result = await session.execute(stmt)
+        return [
+            {
+                "event_type": row[0],
+                "started_at": row[1],
+                "completion_percentage": row[2] or 0,
+                "genre": row[3] or "",
+                "audio_energy": row[4],
+                "audio_valence": row[5],
+                "danceability": row[6],
+                "lyrics_valence": row[7],
+            }
+            for row in result.all()
+        ]
+
+
 # ---------------------------------------------------------------------------
 # Advanced analytics: skip rate
 # ---------------------------------------------------------------------------

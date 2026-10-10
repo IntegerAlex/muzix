@@ -90,83 +90,138 @@ def _split_genres(raw: str) -> list[str]:
     return parts
 
 
-async def compute_mood(user_id: str) -> dict:
-    """Return mood from today's plays, blending genre + time + completion.
-
-    Never returns bare Neutral when the user actually listened — unknown
-    genres fall back to time-of-day + completion valence.
-    """
-    now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    # Rich signal fetch: genres + recency + completion in one pass.
-    # get_genres_since returns only genre strings; fetch recent play events
-    # for completion/skip weighting via the same repo.
-    genres = await event_repo.get_genres_since(user_id, today_start)
-
-    # Recency-decayed genre vote. We don't have per-event timestamps here,
-    # so weight by position (recent plays first if the repo orders by recency;
-    # otherwise uniform). Count occurrences.
-    genre_counts: Counter = Counter()
-    for raw in genres:
-        for g in _split_genres(raw):
-            genre_counts[g] += 1
-
-    total_plays = sum(genre_counts.values())
-    # Also count genre-less plays: they still inform confidence + time mood.
-    # get_genres_since filters empty genres, so fetch total play count today
-    # for confidence calibration.
-    try:
-        stats = await event_repo.get_stats(user_id, "day")
-        total_today = int(stats.get("total_plays", total_plays))
-    except Exception:
-        total_today = total_plays
-
-    if not genre_counts:
-        # No genre signal (all YouTube tracks, or no plays). Fall back to
-        # time-of-day so the card still feels alive when there is activity.
-        if total_today <= 0:
-            return {"label": "Neutral", "color": "#6b7280", "energy": 0.5, "valence": 0.5, "confidence": 0.0, "based_on": 0}
-        energy, label, color = _time_energy(now.hour)
-        confidence = min(1.0, total_today / 8.0) * 0.6
-        return {
-            "label": label, "color": color,
-            "energy": round(energy, 2), "valence": 0.6,
-            "confidence": round(confidence, 2), "based_on": total_today,
-        }
-
-    top = genre_counts.most_common(1)[0][0]
-    top_count = genre_counts.most_common(1)[0][1]
-
-    matched: tuple[str, str, float, float] | None = None
+def _match_genre(top: str) -> tuple[str, str, float, float] | None:
     # Longest key first: "pop" must not shadow "punjabi pop", "hip-hop",
     # or any other compound genre that merely contains it.
     for key in sorted(GENRE_MOODS, key=len, reverse=True):
         if key in top:
-            matched = GENRE_MOODS[key]
-            break
-    if matched is None:
-        # Unknown genre string — still blend time energy instead of Neutral.
-        energy_t, label_t, color_t = _time_energy(now.hour)
-        confidence = min(1.0, top_count / 5.0) * 0.5
-        return {
-            "label": f"{top.title()} Mix" if len(top) < 20 else label_t,
-            "color": color_t,
-            "energy": round(energy_t, 2), "valence": 0.6,
-            "confidence": round(confidence, 2), "based_on": total_today,
-        }
+            return GENRE_MOODS[key]
+    return None
 
-    label, color, g_energy, g_valence = matched
-    # Blend genre energy with time-of-day energy (70/30) so a metal session
-    # at 2am reads calmer than the same session at noon.
-    t_energy, _, _ = _time_energy(now.hour)
-    energy = round(g_energy * 0.7 + t_energy * 0.3, 2)
-    # Confidence grows with plays and genre concentration.
-    concentration = top_count / max(1, total_plays)
-    confidence = round(min(1.0, (total_today / 10.0)) * (0.5 + 0.5 * concentration), 2)
+
+def _quadrant_label(arousal: float, valence: float) -> tuple[str, str]:
+    if arousal >= 0.6:
+        return ("Energetic", "#ec4899") if valence >= 0.55 else ("Intense", "#ef4444")
+    return ("Calm", "#a855f7") if valence >= 0.55 else ("Soulful", "#f43f5e")
+
+
+async def compute_mood(user_id: str) -> dict:
+    """Return mood from today's plays, fusing three signals.
+
+    Per event (newest first):
+      arousal = stored audio_energy, else genre-implied energy, else time energy
+      valence = stored lyrics_valence, else genre-implied valence, else 0.5
+      weight  = recency decay (6h half-life) x completion boost;
+                skip events vote low-valence at half weight instead.
+
+    Label rule: the genre label wins unless stored lyrics contradict it
+    (|lyrics - genre valence| > 0.3 with lyrics negative and genre positive)
+    — that contradiction is exactly the "energetic but heartbroken" case,
+    which resolves to the arousal/valence quadrant instead. Unknown genres
+    and scoreless tracks fall back to time-of-day, never bare Neutral while
+    the user actually listened.
+    """
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    signals = await event_repo.get_mood_signals(user_id, today_start)
+    if not signals:
+        return {"label": "Neutral", "color": "#6b7280", "energy": 0.5, "valence": 0.5, "confidence": 0.0, "based_on": 0}
+
+    t_energy, t_label, t_color = _time_energy(now.hour)
+
+    sum_a = sum_v = sum_w = 0.0
+    genre_counts: Counter = Counter()
+    lyrics_vals: list[float] = []
+    lyrics_w: list[float] = []
+    scored_w = 0.0
+
+    for s in signals:
+        started = s["started_at"]
+        hours_old = max(0.0, (now - started).total_seconds() / 3600) if started else 12.0
+        decay = 0.5 ** (hours_old / 6.0)
+        etype = (s["event_type"] or "play").lower()
+
+        matched = None
+        for g in _split_genres(s["genre"]):
+            genre_counts[g] += 1
+        if s["genre"]:
+            tops = Counter({g: 1 for g in _split_genres(s["genre"])})
+            if tops:
+                matched = _match_genre(tops.most_common(1)[0][0])
+
+        if etype == "skip":
+            # A skip is a rejection vote, not an endorsement: low valence at
+            # half weight. Arousal still counts (skipping a banger is taste).
+            a = s["audio_energy"] if s["audio_energy"] is not None else (matched[2] if matched else 0.5)
+            sum_a += a * decay * 0.5
+            sum_v += 0.25 * decay * 0.5
+            sum_w += decay * 0.5
+            continue
+
+        a = s["audio_energy"] if s["audio_energy"] is not None else (matched[2] if matched else t_energy)
+        if s["lyrics_valence"] is not None:
+            v = float(s["lyrics_valence"])
+            lyrics_vals.append(v)
+            lyrics_w.append(decay)
+        elif matched:
+            v = matched[3]
+        else:
+            v = 0.5
+
+        completion = min(100, max(0, int(s["completion_percentage"] or 0)))
+        w = decay * (1.5 if etype == "complete" else (0.6 + 0.8 * completion / 100.0))
+        sum_a += a * w
+        sum_v += v * w
+        sum_w += w
+        if s["audio_energy"] is not None or s["lyrics_valence"] is not None:
+            scored_w += w
+
+    if sum_w <= 0:
+        return {"label": "Neutral", "color": "#6b7280", "energy": 0.5, "valence": 0.5, "confidence": 0.0, "based_on": len(signals)}
+
+    arousal = sum_a / sum_w
+    valence = sum_v / sum_w
+
+    # Genre vote (longest-first) for the label, with contradiction override.
+    label: str | None = None
+    color: str | None = None
+    g_energy = g_valence = None
+    if genre_counts:
+        top = genre_counts.most_common(1)[0][0]
+        matched = _match_genre(top)
+        if matched:
+            label, color, g_energy, g_valence = matched
+
+    if label is not None and lyrics_w:
+        lyrics_mean = sum(v * w for v, w in zip(lyrics_vals, lyrics_w)) / sum(lyrics_w)
+        if g_valence is not None and g_valence >= 0.55 and lyrics_mean < 0.45 and (g_valence - lyrics_mean) > 0.3:
+            # Genre says happy, lyrics say heartbreak — trust the lyrics.
+            label, color = _quadrant_label(arousal, lyrics_mean)
+            valence = 0.7 * valence + 0.3 * lyrics_mean
+
+    if label is None:
+        if genre_counts:
+            top = genre_counts.most_common(1)[0][0]
+            label, color = (f"{top.title()} Mix", t_color) if len(top) < 20 else (t_label, t_color)
+        else:
+            # No genre signal at all (all YouTube tracks, unscored): time mood.
+            energy, t_lbl, t_col = _time_energy(now.hour)
+            confidence = min(1.0, len(signals) / 8.0) * 0.6
+            return {
+                "label": t_lbl, "color": t_col,
+                "energy": round(energy, 2), "valence": round(valence, 2),
+                "confidence": round(confidence, 2), "based_on": len(signals),
+            }
+
+    # Blend genre energy with time-of-day (70/30) so 2am metal reads calmer.
+    energy = round((g_energy if g_energy is not None else arousal) * 0.7 + t_energy * 0.3, 2)
+    concentration = genre_counts.most_common(1)[0][1] / max(1, sum(genre_counts.values()))
+    scored_frac = scored_w / sum_w if sum_w > 0 else 0.0
+    confidence = round(min(1.0, len(signals) / 10.0) * (0.4 + 0.6 * scored_frac) * (0.5 + 0.5 * concentration), 2)
 
     return {
         "label": label, "color": color,
-        "energy": energy, "valence": g_valence,
-        "confidence": confidence, "based_on": total_today,
+        "energy": energy, "valence": round(valence, 2),
+        "confidence": confidence, "based_on": len(signals),
     }
