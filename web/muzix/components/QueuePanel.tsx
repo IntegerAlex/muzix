@@ -4,7 +4,7 @@ import Animated, { useSharedValue, withSpring, useAnimatedStyle, runOnJS } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import type { RenderItem } from 'react-native-draggable-flatlist';
-import { X, ListMusic, Trash2 } from '@/lib/icons';
+import { X, ListMusic, Trash2, Sparkles } from '@/lib/icons';
 import { View, Text } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { usePlayerStore } from '@/store/playerStore';
@@ -51,6 +51,8 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
   const reorderQueue = usePlayerStore((s) => s.reorderQueue);
   const playSong = usePlayerStore((s) => s.playSong);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
+  const autoplay = usePlayerStore((s) => s.autoplay);
+  const setAutoplay = usePlayerStore((s) => s.setAutoplay);
   const { impact } = useHaptics();
 
   const translateY = useSharedValue(screenHeight);
@@ -228,25 +230,43 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
               dragItemOverflow={false}
             />
 
-            <Pressable
-              onPress={handleClearAll}
+            <View
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                justifyContent: 'center',
-                gap: SPACING.sm,
-                paddingVertical: SPACING.md,
+                justifyContent: 'space-between',
                 marginHorizontal: SPACING.lg,
                 marginTop: SPACING.sm,
+                paddingTop: SPACING.md,
                 borderTopWidth: 1,
                 borderTopColor: BORDER,
               }}
-              accessibilityLabel="Clear queue"
-              accessibilityRole="button"
             >
-              <Trash2 size={16} color={DANGER} />
-              <Text fontSize={14} fontWeight="600" color={DANGER}>Clear all</Text>
-            </Pressable>
+              <Pressable
+                onPress={() => setAutoplay(!autoplay)}
+                hitSlop={8}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 4 }}
+                accessibilityLabel={autoplay ? 'Disable autoplay' : 'Enable autoplay'}
+                accessibilityRole="switch"
+                accessibilityState={{ checked: autoplay }}
+              >
+                <Sparkles size={16} color={autoplay ? ACCENT : TEXT_MUTED} />
+                <Text fontSize={14} fontWeight="600" color={autoplay ? ACCENT : TEXT_MUTED}>
+                  Autoplay
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={handleClearAll}
+                hitSlop={8}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: 4 }}
+                accessibilityLabel="Clear queue"
+                accessibilityRole="button"
+              >
+                <Trash2 size={16} color={DANGER} />
+                <Text fontSize={14} fontWeight="600" color={DANGER}>Clear all</Text>
+              </Pressable>
+            </View>
           </>
         )}
       </Animated.View>

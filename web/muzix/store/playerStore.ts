@@ -12,6 +12,15 @@ export type RepeatMode = 'off' | 'all' | 'one';
 
 const QUEUE_STORAGE_KEY = 'muzix-queue';
 
+/** How many tracks autoplay appends when the queue runs dry. */
+const AUTOPLAY_LIMIT = 25;
+
+/**
+ * The seed track we last attempted an autoplay fetch for. Prevents re-asking
+ * YouTube on every exhaustion when a seed has no mix / no results.
+ */
+let _autoplayTriedFor: string | null = null;
+
 // ---------------------------------------------------------------------------
 // Unique queue-slot identifier. Collides ~never for any realistic queue size.
 // ---------------------------------------------------------------------------
@@ -93,6 +102,8 @@ interface PlayerState {
   totalPlays: number;
   totalListeningMs: number;
   recentlyPlayed: string[];
+  /** When the queue runs out, keep playing similar tracks from YouTube. */
+  autoplay: boolean;
 
   /**
    * Start playing a song.
@@ -126,6 +137,13 @@ interface PlayerState {
   setPlaybackPosition: (positionMs: number, durationSec: number) => void;
   setConnectionStatus: (status: 'online' | 'offline') => void;
   retry: () => void;
+  /** Toggle autoplay-on-queue-end. */
+  setAutoplay: (v: boolean) => void;
+  /**
+   * Queue is exhausted: ask YouTube for what should play next and append it.
+   * Resolves to true when the queue grew (caller can then advance).
+   */
+  extendQueueFromAutoplay: () => Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -183,8 +201,12 @@ export const usePlayerStore = create<PlayerState>()(
       totalPlays: 0,
       totalListeningMs: 0,
       recentlyPlayed: [],
+      autoplay: true,
 
       playSong: (song, queue, index) => {
+        // Explicit play = new seed for autoplay; clear the once-per-seed guard.
+        _autoplayTriedFor = null;
+
         const nextQueue: QueueItem[] = queue
           ? ensureQueueItems(queue)
           : get().queue.length
@@ -249,7 +271,16 @@ export const usePlayerStore = create<PlayerState>()(
             set({ current: null, currentIndex: -1, isPlaying: false, error: null });
             return;
           }
+          // Queue ran out. If on-device extraction is available, pull a batch
+          // of similar tracks from YouTube and keep going instead of stopping.
           set({ isPlaying: false, error: null });
+          void (async () => {
+            const grew = await get().extendQueueFromAutoplay();
+            if (grew) {
+              set({ isPlaying: true });
+              get().next();
+            }
+          })();
           return;
         }
 
@@ -316,8 +347,23 @@ export const usePlayerStore = create<PlayerState>()(
             enqueueRequest(`/likes/${songId}`, method);
             return;
           }
+          // Send song metadata so liking a YouTube / on-device track that was
+          // never imported still registers (backend auto-creates the row).
+          const st = get();
+          const song = st.current?.id === songId
+            ? st.current
+            : st.queue.find((s) => s.id === songId) ?? null;
+          const meta = song
+            ? {
+                title: song.title, artist: song.artist, album: song.album,
+                genre: song.genre, duration_ms: song.durationMs, colors: song.colors,
+              }
+            : undefined;
           const apiCall = wasLiked ? api.unlike : api.like;
-          apiCall(songId, token).catch(() => {
+          (wasLiked
+            ? (apiCall as typeof api.unlike)(songId, token)
+            : (apiCall as typeof api.like)(songId, token, meta)
+          ).catch(() => {
             set((s) => ({ likedSongs: { ...s.likedSongs, [songId]: wasLiked } }));
           });
         }
@@ -450,6 +496,40 @@ export const usePlayerStore = create<PlayerState>()(
         if (!current) return;
         set({ error: null, loadingId: current.id });
       },
+
+      setAutoplay: (v) => set({ autoplay: v }),
+
+      extendQueueFromAutoplay: async () => {
+        const { autoplay, current } = get();
+        if (!autoplay || !current) return false;
+        // One attempt per seed track — without this, a seed with no mix would
+        // be re-fetched every time the queue runs dry.
+        if (_autoplayTriedFor === current.id) return false;
+        _autoplayTriedFor = current.id;
+
+        try {
+          const { fetchUpNext } = await import('@/services/autoQueue');
+          const fresh = await fetchUpNext(current.id, current, AUTOPLAY_LIMIT);
+          if (!fresh.length) return false;
+
+          const seen = new Set(get().queue.map((q) => q.id));
+          const additions = fresh.filter((s) => !seen.has(s.id));
+          if (!additions.length) return false;
+
+          const wrapped: QueueItem[] = additions.map((s) => ({ ...s, queueItemId: generateQueueItemId() }));
+          const newQueue = [...get().queue, ...wrapped];
+          set({ queue: newQueue, error: null });
+          saveQueue({
+            queue: newQueue,
+            currentIndex: get().currentIndex,
+            shuffle: get().shuffle,
+            repeat: get().repeat,
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
     }),
     {
       name: 'player-liked-songs',
@@ -459,6 +539,7 @@ export const usePlayerStore = create<PlayerState>()(
         recentlyPlayed: state.recentlyPlayed,
         totalPlays: state.totalPlays,
         totalListeningMs: state.totalListeningMs,
+        autoplay: state.autoplay,
       }),
     }
   )
