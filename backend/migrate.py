@@ -49,6 +49,7 @@ async def migrate() -> None:
         if current >= MIGRATION_VERSION:
             print(f"Migration up-to-date (version {current}). Skipping.")
             return
+        print(f"Applying migration v{current} → v{MIGRATION_VERSION} (idempotent DDL pass, ~1 min)...", flush=True)
 
         # ----- users (must be first — referenced by FKs) -----
         await conn.execute(

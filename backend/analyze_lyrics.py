@@ -57,7 +57,15 @@ GURMUKHI_RE = re.compile(r"[\u0a00-\u0a7f]")
 def log(severity: str, msg: str):
     ts = time.strftime("%H:%M:%S")
     icon = {"OK": "✓", "WARN": "⚠", "ERROR": "✗", "INFO": "•"}.get(severity, " ")
-    print(f"[{ts}] [{icon}] {msg}")
+    print(f"[{ts}] [{icon}] {msg}", flush=True)
+
+
+def _eta(t0: float, done: int, total: int) -> str:
+    el = time.time() - t0
+    if done <= 0:
+        return f"{el:.0f}s elapsed"
+    rate = el / done
+    return f"{el:.0f}s elapsed, ~{rate * (total - done):.0f}s left ({rate:.2f}s/song)"
 
 
 def detect_script(sample: str) -> str:
@@ -163,6 +171,8 @@ def main():
     if DRY_RUN:
         rows = rows[:5]
     log("INFO", f"Scoring {len(rows)} songs with {MODEL_ID}...")
+    log("INFO", "Loading model (first run downloads ~500MB of weights — may take minutes)...")
+    t0 = time.time()
 
     try:
         clf = pipeline("sentiment-analysis", model=MODEL_ID, tokenizer=MODEL_ID,
@@ -186,8 +196,9 @@ def main():
             v = probs_to_valence(scores if isinstance(scores, list) else [scores])
             scored.append((r["id"], round(v, 3)))
             scripts[detect_script(r["lyrics"][:2000])] = scripts.get(detect_script(r["lyrics"][:2000]), 0) + 1
-        if (i // BATCH_SIZE + 1) % 5 == 0 or i + BATCH_SIZE >= len(rows):
-            log("INFO", f"  scored {min(i + BATCH_SIZE, len(rows))}/{len(rows)}")
+        done_n = min(i + BATCH_SIZE, len(rows))
+        if (i // BATCH_SIZE + 1) % 5 == 0 or done_n == len(rows):
+            log("INFO", f"  scored {done_n}/{len(rows)} | {_eta(t0, done_n, len(rows))}")
 
     if DRY_RUN:
         for (sid, v), r in zip(scored, rows):
@@ -196,7 +207,11 @@ def main():
         return
 
     n = asyncio.run(write_scores(scored))
-    log("OK", f"Wrote lyrics_valence for {n}/{len(rows)} songs (scripts seen: {scripts})")
+    if scored:
+        vals = [v for _, v in scored]
+        log("INFO", f"  valence distribution: min={min(vals):.2f} mean={sum(vals) / len(vals):.2f} max={max(vals):.2f}")
+        log("INFO", "  (everything ~0.50 means the model isn't discriminating — check MODEL_ID)")
+    log("OK", f"Wrote lyrics_valence for {n}/{len(rows)} songs in {time.time() - t0:.0f}s (scripts seen: {scripts})")
     log("INFO", "=" * 55)
 
 

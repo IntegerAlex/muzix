@@ -72,7 +72,15 @@ enjoy hass hassde hasa hasna khush khushi khushiyan nach nacho nachde nachdi
 def log(severity: str, msg: str):
     ts = time.strftime("%H:%M:%S")
     icon = {"OK": "✓", "WARN": "⚠", "ERROR": "✗", "INFO": "•"}.get(severity, " ")
-    print(f"[{ts}] [{icon}] {msg}")
+    print(f"[{ts}] [{icon}] {msg}", flush=True)
+
+
+def _eta(t0: float, done: int, total: int) -> str:
+    el = time.time() - t0
+    if done <= 0:
+        return f"{el:.0f}s elapsed"
+    rate = el / done
+    return f"{el:.0f}s elapsed, ~{rate * (total - done):.0f}s left ({rate:.1f}s/song)"
 
 
 def _http_json(url: str, params: dict, timeout: int = 15):
@@ -241,11 +249,14 @@ def main():
     if not rows:
         log("OK", "No unenriched YouTube tracks. Nothing to do.")
         return
-    log("INFO", f"Enriching {len(rows)} tracks...")
+    log("INFO", f"Enriching {len(rows)} tracks (~{len(rows) * (ITUNES_SLEEP_S + 1):.0f}s expected, mostly iTunes spacing)...")
 
     done = {"genre": 0, "lyrics": 0, "valence": 0}
+    skipped = 0
+    t0 = time.time()
     for i, r in enumerate(rows, 1):
         update: dict = {"id": r["id"]}
+        song_label = f"{r['artist']} – {r['title']}" if r['artist'] else r['title']
         try:
             if (not r["genre"] or FORCE) and r["title"]:
                 g = itunes_genre(r["title"], r["artist"])
@@ -262,16 +273,27 @@ def main():
             if lyrics_text and (not r["has_valence"] or FORCE):
                 update["lyrics_valence"] = lexicon_valence(lyrics_text)
                 done["valence"] += 1
+            parts = []
+            if update.get("genre"):
+                parts.append(f"genre={update['genre']}")
+            if update.get("lyrics"):
+                parts.append(f"lyrics={len(update['lyrics'])}ch")
+            if update.get("lyrics_valence") is not None:
+                parts.append(f"valence={update['lyrics_valence']}")
             if DRY_RUN:
-                log("INFO", f"  {r['artist']} – {r['title']}: { {k: (str(v)[:40]) for k, v in update.items() if k != 'id'} }")
+                log("INFO", f"  [{i}/{len(rows)}] {song_label}: preview={ {k: (str(v)[:40]) for k, v in update.items() if k != 'id'} }")
             elif len(update) > 1:
                 asyncio.run(write_row(update))
+                log("INFO", f"  [{i}/{len(rows)}] {song_label}: {', '.join(parts) if parts else 'no change'}")
+            else:
+                skipped += 1
+                log("INFO", f"  [{i}/{len(rows)}] {song_label}: skipped (already enriched)")
         except Exception as e:
-            log("WARN", f"  failed {r['id']}: {e}")
+            log("WARN", f"  [{i}/{len(rows)}] {song_label}: failed: {e}")
         if i % 10 == 0 or i == len(rows):
-            log("INFO", f"  {i}/{len(rows)} (genre={done['genre']} lyrics={done['lyrics']} valence={done['valence']})")
+            log("INFO", f"  progress {i}/{len(rows)} | genre={done['genre']} lyrics={done['lyrics']} valence={done['valence']} skipped={skipped} | {_eta(t0, i, len(rows))}")
 
-    log("OK", f"Done: genre={done['genre']} lyrics={done['lyrics']} valence={done['valence']}")
+    log("OK", f"Done in {time.time() - t0:.0f}s: genre={done['genre']} lyrics={done['lyrics']} valence={done['valence']} skipped={skipped}")
     if DRY_RUN:
         log("OK", "Dry run — nothing written.")
     log("INFO", "=" * 55)

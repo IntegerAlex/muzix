@@ -51,7 +51,15 @@ REQUIRED_COLUMNS = ("audio_energy", "audio_valence", "danceability")
 def log(severity: str, msg: str):
     ts = time.strftime("%H:%M:%S")
     icon = {"OK": "✓", "WARN": "⚠", "ERROR": "✗", "INFO": "•"}.get(severity, " ")
-    print(f"[{ts}] [{icon}] {msg}")
+    print(f"[{ts}] [{icon}] {msg}", flush=True)
+
+
+def _eta(t0: float, done: int, total: int) -> str:
+    el = time.time() - t0
+    if done <= 0:
+        return f"{el:.0f}s elapsed"
+    rate = el / done
+    return f"{el:.0f}s elapsed, ~{rate * (total - done):.0f}s left ({rate:.1f}s/file)"
 
 
 def _get(res: object, *names: str):
@@ -189,9 +197,12 @@ def main():
     if DRY_RUN:
         rows = rows[:3]
     log("INFO", f"Scoring {len(rows)} files...")
+    log("INFO", "Loading VibeNet weights (first run downloads them — may take a minute)...")
+    t0 = time.time()
 
     try:
         model = load_model()
+        log("INFO", "Model ready, starting inference...")
     except Exception as e:
         log("ERROR", f"Could not load VibeNet model: {e}")
         return
@@ -205,13 +216,14 @@ def main():
             v = _clamp01(_get(res, "valence"))
             d = _clamp01(_get(res, "danceability"))
             if e is None and v is None and d is None:
-                log("WARN", f"  no usable fields for {r['id']} (result keys? {getattr(res, '__dict__', res)!r:.120})")
+                log("WARN", f"  [{i}/{len(rows)}] {r['artist']} – {r['title']}: no usable fields (result keys? {getattr(res, '__dict__', res)!r:.120})")
                 continue
             scored.append({"id": r["id"], "e": e, "v": v, "d": d})
+            log("INFO", f"  [{i}/{len(rows)}] {r['artist']} – {r['title']}: energy={e} valence={v} dance={d}")
         except Exception as ex:
-            log("WARN", f"  failed {r['id']}: {ex}")
+            log("WARN", f"  [{i}/{len(rows)}] {r['artist']} – {r['title']}: failed: {ex}")
         if i % 10 == 0 or i == len(rows):
-            log("INFO", f"  scored {i}/{len(rows)}")
+            log("INFO", f"  progress {i}/{len(rows)} | {_eta(t0, i, len(rows))}")
 
     if DRY_RUN:
         for s in scored:
@@ -220,7 +232,7 @@ def main():
         return
 
     n = asyncio.run(write_scores(scored))
-    log("OK", f"Wrote audio scores for {n}/{len(rows)} songs")
+    log("OK", f"Wrote audio scores for {n}/{len(rows)} songs in {time.time() - t0:.0f}s")
     log("INFO", "=" * 55)
 
 
