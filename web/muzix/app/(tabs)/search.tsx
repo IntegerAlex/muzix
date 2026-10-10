@@ -218,14 +218,19 @@ function YouTubeResults({
 }) {
   const { playSong, setLoading } = usePlayerStore.getState();
   const [loadingId, setBusyId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<Record<string, number>>({});
 
   const play = useCallback(async (hit: YouTubeSearchHit) => {
     setBusyId(hit.id);
+    setProgress((p) => ({ ...p, [hit.id]: 0 }));
     try {
       setLoading(hit.id);
       // Resolve first so the user sees a real error if extraction fails,
-      // rather than a spinner that never resolves.
-      await resolveAudio(hit.id);
+      // rather than a spinner that never resolves. Progress streams in
+      // while the bytes download.
+      await resolveAudio(hit.id, null, (f) => {
+        setProgress((p) => ({ ...p, [hit.id]: f }));
+      });
       const song: Song = {
         id: hit.id,
         title: hit.title,
@@ -246,6 +251,12 @@ function YouTubeResults({
     } finally {
       setBusyId(null);
       setLoading(null);
+      setProgress((p) => {
+        if (!(hit.id in p)) return p;
+        const next = { ...p };
+        delete next[hit.id];
+        return next;
+      });
     }
   }, [playSong, setLoading]);
 
@@ -266,6 +277,7 @@ function YouTubeResults({
 
       {hits.map((hit) => {
         const busy = loadingId === hit.id;
+        const pct = progress[hit.id];
         return (
           <Pressable
             key={hit.id}
@@ -285,15 +297,26 @@ function YouTubeResults({
             <View style={{
               width: 40, height: 40, borderRadius: RADIUS.sm,
               backgroundColor: SURFACE_ICON, alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden',
             }}>
               {busy
                 ? <ActivityIndicator size="small" color={TEXT_PRIMARY} />
                 : <Music size={16} color={TEXT_SECONDARY} />}
+              {busy && pct != null && pct > 0 && (
+                <View style={{
+                  position: 'absolute', left: 0, right: 0, bottom: 0, height: 3,
+                  backgroundColor: 'rgba(255,255,255,0.15)',
+                }}>
+                  <View style={{ width: `${Math.round(pct * 100)}%`, height: '100%', backgroundColor: ACCENT }} />
+                </View>
+              )}
             </View>
             <View style={{ flex: 1 }}>
               <Text fontSize={14} color={TEXT_PRIMARY} numberOfLines={1}>{hit.title}</Text>
               <Text fontSize={12} color={TEXT_MUTED}>
-                {hit.durationSec ? formatTime(hit.durationSec * 1000) : 'YouTube'}
+                {busy && pct != null && pct > 0
+                  ? `Downloading… ${Math.round(pct * 100)}%`
+                  : hit.durationSec ? formatTime(hit.durationSec * 1000) : 'YouTube'}
               </Text>
             </View>
           </Pressable>

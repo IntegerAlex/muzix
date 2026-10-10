@@ -93,7 +93,11 @@ async function normalizeToCachePath(src: string, dest: string): Promise<string> 
  * Rejects if none work. Note that extraction failures (bot check, age gate,
  * removed video) are not retryable by us — surface them to the user.
  */
-export async function resolveAudio(songId: string, _song?: Song | null): Promise<AudioResolution> {
+export async function resolveAudio(
+  songId: string,
+  _song?: Song | null,
+  onProgress?: (fraction: number) => void,
+): Promise<AudioResolution> {
   // 1. Local cache hit.
   try {
     const cached = await getCachedAudioPath(songId);
@@ -122,6 +126,18 @@ export async function resolveAudio(songId: string, _song?: Song | null): Promise
       const task = ytdlp.download(youtubeUrl(songId), {
         audioOnly: true,
         networkRetries: 2,
+        onProgress: (e) => {
+          if (!onProgress) return;
+          const pct = typeof e?.percent === 'number' ? e.percent / 100 : null;
+          const ratio =
+            pct ??
+            (typeof e?.downloadedBytes === 'number' && typeof e?.totalBytes === 'number' && e.totalBytes > 0
+              ? e.downloadedBytes / e.totalBytes
+              : null);
+          if (ratio != null && Number.isFinite(ratio)) {
+            onProgress(Math.max(0, Math.min(1, ratio)));
+          }
+        },
       });
       const result = await task.promise;
       const src = result?.files?.[0];
