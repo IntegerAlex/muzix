@@ -1,10 +1,25 @@
 """Like routes: like/unlike songs, get likes."""
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, ConfigDict
 from helpers import success_resp, make_cached_response, get_current_user
 from schemas import Envelope, LikesOut, UNAUTHORIZED, RATE_LIMITED
 from services import likes as like_svc
 
 router = APIRouter(tags=["likes"])
+
+
+class LikeIn(BaseModel):
+    """Optional song metadata so liking a YouTube / on-device track that was
+    never imported still works — the song row is auto-created."""
+
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None
+    genre: str | None = None
+    duration_ms: int | None = None
+    colors: list[str] | None = None
+
+    model_config = ConfigDict(extra="ignore")
 
 
 @router.post(
@@ -15,8 +30,9 @@ router = APIRouter(tags=["likes"])
     responses={**UNAUTHORIZED},
     openapi_extra={"security": [{"bearerAuth": []}]},
 )
-async def like_song(song_id: str, user=Depends(get_current_user)):
-    result = await like_svc.like_song(user.id, song_id)
+async def like_song(song_id: str, body: LikeIn | None = None, user=Depends(get_current_user)):
+    meta = body.model_dump(exclude_none=True) if body else {}
+    result = await like_svc.like_song(user.id, song_id, meta or None)
     return success_resp(data={}, message="Liked" if result == "liked" else "Already liked")
 
 

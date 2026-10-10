@@ -24,6 +24,14 @@ class TelemetryEventIn(BaseModel):
     position_in_queue: int | None = None
     device_type: str = "web"
     app_version: str | None = None
+    # Optional song metadata — used to auto-register YouTube / on-device
+    # tracks that are not yet in the catalog, so their plays still count
+    # toward telemetry, mood, and recommendations instead of FK-failing.
+    title: str | None = None
+    artist: str | None = None
+    album: str | None = None
+    genre: str | None = None
+    colors: list[str] | None = None
 
     model_config = ConfigDict(
         json_schema_extra={

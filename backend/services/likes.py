@@ -2,7 +2,22 @@
 from repositories import likes as like_repo
 
 
-async def like_song(user_id: str, song_id: str) -> str:
+async def like_song(user_id: str, song_id: str, meta: dict | None = None) -> str:
+    # Auto-register YouTube / on-device tracks so the FK never drops a like.
+    if meta:
+        try:
+            from repositories import songs as songs_repo
+
+            await songs_repo.ensure_external_songs([{"id": song_id, **meta}])
+        except Exception:
+            pass
+    else:
+        try:
+            from repositories import songs as songs_repo
+
+            await songs_repo.ensure_external_songs([{"id": song_id}])
+        except Exception:
+            pass
     liked = await like_repo.add_like(user_id, song_id)
     return "liked" if liked else "already_liked"
 

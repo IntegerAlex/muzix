@@ -25,6 +25,31 @@ async def upsert_duration(user_id: str, song_id: str, delta_ms: int) -> None:
 
 
 async def record_events(user_id: str, events: list[dict]) -> int:
+    # Auto-register YouTube / on-device tracks so the FK to songs.id never
+    # drops plays. Catalog rows are untouched (ON CONFLICT DO NOTHING).
+    try:
+        from repositories import songs as songs_repo
+
+        metas = [
+            {
+                "id": e.get("song_id"),
+                "title": e.get("title"),
+                "artist": e.get("artist"),
+                "album": e.get("album"),
+                "genre": e.get("genre"),
+                "duration_ms": e.get("song_duration_ms"),
+                "colors": e.get("colors"),
+            }
+            for e in events
+            if e.get("song_id")
+        ]
+        if metas:
+            await songs_repo.ensure_external_songs(metas)
+    except Exception:
+        # Never fail telemetry because enrichment failed; the insert below
+        # will still record events whose song_id already exists.
+        pass
+
     async with SessionLocal() as session:
         for e in events:
             started_at = datetime.fromisoformat(e["started_at"].replace("Z", "+00:00"))
