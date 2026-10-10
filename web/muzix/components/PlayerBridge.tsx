@@ -180,6 +180,7 @@ export function PlayerBridge() {
   const setPlaying = usePlayerStore((s) => s.setPlaying);
   const setLoading = usePlayerStore((s) => s.setLoading);
   const setSeekPosition = usePlayerStore((s) => s.setSeekPosition);
+  const retryNonce = usePlayerStore((s) => s.retryNonce);
 
   useAppStateAudioSync(
     IS_WEB ? null : player,
@@ -318,7 +319,7 @@ export function PlayerBridge() {
       if (bufferedTimeoutRef.current) clearTimeout(bufferedTimeoutRef.current);
       bufferedTimeoutRef.current = null;
     };
-  }, [current?.id, player, setLoading, setPlaying]);
+  }, [current?.id, player, setLoading, setPlaying, retryNonce]);
 
   useEffect(() => {
     if (!current || bufferedTrackRef.current !== current.id) return;

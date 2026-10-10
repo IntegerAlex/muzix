@@ -181,7 +181,9 @@ async function requestRaw<T>(path: string, options?: RequestOptions): Promise<T>
 }
 
 async function request<T>(path: string, options?: RequestOptions): Promise<T> {
-  if (options?.skipRetry) return requestRaw<T>(path, options);
+  // Mutations are never retried: replaying a POST/PUT/DELETE on a 5xx or
+  // timeout duplicates playlists, likes, and registrations. GET-only retry.
+  if (options?.skipRetry || (options?.method ?? 'GET') !== 'GET') return requestRaw<T>(path, options);
   // Deduplicate concurrent requests to the same path
   const key = `${options?.method ?? 'GET'}:${path}`;
   const existing = inFlight.get(key);

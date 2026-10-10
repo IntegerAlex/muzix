@@ -141,6 +141,8 @@ interface PlayerState {
   setPlaybackPosition: (positionMs: number, durationSec: number) => void;
   setConnectionStatus: (status: 'online' | 'offline') => void;
   retry: () => void;
+  /** Bumped by retry() so the load effect re-fires for the same track. Not persisted. */
+  retryNonce: number;
   /** Toggle autoplay-on-queue-end. */
   setAutoplay: (v: boolean) => void;
   /**
@@ -212,6 +214,7 @@ export const usePlayerStore = create<PlayerState>()(
       totalListeningMs: 0,
       recentlyPlayed: [],
       autoplay: true,
+      retryNonce: 0,
       sleepTimerEndsAt: null,
       sleepAfterTrack: false,
 
@@ -506,7 +509,10 @@ export const usePlayerStore = create<PlayerState>()(
       retry: () => {
         const { current } = get();
         if (!current) return;
-        set({ error: null, loadingId: current.id });
+        // Bump retryNonce so the PlayerBridge load effect re-fires: it keys
+        // on current?.id, which doesn't change on retry, leaving the button
+        // dead with a lit spinner and no load in flight.
+        set({ error: null, loadingId: current.id, retryNonce: get().retryNonce + 1 });
       },
 
       setAutoplay: (v) => set({ autoplay: v }),
