@@ -91,6 +91,39 @@ def _clamp01(v: float | None) -> float | None:
     return max(0.0, min(1.0, v))
 
 
+def decode_mono(path: str) -> tuple[object, int]:
+    """Decode any container to mono float32 + native sample rate.
+
+    Works around a VibeNet loader bug: its load_audio() falls back to
+    librosa.load(mono=False) for formats soundfile can't read (.m4a), then
+    averages over axis=1 — but librosa returns (channels, time), not
+    soundfile's (time, channels). The mean collapses time to two DC values,
+    so every stereo .m4a scores an identical constant. Decoding to mono
+    ourselves and passing the raw waveform skips their loader entirely.
+    """
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            import soundfile as sf
+
+            y, sr = sf.read(path, always_2d=False)
+            import numpy as np
+
+            y = np.asarray(y, dtype=np.float32)
+            if y.ndim == 2:
+                y = y.mean(axis=1)  # soundfile layout is (time, channels)
+            return y, int(sr)
+        except Exception:
+            pass
+        import librosa
+        import numpy as np
+
+        y, sr = librosa.load(path, sr=None, mono=True)  # 1-D, layout-free
+        return np.asarray(y, dtype=np.float32), int(sr)
+
+
 async def ensure_columns() -> bool:
     """Fail fast when migration v3 hasn't run, instead of tracebacks."""
     from db import DATABASE_URL
@@ -210,7 +243,8 @@ def main():
     scored: list[dict] = []
     for i, r in enumerate(rows, 1):
         try:
-            out = model.predict(r["path"])
+            y, native_sr = decode_mono(r["path"])
+            out = model.predict(y, sr=native_sr)
             res = out[0] if isinstance(out, (list, tuple)) else out
             e = _clamp01(_get(res, "energy"))
             v = _clamp01(_get(res, "valence"))
