@@ -1,6 +1,6 @@
 [project]
 name = "muzix-backend"
-version = "0.1.0"
+version = "0.2.0"
 description = "Muzix FastAPI backend: search + presigned R2 URLs"
 requires-python = ">=3.10"
 dependencies = [

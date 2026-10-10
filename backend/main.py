@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Muzix API",
     description="Music streaming, discovery and recommendation API.",
-    version="1.0.0",
+    version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
