@@ -45,6 +45,16 @@
 
 </div>
 
+## What's New in v1.1.0
+
+- **Play anything:** "Search all of YouTube" in Search — on-device audio extraction (Android) downloads any track as AAC, with no server in the loop.
+- **Autoplay:** when the queue runs out, YouTube Mix keeps similar tracks coming. Toggle in the queue panel.
+- **YouTube plays count:** on-device tracks auto-register on first play/like, so they show up in stats, mood, and recommendations.
+- **Mood v2:** genre vote blended with time-of-day energy, plus an energy bar and confidence on the home card.
+- **Feel:** haptics on all transport controls, YouTube source badges, autoplay notice in Up Next.
+
+See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the full release notes.
+
 ## Architecture
 
 ### Backend
@@ -61,7 +71,7 @@ backend/
 ├── schemas.py         # Pydantic request/response models + OpenAPI error schemas
 ├── migrate.py         # Idempotent SQL migration (no Alembic)
 ├── backfill_genre.py  # Song genre enrichment via MusicBrainz + Wikipedia
-├── import_songs.py    # Catalog import: Genius lyrics + YouTube download + MusicBrainz genre
+├── import_songs.py    # Catalog import: Genius lyrics + YouTube download + MusicBrainz genre (R2 uploads verified before DB insert)
 ├── repositories/      # Database operations per entity
 ├── services/          # Business logic per entity
 └── routes/            # API endpoints per entity
@@ -81,7 +91,7 @@ web/muzix/
 ├── components/        # Reusable UI components
 │   ├── NowPlaying.tsx # Full player view with lyrics sharing
 │   ├── MiniPlayer.tsx # Persistent mini player bar
-│   ├── QueuePanel.tsx # Queue management modal (reorder, remove, clear)
+│   ├── QueuePanel.tsx # Queue management modal (reorder, remove, clear, autoplay toggle)
 │   ├── LyricsPanel.tsx, LyricsImageGenerator.tsx
 │   ├── ErrorBoundary.tsx # Sentry-wrapped error boundary
 │   └── EmptyStates.tsx, Skeleton.tsx
@@ -97,6 +107,8 @@ web/muzix/
 │   └── storage.ts     # Cross-platform storage adapter (MMKV native / localStorage web)
 ├── services/
 │   ├── api.ts         # API client with retry, timeout, dedup, Sentry error reporting
+│   ├── audioSource.ts # 3-tier audio resolver: local cache → catalog (R2) → on-device extract + YouTube search
+│   ├── autoQueue.ts   # Autoplay: seed song's YouTube Mix + search fallback for queue refill
 │   ├── cache.ts       # ETag-based API response cache (in-memory + localStorage)
 │   ├── metrics.ts     # Sentry metrics (API latency, queue depth, track plays)
 │   ├── playTimeTracker.ts # Persistent play time accumulator with delta-flush
@@ -122,21 +134,25 @@ npx api-understanding dashboard analysis.json    # → interactive dashboard
 
 See [`algorithms/`](algorithms/) for documented runtime logic: ALS recommendation engine, Fisher-Yates shuffle, play-time tracking, analytics scoring, caching strategies, and more — 16 algorithms with actual code references, constants, and input/output specs.
 
-**What's newest:** the ALS model retraining now runs in the app lifespan as a background task (fit once on startup; subsequent requests serve the cached factor matrices).
+**What's newest:** the ALS model retraining now runs in the app lifespan as a background task (fit once on startup; subsequent requests serve the cached factor matrices). Mood is v2: genre vote blended with time-of-day energy, with energy/valence/confidence scores and a fallback for genre-less tracks.
 
 ## Features
 
 - **Content sharing:** Generate share links for songs, albums, artists, playlists, lyrics. 30-day token expiry. Web Share API / native share sheet / clipboard fallback.
 - **Lyrics sharing:** Select up to 5 lyrics lines, share as image (16:9 PNG) or plain text. Synced scrolling with LRC support.
 - **Home screen dashboard:** 2x2 smart grid with current time, live weather (geolocation + wttr.in), mood derived from recently played song genres.
-- **Mood detection:** Analyzes genre of your recent plays and displays a mood label + icon (Energetic, Calm, Confident, etc.).
+- **Mood detection v2:** Blends today's genre vote with time-of-day energy; shows label + icon + energy bar + confidence. Genre-less YouTube tracks fall back to time-of-day instead of Neutral.
 - **Genre enrichment:** Song genre metadata fetched from MusicBrainz + Wikipedia, stored per-track in the database.
 - **MMKV storage:** ~30x faster than AsyncStorage on native. Zustand persist + offline queue + play time tracker all use MMKV. Web falls back to localStorage.
-- **Audio playback:** Uses `expo-audio` for cross-platform playback; downloads audio to cache via `expo-file-system`. Falls back gracefully when native TrackPlayer module is unavailable.
+- **Audio playback:** Uses `expo-audio` for cross-platform playback; downloads audio to cache via `expo-file-system`. On Android, `expo-yt-dlp` extracts any YouTube track on-device as AAC `.m4a` (dev build required, no Expo Go). Falls back gracefully when native TrackPlayer module is unavailable.
+- **Autoplay:** When the queue ends, the app pulls a batch of similar tracks from the seed song's YouTube Mix and keeps playing. Toggle in the queue panel; preference persists.
+- **YouTube telemetry:** Plays, pauses, seeks, completes, and likes for on-device tracks carry full song metadata and auto-register the song server-side — they count toward stats, mood, and recommendations like any catalog track.
+- **Mood detection v2:** Genre vote blended with time-of-day energy, with energy/valence/confidence scores. Handles genre-less YouTube tracks via a time-of-day fallback instead of Neutral.
 - **Play time tracking:** Persistent per-song accumulator flushes deltas to `POST /telemetry/duration` every 30s. Survives app backgrounding and restarts.
-- **Queue management:** Slide-up panel with reorder (up/down arrows), remove, clear all.
+- **Queue management:** Slide-up panel with reorder (up/down arrows), remove, clear all, and an autoplay toggle.
 - **Keyboard shortcuts (web):** Space=play/pause, arrows=next/prev, N/P=next/prev, L=like, Q=queue, Esc=close.
-- **Haptic feedback:** Light/medium/success/error on native (no-op on web).
+- **Haptic feedback:** Light impact on all transport controls, queue rows, likes, and seeks on native (no-op on web).
+- **Source badges:** YouTube tracks show a `YT`/`YOUTUBE` badge in rows and Now Playing, so offline vs catalog is visible at a glance.
 - **Offline banner:** Persistent top banner when disconnected.
 - **Pull-to-refresh:** All detail screens (album, artist, playlist, profile).
 - **Responsive layout:** Desktop sidebar, tablet split-view, mobile bottom tabs. Orientation-aware.
@@ -256,7 +272,7 @@ All endpoints return standardized JSON:
 | POST | `/playlists/{id}/songs/{songId}` | Yes | Add song to playlist |
 | DELETE | `/playlists/{id}/songs/{songId}` | Yes | Remove song from playlist |
 | GET | `/likes` | Yes | Get user's liked songs |
-| POST | `/likes/{songId}` | Yes | Like a song |
+| POST | `/likes/{songId}` | Yes | Like a song (accepts optional song metadata body so unimported tracks register) |
 | DELETE | `/likes/{songId}` | Yes | Unlike a song |
 | GET | `/search?q=` | No | Full-text search (songs, albums, artists) |
 | GET | `/stream/{id}` | No | Get 1-hour presigned R2 URL |
@@ -265,7 +281,7 @@ All endpoints return standardized JSON:
 | POST | `/auth/login` | No | Get JWT + refresh token |
 | POST | `/auth/refresh` | No | Refresh JWT token |
 | GET | `/auth/me` | Yes | Current user profile |
-| POST | `/telemetry/events` | Yes | Batch insert listening events (max 50) |
+| POST | `/telemetry/events` | Yes | Batch insert listening events (max 50; unknown songs auto-register from embedded metadata) |
 | POST | `/telemetry/duration` | Yes | Record accumulated play time for a song |
 | POST | `/telemetry/session/start` | Yes | Start session |
 | POST | `/telemetry/session/end` | Yes | End session |
