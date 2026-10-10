@@ -139,9 +139,11 @@ async def compute_mood(user_id: str) -> dict:
     top_count = genre_counts.most_common(1)[0][1]
 
     matched: tuple[str, str, float, float] | None = None
-    for key, val in GENRE_MOODS.items():
+    # Longest key first: "pop" must not shadow "punjabi pop", "hip-hop",
+    # or any other compound genre that merely contains it.
+    for key in sorted(GENRE_MOODS, key=len, reverse=True):
         if key in top:
-            matched = val
+            matched = GENRE_MOODS[key]
             break
     if matched is None:
         # Unknown genre string — still blend time energy instead of Neutral.
