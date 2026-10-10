@@ -23,13 +23,15 @@ async function getDb() {
 }
 
 function getAudioDir(): string {
-  const FileSystem = require('expo-file-system');
-  return `${FileSystem.documentDirectory}muzix-audio/`;
+  const FileSystem = require('expo-file-system/legacy');
+  const base = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
+  if (!base) throw new Error('No writable directory available');
+  return `${base}muzix-audio/`;
 }
 
 async function deleteFile(uri: string): Promise<void> {
   try {
-    const FileSystem = require('expo-file-system');
+    const FileSystem = require('expo-file-system/legacy');
     const info = await FileSystem.getInfoAsync(uri);
     if (info.exists) await FileSystem.deleteAsync(uri);
   } catch {}
@@ -56,7 +58,7 @@ async function evictOldEntries(keepSongId: string): Promise<void> {
 
 export async function downloadToCache(songId: string, url: string): Promise<string> {
   try {
-    const FileSystem = require('expo-file-system');
+    const FileSystem = require('expo-file-system/legacy');
     const audioDir = getAudioDir();
     const info = await FileSystem.getInfoAsync(audioDir);
     if (!info.exists) await FileSystem.makeDirectoryAsync(audioDir, { intermediates: true });
@@ -105,7 +107,7 @@ export async function getCachedAudioPath(songId: string): Promise<string | null>
       'SELECT local_uri FROM audio_cache WHERE song_id = ?', songId
     );
     if (!row) return null;
-    const FileSystem = require('expo-file-system');
+    const FileSystem = require('expo-file-system/legacy');
     const info = await FileSystem.getInfoAsync(row.local_uri);
     if (!info.exists) {
       await deleteFile(row.local_uri);
@@ -130,6 +132,37 @@ export async function removeCachedAudio(songId: string): Promise<void> {
       await db.runAsync('DELETE FROM audio_cache WHERE song_id = ?', songId);
     }
   } catch {}
+}
+
+/**
+ * Register an audio file that already exists on disk (e.g. downloaded by the
+ * on-device extractor) so getCachedAudioPath() and LRU eviction see it.
+ *
+ * `filePath` may be a file:// URI or a plain absolute path, and may have any
+ * container extension — players resolve local files by extension, so we store
+ * whatever the extractor actually produced rather than forcing `.m4a`.
+ *
+ * Returns the local URI, or null if the file isn't actually there.
+ */
+export async function registerCachedFile(songId: string, filePath: string): Promise<string | null> {
+  try {
+    const FileSystem = require('expo-file-system/legacy');
+    const uri = filePath.startsWith('file://') ? filePath : `file://${filePath}`;
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists || !(info.size ?? 0)) return null;
+
+    const db = await getDb();
+    if (db) {
+      await db.runAsync(
+        'INSERT OR REPLACE INTO audio_cache (song_id, local_uri, size, downloaded_at, downloaded) VALUES (?, ?, ?, ?, 0)',
+        songId, uri, info.size ?? 0, Date.now(),
+      );
+      await evictOldEntries(songId);
+    }
+    return uri;
+  } catch {
+    return null;
+  }
 }
 
 export async function getCachedAudioSize(): Promise<number> {
@@ -186,7 +219,7 @@ export async function markDownloaded(songId: string): Promise<void> {
       // returns true for a phantom path.
       const audioDir = getAudioDir();
       const filePath = `${audioDir}${songId}.m4a`;
-      const FileSystem = require('expo-file-system');
+      const FileSystem = require('expo-file-system/legacy');
       const fileInfo = await FileSystem.getInfoAsync(filePath);
       if (!fileInfo.exists) return;
       await db.runAsync(

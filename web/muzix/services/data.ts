@@ -167,10 +167,11 @@ export async function apiSearch(q: string): Promise<{ songs: Song[]; albums: Alb
 }
 
 export async function apiStream(id: string): Promise<{ url: string }> {
-  const { useAuthStore } = await import('@/store/authStore');
-  const token = useAuthStore.getState().token;
-  const res = await api.stream(id, token ?? undefined);
-  return { url: res.url };
+  // Uses the same resolver as playback, so the download button works for
+  // songs that are not in our catalog yet (on-device extraction).
+  const { resolveAudio } = await import('@/services/audioSource');
+  const { uri } = await resolveAudio(id);
+  return { url: uri };
 }
 
 export function useQuery<T>(fetcher: () => Promise<T>, deps: readonly unknown[], initialData: T): QueryResult<T> {

@@ -103,6 +103,11 @@ export async function removeCachedAudio(songId: string): Promise<void> {
   } catch {}
 }
 
+export async function registerCachedFile(_songId: string, _filePath: string): Promise<string | null> {
+  // Web caches audio in IndexedDB keyed by blob; there is no file to register.
+  return null;
+}
+
 export async function getCachedAudioSize(): Promise<number> {
   try {
     const all = await getAllRecords();

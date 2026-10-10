@@ -13,9 +13,11 @@ import { useToast } from '@/components/Toast';
 import { AnimatedEntrance } from '@/lib/useEntrance';
 import { Artwork } from '@/components/Artwork';
 import { RADIUS } from '@/lib/sizing';
-import { BG, SURFACE, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
+import { BG, SURFACE, SURFACE_ICON, CARD_BG, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, ACCENT, BORDER } from '@/lib/colors';
 import { useResponsive } from '@/lib/useResponsive';
 import { SPACING } from '@/lib/spacing';
+import { formatTime } from '@/lib/utils';
+import { resolveAudio, searchYouTube, canExtractOnDevice, type YouTubeSearchHit } from '@/services/audioSource';
 import type { Song } from '@/services/types';
 
 const RECENT_KEY = 'muzix_recent_searches';
@@ -200,6 +202,108 @@ function SearchResults({ results, current, onShare, isSharing, showSongs, showAl
 }
 
 // ---------------------------------------------------------------------------
+// YouTube (not in your library yet)
+// ---------------------------------------------------------------------------
+
+function YouTubeResults({
+  hits,
+  loading,
+  query: _query,
+  standalone = false,
+}: {
+  hits: YouTubeSearchHit[];
+  loading: boolean;
+  query: string;
+  standalone?: boolean;
+}) {
+  const { playSong, setLoading } = usePlayerStore.getState();
+  const [loadingId, setBusyId] = useState<string | null>(null);
+
+  const play = useCallback(async (hit: YouTubeSearchHit) => {
+    setBusyId(hit.id);
+    try {
+      setLoading(hit.id);
+      // Resolve first so the user sees a real error if extraction fails,
+      // rather than a spinner that never resolves.
+      await resolveAudio(hit.id);
+      const song: Song = {
+        id: hit.id,
+        title: hit.title,
+        artist: 'YouTube',
+        artistId: 'youtube',
+        album: 'YouTube',
+        albumId: 'youtube',
+        genre: '',
+        duration: hit.durationSec ? formatTime(hit.durationSec * 1000) : '',
+        durationMs: hit.durationSec * 1000,
+        colors: ['#6d28d9', '#db2777'],
+      };
+      playSong(song);
+    } catch (e: any) {
+      usePlayerStore.setState({
+        error: e?.message?.slice?.(0, 160) || 'Could not get that track from YouTube',
+      });
+    } finally {
+      setBusyId(null);
+      setLoading(null);
+    }
+  }, [playSong, setLoading]);
+
+  return (
+    <View style={{ marginTop: SPACING.xxl }}>
+      {!standalone && <View style={{ height: 1, backgroundColor: BORDER, marginBottom: SPACING.lg }} />}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.md }}>
+        <Music size={14} color={ACCENT} />
+        <Text fontSize={12} fontWeight="600" color={TEXT_MUTED} style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          Search all of YouTube
+        </Text>
+        {loading && <ActivityIndicator size="small" color={ACCENT} />}
+      </View>
+
+      {hits.length === 0 && !loading && (
+        <Text fontSize={13} color={TEXT_MUTED}>No YouTube matches.</Text>
+      )}
+
+      {hits.map((hit) => {
+        const busy = loadingId === hit.id;
+        return (
+          <Pressable
+            key={hit.id}
+            onPress={() => void play(hit)}
+            disabled={busy}
+            hitSlop={8}
+            accessibilityLabel={`Play ${hit.title} from YouTube`}
+            accessibilityRole="button"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: SPACING.md,
+              paddingVertical: SPACING.sm,
+              opacity: busy ? 0.6 : 1,
+            }}
+          >
+            <View style={{
+              width: 40, height: 40, borderRadius: RADIUS.sm,
+              backgroundColor: SURFACE_ICON, alignItems: 'center', justifyContent: 'center',
+            }}>
+              {busy
+                ? <ActivityIndicator size="small" color={TEXT_PRIMARY} />
+                : <Music size={16} color={TEXT_SECONDARY} />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text fontSize={14} color={TEXT_PRIMARY} numberOfLines={1}>{hit.title}</Text>
+              <Text fontSize={12} color={TEXT_MUTED}>
+                {hit.durationSec ? formatTime(hit.durationSec * 1000) : 'YouTube'}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -232,6 +336,31 @@ export default function SearchScreen() {
   const { data: results, loading } = useSearch(query);
   const hasQuery = query.trim().length > 0;
   const hasResults = results.songs.length > 0 || results.albums.length > 0 || results.artists.length > 0;
+
+  // On-device YouTube search — lets you find any song, not just what's already
+  // in the catalog. Empty array on web/iOS/Expo Go, which just hides the section.
+  const [youtubeHits, setYoutubeHits] = useState<YouTubeSearchHit[]>([]);
+  const [youtubeLoading, setYoutubeLoading] = useState(false);
+  const [canExtract, setCanExtract] = useState(false);
+
+  useEffect(() => {
+    void canExtractOnDevice().then(setCanExtract);
+  }, []);
+
+  useEffect(() => {
+    if (!hasQuery || !canExtract) {
+      setYoutubeHits([]);
+      return;
+    }
+    let cancelled = false;
+    setYoutubeLoading(true);
+    const timer = setTimeout(() => {
+      searchYouTube(query, 8)
+        .then((hits) => { if (!cancelled) { setYoutubeHits(hits); setYoutubeLoading(false); } })
+        .catch(() => { if (!cancelled) setYoutubeLoading(false); });
+    }, 400); // longer than the local debounce; network is slower
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [query, hasQuery, canExtract]);
 
   useEffect(() => {
     if (!loading && hasQuery && hasResults) {
@@ -384,15 +513,26 @@ export default function SearchScreen() {
         ) : loading ? (
           <LoadingState />
         ) : hasResults ? (
-          <SearchResults
-            results={results}
-            current={current}
-            onShare={handleShare}
-            isSharing={isSharing}
-            showSongs={true}
-            showAlbums={true}
-            showArtists={true}
-          />
+          <>
+            <SearchResults
+              results={results}
+              current={current}
+              onShare={handleShare}
+              isSharing={isSharing}
+              showSongs={true}
+              showAlbums={true}
+              showArtists={true}
+            />
+            {(canExtract && (youtubeLoading || youtubeHits.length > 0)) && (
+              <YouTubeResults
+                hits={youtubeHits}
+                loading={youtubeLoading}
+                query={query}
+              />
+            )}
+          </>
+        ) : canExtract && (youtubeLoading || youtubeHits.length > 0) ? (
+          <YouTubeResults hits={youtubeHits} loading={youtubeLoading} query={query} standalone />
         ) : (
           <NoResultsState query={query} />
         )}

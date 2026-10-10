@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus, type AudioPlayer } from 'expo-audio';
 import { router } from 'expo-router';
 import { api, ApiError } from '@/services/api';
-import { downloadToCache, getCachedAudioPath } from '@/services/audioCache';
+import { resolveAudio } from '@/services/audioSource';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/lib/config';
@@ -37,6 +37,11 @@ interface TelemetryEvent {
   position_in_queue: number | null;
   device_type: string;
   app_version: string | null;
+  title?: string | null;
+  artist?: string | null;
+  album?: string | null;
+  genre?: string | null;
+  colors?: string[] | null;
 }
 
 const EVENT_BUFFER: TelemetryEvent[] = [];
@@ -75,10 +80,26 @@ async function flushEvents() {
   }
 }
 
-function recordEvent(event: Omit<TelemetryEvent, 'device_type' | 'app_version' | 'source' | 'source_id' | 'position_in_queue'>) {
-  EVENT_BUFFER.push({ ...event, source: null, source_id: null, position_in_queue: null, device_type: 'web', app_version: '1.0.0' });
+function recordEvent(event: Omit<TelemetryEvent, 'device_type' | 'app_version'>) {
+  EVENT_BUFFER.push({
+    ...event,
+    device_type: Platform.OS,
+    app_version: '1.0.0',
+  });
   if (EVENT_BUFFER.length >= BUFFER_MAX_SIZE) { if (flushTimeout) clearTimeout(flushTimeout); flushEvents(); }
   else if (!flushTimeout) { flushTimeout = setTimeout(flushEvents, 10000); }
+}
+
+function songMeta(song: { id: string; title: string; artist: string; album: string; genre: string; colors: [string, string]; durationMs: number }) {
+  return {
+    song_id: song.id,
+    title: song.title?.slice(0, 512) ?? null,
+    artist: song.artist?.slice(0, 512) ?? null,
+    album: song.album?.slice(0, 512) ?? null,
+    genre: song.genre?.slice(0, 128) ?? null,
+    colors: song.colors ?? null,
+    song_duration_ms: song.durationMs ?? null,
+  };
 }
 
 let sessionStarted = false;
@@ -167,6 +188,7 @@ export function PlayerBridge() {
   );
 
   const currentUrlRef = useRef<string | null>(null);
+  const audioSourceRef = useRef<{ id: string; source: string } | null>(null);
   const retryCountRef = useRef(0);
   const bufferedTrackRef = useRef<string | null>(null);
   const bufferedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -201,33 +223,14 @@ export function PlayerBridge() {
     const attemptLoad = async () => {
       setLoading(current.id);
       try {
-        let playUri: string;
-        if (IS_WEB) {
-          const cached = await getCachedAudioPath(current.id);
-          if (cancelled) return;
-          if (cached) {
-            playUri = cached;
-          } else {
-            const token = useAuthStore.getState().token;
-            const { url } = await api.stream(current.id, token ?? undefined);
-            if (cancelled) return;
-            playUri = await downloadToCache(current.id, url);
-          }
-        } else {
-          const cached = await getCachedAudioPath(current.id);
-          if (cancelled) return;
-          if (cached) {
-            playUri = cached;
-          } else {
-            const token = useAuthStore.getState().token;
-            const { url } = await api.stream(current.id, token ?? undefined);
-            if (cancelled) return;
-            playUri = await downloadToCache(current.id, url);
-          }
-        }
+        // Single resolver: local cache -> our catalog (R2) -> on-device extract.
+        const { uri: playUri, source: audioOrigin } = await resolveAudio(current.id, current);
         if (cancelled) return;
 
         currentUrlRef.current = playUri;
+        // Remember how this track was sourced so pause/complete/seek events
+        // carry the same attribution (needed for source-effectiveness).
+        audioSourceRef.current = { id: current.id, source: audioOrigin };
 
         player.replace({ uri: playUri });
         player.volume = volume;
@@ -262,7 +265,7 @@ export function PlayerBridge() {
             bufferedTrackRef.current = null;
           }
         }, 10000);
-        recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: 0 });
+        recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, completion_percentage: 0, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) {
@@ -270,14 +273,19 @@ export function PlayerBridge() {
           setLoading(null);
           return;
         }
-        if (retryCountRef.current < MAX_RETRIES) {
+        // On-device extraction failures (bot check, age gate, unsupported
+        // container) are not retryable — retrying just burns time.
+        const msg = err instanceof Error ? err.message : String(err);
+        const isFatal = /bot|sign in|unavailable|unsupported|private|age|removed|extract/i.test(msg);
+        if (!isFatal && retryCountRef.current < MAX_RETRIES) {
           retryCountRef.current++;
           setTimeout(() => { if (!cancelled) attemptLoad(); }, 1000 * retryCountRef.current);
           return;
         }
+        console.warn('[PlayerBridge] playback failed:', msg);
         setPlaying(false);
         setLoading(null);
-        usePlayerStore.setState({ error: 'Playback failed. Tap retry to try again.' });
+        usePlayerStore.setState({ error: msg.slice(0, 200) || 'Playback failed. Tap retry to try again.' });
       }
     };
 
@@ -348,11 +356,11 @@ export function PlayerBridge() {
     if (prevIsPlayingRef.current !== isPlaying) {
       if (isPlaying) {
         playTimeTracker.startPlaying(current.id);
-        recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: 0 });
+        recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, completion_percentage: 0, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
       } else {
         const now = new Date();
         playTimeTracker.pausePlaying();
-        recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'pause', started_at: now.toISOString(), ended_at: now.toISOString(), duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: 0 });
+        recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'pause', started_at: now.toISOString(), ended_at: now.toISOString(), duration_played_ms: 0, completion_percentage: 0, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
       }
     }
     prevIsPlayingRef.current = isPlaying;
@@ -364,7 +372,7 @@ export function PlayerBridge() {
   const handleTrackComplete = () => {
     if (!current) return;
     didJustFinishRef.current = true;
-    recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'complete', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: current.durationMs, song_duration_ms: current.durationMs, completion_percentage: 100 });
+    recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'complete', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: current.durationMs, completion_percentage: 100, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
     if (usePlayerStore.getState().repeat === 'one') {
       playTimeTracker.flushDelta(current.id);
       player.seekTo(0);
@@ -404,7 +412,7 @@ export function PlayerBridge() {
     playTimeTracker.flushDelta(current.id);
     player.seekTo(clampedFraction * durationSec);
     usePlayerStore.getState().setPlaybackPosition(clampedFraction * durationSec * 1000, durationSec);
-    recordEvent({ song_id: current.id, session_id: SESSION_ID, event_type: 'seek', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: 0, song_duration_ms: current.durationMs, completion_percentage: current.durationMs > 0 ? Math.round(clampedFraction * 100) : 0 });
+    recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'seek', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: 0, completion_percentage: current.durationMs > 0 ? Math.round(clampedFraction * 100) : 0, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
     setSeekPosition(null);
   }, [seekPosition, current, player, status.duration, setSeekPosition]);
 
