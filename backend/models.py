@@ -12,7 +12,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Table, Text, ARRAY, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Table, Text, ARRAY, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import relationship
 
@@ -96,6 +96,13 @@ class Song(Base):
     r2_object_key = Column(String(1024), nullable=True)
     colors = Column(ARRAY(Text), nullable=False, server_default="{}")
     fts = Column(TSVECTOR, nullable=True)
+    # Precomputed mood signals (nullable until analyzed — see analyze_lyrics.py
+    # and analyze_audio.py). All 0.0–1.0. compute_mood() falls back gracefully
+    # when these are NULL (genre vote + time-of-day only).
+    audio_energy = Column(Float, nullable=True)
+    audio_valence = Column(Float, nullable=True)
+    danceability = Column(Float, nullable=True)
+    lyrics_valence = Column(Float, nullable=True)
 
     artists = relationship("Artist", secondary=song_artists_table, backref="song_artists",
                            order_by=song_artists_table.c.position)

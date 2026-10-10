@@ -22,7 +22,7 @@ load_dotenv()
 # Bump when the schema changes. migrate() runs all DDL below only when the
 # recorded version is older, then records the new version atomically — so a
 # normal restart costs one round-trip (~1s) instead of a full DDL pass.
-MIGRATION_VERSION = 2
+MIGRATION_VERSION = 3
 
 
 async def _current_version(conn) -> int:
@@ -129,7 +129,11 @@ async def migrate() -> None:
                     lyrics TEXT,
                     r2_object_key TEXT,
                     colors TEXT[] NOT NULL DEFAULT '{}',
-                    fts TSVECTOR
+                    fts TSVECTOR,
+                    audio_energy DOUBLE PRECISION,
+                    audio_valence DOUBLE PRECISION,
+                    danceability DOUBLE PRECISION,
+                    lyrics_valence DOUBLE PRECISION
                 );
                 """
             )
@@ -143,7 +147,11 @@ async def migrate() -> None:
                     ADD COLUMN IF NOT EXISTS track INTEGER,
                     ADD COLUMN IF NOT EXISTS genre TEXT NOT NULL DEFAULT '',
                     ADD COLUMN IF NOT EXISTS lyrics TEXT,
-                    ADD COLUMN IF NOT EXISTS colors TEXT[] NOT NULL DEFAULT '{}';
+                    ADD COLUMN IF NOT EXISTS colors TEXT[] NOT NULL DEFAULT '{}',
+                    ADD COLUMN IF NOT EXISTS audio_energy DOUBLE PRECISION,
+                    ADD COLUMN IF NOT EXISTS audio_valence DOUBLE PRECISION,
+                    ADD COLUMN IF NOT EXISTS danceability DOUBLE PRECISION,
+                    ADD COLUMN IF NOT EXISTS lyrics_valence DOUBLE PRECISION;
                 """
             )
         )
