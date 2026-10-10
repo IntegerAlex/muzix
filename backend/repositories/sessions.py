@@ -1,14 +1,20 @@
 """Session repository: database operations for user sessions."""
 from datetime import datetime, timezone
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from db import SessionLocal
 from models import UserSession, ListeningEvent, Song
 
 
 async def create_session(session_data: UserSession) -> None:
+    # Client retries (timeout, double-tap) reuse the same session_id PK —
+    # treat a duplicate as the already-recorded start, not a 500.
     async with SessionLocal() as session:
         session.add(session_data)
-        await session.commit()
+        try:
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
 
 
 async def end_session(session_id: str, user_id: str, exit_reason: str | None) -> bool:

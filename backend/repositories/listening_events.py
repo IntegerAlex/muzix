@@ -1,26 +1,27 @@
 """Listening event repository: database operations for telemetry/analytics."""
 import uuid
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import BigInteger, select, func, case
+from sqlalchemy import BigInteger, select, func, case, text
 from db import SessionLocal
 from models import ListeningEvent, Song, UserSession, SongDuration
 
 
 async def upsert_duration(user_id: str, song_id: str, delta_ms: int) -> None:
+    # Single statement: the old SELECT-then-INSERT raced under concurrent
+    # /telemetry/duration calls (both miss, both insert → UniqueViolation 500).
     async with SessionLocal() as session:
-        result = await session.execute(
-            select(SongDuration).where(
-                SongDuration.user_id == user_id,
-                SongDuration.song_id == song_id,
-            )
+        await session.execute(
+            text(
+                """
+                INSERT INTO song_durations (id, user_id, song_id, total_ms, last_updated)
+                VALUES (:id, :user_id, :song_id, :delta_ms, NOW())
+                ON CONFLICT (user_id, song_id) DO UPDATE SET
+                    total_ms = song_durations.total_ms + EXCLUDED.total_ms,
+                    last_updated = NOW()
+                """
+            ),
+            {"id": str(uuid.uuid4()), "user_id": user_id, "song_id": song_id, "delta_ms": delta_ms},
         )
-        row = result.scalar_one_or_none()
-        if row:
-            row.total_ms += delta_ms
-            row.last_updated = datetime.now(timezone.utc)
-        else:
-            row = SongDuration(user_id=user_id, song_id=song_id, total_ms=delta_ms)
-            session.add(row)
         await session.commit()
 
 
@@ -168,14 +169,22 @@ async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
         ]
 
 
-async def get_stats(user_id: str, period: str, since: datetime | None = None) -> dict:
+async def get_stats(
+    user_id: str,
+    period: str,
+    since: datetime | None = None,
+    before: datetime | None = None,
+) -> dict:
     if since is None:
         since = _since_from_period(period)
-    base_filter = (
+    filters = [
         ListeningEvent.user_id == user_id,
         ListeningEvent.event_type == "play",
         ListeningEvent.started_at >= since,
-    )
+    ]
+    if before is not None:
+        filters.append(ListeningEvent.started_at < before)
+    base_filter = tuple(filters)
     async with SessionLocal() as session:
         stats_result = await session.execute(
             select(
@@ -203,6 +212,7 @@ async def get_stats(user_id: str, period: str, since: datetime | None = None) ->
             select(func.count(func.distinct(ListeningEvent.session_id))).where(
                 ListeningEvent.user_id == user_id,
                 ListeningEvent.started_at >= since,
+                *([ListeningEvent.started_at < before] if before is not None else []),
             )
         )
         sessions = sessions_result.scalar() or 0
@@ -569,7 +579,7 @@ async def get_trend_analysis(user_id: str, period: str) -> dict:
     current_since, previous_since, previous_end = _period_bounds(period)
 
     current = await get_stats(user_id, period, since=current_since)
-    previous = await get_stats(user_id, period, since=previous_since)
+    previous = await get_stats(user_id, period, since=previous_since, before=previous_end)
 
     def pct_change(current_val: float, previous_val: float) -> float:
         if previous_val == 0:
