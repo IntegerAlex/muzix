@@ -194,6 +194,10 @@ export function PlayerBridge() {
   const bufferedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const positionTrackRef = useRef<string | null>(null);
   const lockScreenActiveRef = useRef(false);
+  // Track whose audio is still resolving (cache/R2/extract). Until replace()
+  // lands, the player still holds the *previous* track — every other effect
+  // must treat playback as owned by the loader, not the store.
+  const loadInFlightRef = useRef<string | null>(null);
   const MAX_RETRIES = 3;
 
   useEffect(() => {
@@ -219,9 +223,15 @@ export function PlayerBridge() {
     if (!current) return;
     let cancelled = false;
     retryCountRef.current = 0;
+    externalPauseRef.current = false;
+    // Stop the previous track immediately and mark this one as resolving.
+    // Extraction/download takes seconds; without this the old audio keeps
+    // sounding until replace() lands.
+    try { player.pause(); } catch {}
+    loadInFlightRef.current = current.id;
+    setLoading(current.id);
 
     const attemptLoad = async () => {
-      setLoading(current.id);
       try {
         // Single resolver: local cache -> our catalog (R2) -> on-device extract.
         const { uri: playUri, source: audioOrigin } = await resolveAudio(current.id, current);
@@ -234,7 +244,13 @@ export function PlayerBridge() {
 
         player.replace({ uri: playUri });
         player.volume = volume;
-        player.play();
+        loadInFlightRef.current = null;
+        // The user may have paused (or switched again) while this track was
+        // still resolving — don't barge in if playback is no longer wanted.
+        const shouldPlay = usePlayerStore.getState().isPlaying;
+        if (shouldPlay) {
+          player.play();
+        }
         if (!lockScreenActiveRef.current) {
           activateLockScreen(player, {
             title: current.title,
@@ -251,9 +267,11 @@ export function PlayerBridge() {
             artworkUrl: current.imageUrl,
           });
         }
-        setPlaying(true);
-        trackPlay();
-        playTimeTracker.startPlaying(current.id);
+        if (shouldPlay) {
+          setPlaying(true);
+          trackPlay();
+          playTimeTracker.startPlaying(current.id);
+        }
         retryCountRef.current = 0;
         positionTrackRef.current = current.id;
         usePlayerStore.setState({ error: null });
@@ -265,10 +283,13 @@ export function PlayerBridge() {
             bufferedTrackRef.current = null;
           }
         }, 10000);
-        recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, completion_percentage: 0, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
+        if (shouldPlay) {
+          recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, completion_percentage: 0, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
+        }
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) {
+          loadInFlightRef.current = null;
           setPlaying(false);
           setLoading(null);
           return;
@@ -283,6 +304,7 @@ export function PlayerBridge() {
           return;
         }
         console.warn('[PlayerBridge] playback failed:', msg);
+        loadInFlightRef.current = null;
         setPlaying(false);
         setLoading(null);
         usePlayerStore.setState({ error: msg.slice(0, 200) || 'Playback failed. Tap retry to try again.' });
@@ -324,7 +346,9 @@ export function PlayerBridge() {
   const prevStatusPlayingRef = useRef(status.playing);
   useEffect(() => {
     if (prevStatusPlayingRef.current !== status.playing) {
-      if (!status.playing && isPlaying) {
+      // Our own track-switch pause (see the load effect) is not an external
+      // pause — a load is in flight, so leave the store alone.
+      if (!status.playing && isPlaying && loadInFlightRef.current == null) {
         externalPauseRef.current = true;
         usePlayerStore.getState().setPlaying(false);
       }
@@ -335,7 +359,10 @@ export function PlayerBridge() {
   useEffect(() => {
     if (!current) return;
     try {
-      if (isPlaying && !status.playing) {
+      // While this track is still resolving, attemptLoad owns playback.
+      // Resuming here would play the *previous* track, which is still loaded
+      // until replace() lands.
+      if (isPlaying && !status.playing && loadInFlightRef.current !== current.id) {
         if (externalPauseRef.current) {
           externalPauseRef.current = false;
         } else if (status.didJustFinish && status.duration && status.currentTime >= status.duration - 0.05) {
