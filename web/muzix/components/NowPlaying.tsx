@@ -411,8 +411,8 @@ export function NowPlaying() {
                 )}
               </ScrollView>
             </View>
-          </Animated.View>
-        </View>
+          </View>
+        </Animated.View>
         {current && (
           <LyricsImageGenerator
             ref={imageRef}
