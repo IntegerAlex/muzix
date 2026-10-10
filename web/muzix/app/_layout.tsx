@@ -3,7 +3,6 @@ import { NAV_THEME } from '@/lib/theme';
 import { ThemeProvider } from 'expo-router/react-navigation';
 import { Stack, useNavigationContainerRef } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useColorScheme } from 'react-native';
 import { Text, View, Animated } from 'react-native';
 import { Music } from '@/lib/icons';
 import { router, usePathname } from 'expo-router';
@@ -14,6 +13,7 @@ import { useConnectivity } from '@/hooks/useConnectivity';
 import { initCatalog } from '@/services/catalogDb';
 import { initPlayer } from '@/store/initPlayer';
 import { initAudioSession, requestNotificationPermission } from '@/services/audioSession';
+import { prepareExtractor } from '@/services/audioSource';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { QueuePanel } from '@/components/QueuePanel';
 import { usePlayerStore } from '@/store/playerStore';
@@ -35,13 +35,11 @@ Sentry.init({
   dsn: 'https://c0faa5751f993e71d1fb4646f7b8d278@o4511132584574976.ingest.de.sentry.io/4511829268234320',
   environment: __DEV__ ? 'development' : 'production',
   tracesSampleRate: __DEV__ ? 1.0 : 0.2,
-  enableNativeFramesTracking: !isRunningInExpoGo(),
 });
 
 const PUBLIC_ROUTES = ['/login', '/register'];
 
 function RootLayoutInner() {
-  const colorScheme = useColorScheme();
   const pathname = usePathname();
   const token = useAuthStore((s) => s.token);
   const loading = useAuthStore((s) => s.loading);
@@ -84,6 +82,9 @@ function RootLayoutInner() {
         await initPlayer();
         await initAudioSession();
         await requestNotificationPermission();
+        // Warm the on-device extractor runtime in the background; the first
+        // extraction would otherwise pay the unpack cost.
+        void prepareExtractor();
         await import('@/services/offlineQueue').then((m) => m.retryQueuedRequests()).catch(() => {});
       })(),
       new Promise<void>((_, reject) => setTimeout(() => reject(new Error('catalog init timeout')), 2500)),
@@ -129,7 +130,7 @@ function RootLayoutInner() {
 
   if (loading || !catalogReady) {
     return (
-      <TamaguiProvider config={config} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
+      <TamaguiProvider config={config} defaultTheme="dark">
         <View style={{ flex: 1, backgroundColor: BG, justifyContent: 'center', alignItems: 'center' }}>
           <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: SURFACE_ICON, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
             <Music size={36} color={TEXT_PRIMARY} strokeWidth={1.5} />
@@ -143,10 +144,10 @@ function RootLayoutInner() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <TamaguiProvider config={config} defaultTheme={colorScheme === 'dark' ? 'dark' : 'light'}>
+      <TamaguiProvider config={config} defaultTheme="dark">
         <ToastProvider>
-          <ThemeProvider value={NAV_THEME[(colorScheme ?? 'light') as 'light' | 'dark']}>
-            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <ThemeProvider value={NAV_THEME.dark}>
+            <StatusBar style="dark" />
             <ErrorBoundary>
               <View style={{ flex: 1 }}>
                 <Animated.View style={{
@@ -169,8 +170,8 @@ function RootLayoutInner() {
                 <View style={{ flex: 1 }}>
                   <AnimatedBackdrop />
                   <Stack screenOptions={{ headerShown: false }} />
-                  <MiniPlayer />
-                  <NowPlaying />
+                  {authed && <MiniPlayer />}
+                  {authed && <NowPlaying />}
                   <PlayerBridge />
                 </View>
                 {showQueue && <QueuePanel onClose={() => setShowQueue(false)} />}
@@ -184,7 +185,7 @@ function RootLayoutInner() {
 }
 
 const navigationIntegration = Sentry.reactNavigationIntegration({
-  enableTimeToInitialDisplay: !isRunningInExpoGo(),
+  enableTimeToInitialDisplay: true,
 });
 
 export default Sentry.wrap(RootLayoutInner);

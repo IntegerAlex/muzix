@@ -36,6 +36,18 @@ const MOOD_ICONS: Record<string, React.ComponentType<{ size: number; color: stri
   Chill: Relieved,
   Groovy: Grinning,
   Passionate: Kissing,
+  Awake: Sun,
+  Focused: Smile,
+  Unwinding: Relieved,
+  'Late Night': Moon,
+  Euphoric: Grinning,
+  Dark: CloudMoon,
+  Chaotic: Angry,
+  Nostalgic: CloudSun,
+  Festive: HappyIcon,
+  Uplifted: Sun,
+  Playful: HappyIcon,
+  Neutral: Music2,
 };
 
 function ErrorView({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -96,7 +108,7 @@ function OfflineEmptyView({ downloadedSongs, onShare, isSharing, current }: { do
   );
 }
 
-const TimeWeatherMoodGrid = memo(function TimeWeatherMoodGrid({ mood, weatherData }: { mood: { label: string; color: string }; weatherData: { icon: React.ComponentType<{ size: number; color: string }>; label: string; color: string; temp?: string } | null }) {
+const TimeWeatherMoodGrid = memo(function TimeWeatherMoodGrid({ mood, weatherData }: { mood: { label: string; color: string; energy?: number; confidence?: number; based_on?: number }; weatherData: { icon: React.ComponentType<{ size: number; color: string }>; label: string; color: string; temp?: string } | null }) {
   const MoodIcon = MOOD_ICONS[mood.label] ?? Music2;
   const w = useMemo(
     () =>
@@ -144,8 +156,13 @@ const TimeWeatherMoodGrid = memo(function TimeWeatherMoodGrid({ mood, weatherDat
         <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }}>
           <Text fontSize={11} fontWeight="600" color={TEXT_MUTED} textTransform="uppercase" letterSpacing={0.5}>Mood</Text>
           <View style={{ alignItems: 'flex-end' }}>
-            <MoodIcon size={32} color={mood.color} />
+            <MoodIcon size={28} color={mood.color} />
             <Text style={{ marginTop: 4 }} fontSize={13} fontWeight="700" color={mood.color}>{mood.label}</Text>
+            {typeof mood.energy === 'number' && (
+              <View style={{ marginTop: 6, width: '100%', height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+                <View style={{ width: `${Math.round(Math.max(0, Math.min(1, mood.energy)) * 100)}%`, height: '100%', borderRadius: 2, backgroundColor: mood.color }} />
+              </View>
+            )}
           </View>
         </View>
         <View style={{ flex: 1, height: 100, borderRadius: RADIUS.lg, backgroundColor: CARD_BG, borderWidth: 1, borderColor: BORDER, padding: SPACING.md, justifyContent: 'space-between' }} />

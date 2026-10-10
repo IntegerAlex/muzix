@@ -43,7 +43,7 @@ export const THEME = {
     accent: '#1DB954',
     accentForeground: 'white',
     destructive: '#f43f5e',
-    border: 'rgba(255,255,255,0.06)',
+    border: 'rgba(255,255,255,0.15)',
     input: 'rgba(255,255,255,0.05)',
     ring: '#1DB954',
     radius: '0.625rem',

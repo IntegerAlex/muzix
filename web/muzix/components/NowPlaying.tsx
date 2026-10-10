@@ -53,6 +53,7 @@ export function NowPlaying() {
   const { queue, currentIndex, showNowPlaying } = usePlayerStore(
     useShallow((s) => ({ queue: s.queue, currentIndex: s.currentIndex, showNowPlaying: s.showNowPlaying }))
   );
+  const autoplay = usePlayerStore((s) => s.autoplay);
   const { setShowNowPlaying, setPlaying, next, previous, playSong, toggleShuffle, toggleRepeat, toggleLike, setVolume, setSeekPosition, retry } = usePlayerStore(
     useShallow((s) => ({
       setShowNowPlaying: s.setShowNowPlaying,
@@ -82,6 +83,13 @@ export function NowPlaying() {
   const { share } = useSharing();
   const { isOnline } = useConnectivity();
   const { impact } = useHaptics();
+
+  const pressPlayPause = () => { impact('light'); setPlaying(!isPlaying); };
+  const pressNext = () => { impact('light'); next(); };
+  const pressPrev = () => { impact('light'); previous(); };
+  const pressShuffle = () => { impact('light'); toggleShuffle(); };
+  const pressRepeat = () => { impact('light'); toggleRepeat(); };
+  const pressSeekDone = (v: number) => { impact('light'); setSeekPosition(v); };
   const [cached, setCached] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
@@ -264,7 +272,7 @@ export function NowPlaying() {
                     onValueChange={(v) => setScrubValue(v)}
                     onSlidingComplete={(v) => {
                       setScrubbing(false);
-                      setSeekPosition(v);
+                      pressSeekDone(v);
                     }}
                     style={{ flex: 1, height: 28 }}
                   />
@@ -278,14 +286,14 @@ export function NowPlaying() {
               )}
 
               <View style={{ marginTop: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28 }}>
-                <Pressable onPress={toggleShuffle} hitSlop={12} accessibilityLabel="Shuffle" accessibilityHint="Toggle shuffle mode" accessibilityRole="button">
+                <Pressable onPress={pressShuffle} hitSlop={12} accessibilityLabel="Shuffle" accessibilityHint="Toggle shuffle mode" accessibilityRole="button">
                   <Shuffle size={18} color={shuffle ? '#1DB954' : 'rgba(255,255,255,0.35)'} strokeWidth={shuffle ? 2.5 : 1.8} />
                 </Pressable>
-                <Pressable onPress={previous} hitSlop={12} accessibilityLabel="Previous track" accessibilityHint="Play previous track" accessibilityRole="button">
+                <Pressable onPress={pressPrev} hitSlop={12} accessibilityLabel="Previous track" accessibilityHint="Play previous track" accessibilityRole="button">
                   <SkipBack size={26} color="white" fill="white" />
                 </Pressable>
                 <Pressable
-                  onPress={() => setPlaying(!isPlaying)}
+                  onPress={pressPlayPause}
                   style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 9999, backgroundColor: 'white', width: 56, height: 56 }}
                   hitSlop={12}
                 >
@@ -297,10 +305,10 @@ export function NowPlaying() {
                     <Play size={24} color="#000" fill="#000" style={{ marginLeft: 3 }} />
                   )}
                 </Pressable>
-                <Pressable onPress={next} hitSlop={12}>
+                <Pressable onPress={pressNext} hitSlop={12}>
                   <SkipForward size={26} color="white" fill="white" />
                 </Pressable>
-                <Pressable onPress={toggleRepeat} hitSlop={12} accessibilityLabel="Repeat" accessibilityHint="Toggle repeat mode" accessibilityRole="button">
+                <Pressable onPress={pressRepeat} hitSlop={12} accessibilityLabel="Repeat" accessibilityHint="Toggle repeat mode" accessibilityRole="button">
                   {repeat === 'one' ? (
                     <Repeat1 size={18} color="#1DB954" strokeWidth={2.5} />
                   ) : (
@@ -593,9 +601,16 @@ export function NowPlaying() {
               <Text fontSize={22} fontWeight="700" letterSpacing={-0.5} color="white" numberOfLines={1}>
                 {current.title}
               </Text>
-              <Text style={{ marginTop: 2 }} fontSize={15} fontWeight="500" color="rgba(255,255,255,0.5)" numberOfLines={1}>
-                {current.artist}
-              </Text>
+              <View style={{ marginTop: 2, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text fontSize={15} fontWeight="500" color="rgba(255,255,255,0.5)" numberOfLines={1} style={{ flexShrink: 1 }}>
+                  {current.artist}
+                </Text>
+                {(current.artistId === 'youtube' || current.albumId === 'youtube') && (
+                  <View style={{ backgroundColor: 'rgba(255,0,0,0.15)', borderWidth: 1, borderColor: 'rgba(255,0,0,0.3)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                    <Text fontSize={9} fontWeight="700" color="#ff6b6b" style={{ letterSpacing: 0.3 }}>YOUTUBE</Text>
+                  </View>
+                )}
+              </View>
             </View>
             <Pressable
               onPress={() => {
@@ -668,7 +683,7 @@ export function NowPlaying() {
                 }}
                 onSlidingComplete={(v) => {
                   setScrubbing(false);
-                  setSeekPosition(v);
+                  pressSeekDone(v);
                 }}
                 style={{ flex: 1, height: 28 }}
                 accessibilityLabel="Seek"
@@ -684,7 +699,7 @@ export function NowPlaying() {
 
           <View style={{ marginTop: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 32 }}>
             <Pressable
-              onPress={toggleShuffle}
+              onPress={pressShuffle}
               hitSlop={12}
               accessibilityLabel={shuffle ? 'Shuffle on' : 'Shuffle off'}
               accessibilityRole="button"
@@ -696,12 +711,12 @@ export function NowPlaying() {
               />
             </Pressable>
 
-            <Pressable onPress={previous} hitSlop={12} accessibilityLabel="Previous track" accessibilityRole="button">
+            <Pressable onPress={pressPrev} hitSlop={12} accessibilityLabel="Previous track" accessibilityRole="button">
               <SkipBack size={30} color="white" fill="white" />
             </Pressable>
 
             <Pressable
-                onPress={() => setPlaying(!isPlaying)}
+                onPress={pressPlayPause}
                 style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 9999, backgroundColor: 'white', width: 64, height: 64 }}
                 hitSlop={12}
                 accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
@@ -716,12 +731,12 @@ export function NowPlaying() {
                 )}
               </Pressable>
 
-            <Pressable onPress={next} hitSlop={12} accessibilityLabel="Next track" accessibilityRole="button">
+            <Pressable onPress={pressNext} hitSlop={12} accessibilityLabel="Next track" accessibilityRole="button">
               <SkipForward size={30} color="white" fill="white" />
             </Pressable>
 
             <Pressable
-              onPress={toggleRepeat}
+              onPress={pressRepeat}
               hitSlop={12}
               accessibilityLabel={repeat === 'off' ? 'Repeat off' : repeat === 'all' ? 'Repeat all' : 'Repeat one'}
               accessibilityRole="button"
@@ -776,6 +791,11 @@ export function NowPlaying() {
                   </View>
                 </Pressable>
               ))}
+              {autoplay && (
+                <Text style={{ marginTop: 8 }} fontSize={11} color="rgba(255,255,255,0.35)">
+                  Autoplay on — similar tracks keep playing when the queue ends.
+                </Text>
+              )}
             </GlassCard>
           )}
 

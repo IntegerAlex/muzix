@@ -15,6 +15,7 @@ import { Artwork } from '@/components/Artwork';
 import { GlassCard } from '@/components/GlassCard';
 import { usePlayerStore } from '@/store/playerStore';
 import { useSharing } from '@/hooks/useSharing';
+import { useHaptics } from '@/hooks/useHaptics';
 import { formatTime } from '@/lib/utils';
 import { useResponsive } from '@/lib/useResponsive';
 import { SURFACE_ICON, SURFACE_ELEVATED, TEXT_PRIMARY, TEXT_MUTED } from '@/lib/colors';
@@ -39,6 +40,15 @@ export function MiniPlayer() {
   const opacity = useSharedValue(0);
   const { isDesktop } = useResponsive();
   const { share, isSharing } = useSharing();
+  const { impact } = useHaptics();
+
+  const pressPlay = () => { impact('light'); setPlaying(!isPlaying); };
+  const pressNext = () => { impact('light'); next(); };
+  const pressPrev = () => { impact('light'); previous(); };
+  const pressShare = () => {
+    impact('light');
+    share({ contentType: 'song', contentId: current?.id ?? '', title: current?.title ?? '', artist: current?.artist ?? '', imageUrl: current?.imageUrl });
+  };
 
   const isLoading = current ? loadingId === current.id : false;
 
@@ -129,7 +139,7 @@ export function MiniPlayer() {
             </Pressable>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Pressable
-                onPress={() => share({ contentType: 'song', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl })}
+                onPress={pressShare}
                 style={{ alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }}
                 hitSlop={8}
                 disabled={isSharing}
@@ -138,7 +148,7 @@ export function MiniPlayer() {
                 {isSharing ? <ActivityIndicator size={18} color={TEXT_MUTED} /> : <Share2 size={18} color={TEXT_MUTED} />}
               </Pressable>
               <Pressable
-                onPress={() => previous()}
+                onPress={pressPrev}
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -154,7 +164,7 @@ export function MiniPlayer() {
                 <SkipBack size={18} color="white" />
               </Pressable>
               <Pressable
-                onPress={() => setPlaying(!isPlaying)}
+                onPress={pressPlay}
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -176,7 +186,7 @@ export function MiniPlayer() {
                 )}
               </Pressable>
               <Pressable
-                onPress={() => next()}
+                onPress={pressNext}
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -218,7 +228,7 @@ export function MiniPlayer() {
               )}
             </Pressable>
             <Pressable
-              onPress={() => share({ contentType: 'song', contentId: current.id, title: current.title, artist: current.artist, imageUrl: current.imageUrl })}
+              onPress={pressShare}
               style={{ alignItems: 'center', justifyContent: 'center', width: 44, height: 44 }}
               hitSlop={8}
               disabled={isSharing}
@@ -229,7 +239,7 @@ export function MiniPlayer() {
               {isSharing ? <ActivityIndicator size={18} color={TEXT_MUTED} /> : <Share2 size={18} color={TEXT_MUTED} />}
             </Pressable>
             <Pressable
-                onPress={() => setPlaying(!isPlaying)}
+                onPress={pressPlay}
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',

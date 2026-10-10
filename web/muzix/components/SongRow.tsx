@@ -15,6 +15,7 @@ import { SPACING } from '@/lib/spacing';
 import { Skeleton } from '@/components/Skeleton';
 import { usePlayerStore } from '@/store/playerStore';
 import { useConnectivity } from '@/hooks/useConnectivity';
+import { useHaptics } from '@/hooks/useHaptics';
 import { useAuthStore } from '@/store/authStore';
 import { apiStream } from '@/services/data';
 import { downloadToCache, getCachedAudioPath, markDownloaded } from '@/services/audioCache';
@@ -58,8 +59,10 @@ export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, su
   const playSong = usePlayerStore((s) => s.playSong);
   const queueRef = useRef(queue);
   const { isOnline } = useConnectivity();
+  const { impact } = useHaptics();
   const [cached, setCached] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const isYouTube = song.artistId === 'youtube' || song.albumId === 'youtube';
 
   useEffect(() => {
     queueRef.current = queue;
@@ -70,8 +73,9 @@ export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, su
   }, [song.id]);
 
   const handlePress = useCallback(() => {
+    impact('light');
     playSong(song, queueRef.current, index);
-  }, [playSong, song, index]);
+  }, [playSong, song, index, impact]);
 
   const handleDownload = useCallback(async () => {
     if (cached || downloading || !isOnline) return;
@@ -128,7 +132,14 @@ export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, su
       {isCurrent ? (
         <Equalizer />
       ) : (
-        <Text fontSize={12} color="rgba(255,255,255,0.4)">{song.duration}</Text>
+        <View style={{ alignItems: 'flex-end', gap: 2 }}>
+          <Text fontSize={12} color="rgba(255,255,255,0.4)">{song.duration}</Text>
+          {isYouTube && (
+            <View style={{ backgroundColor: 'rgba(255,0,0,0.15)', borderWidth: 1, borderColor: 'rgba(255,0,0,0.3)', borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+              <Text fontSize={9} fontWeight="700" color="#ff6b6b" style={{ letterSpacing: 0.3 }}>YT</Text>
+            </View>
+          )}
+        </View>
       )}
     </PressableScale>
   );

@@ -47,8 +47,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       await authStorage.clearTokens();
     } catch {}
     clearActiveLockScreenControls();
-    const playerState = getPlayerStore().getState();
-    playerState.setConnectionStatus?.('online');
+    const playerStore = getPlayerStore();
+    playerStore.setConnectionStatus?.('online');
+    playerStore.clearQueue?.();
     set({ token: null, refreshToken: null, user: null, loading: false, tokenExpiresAt: null });
   },
 

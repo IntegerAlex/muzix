@@ -15,13 +15,29 @@ let _mmkv: any = null;
 function getMMKV(): any {
   if (_mmkv) return _mmkv;
   try {
-    const { MMKV } = require('react-native-mmkv');
-    _mmkv = new MMKV({ id: 'muzix' });
+    const mmkvModule = require('react-native-mmkv');
+    // react-native-mmkv v4 dropped the `MMKV` constructor in favour of
+    // `createMMKV()`. v3 and earlier used `new MMKV(...)`. Support both so a
+    // version bump/downgrade can't silently send all storage back to memory.
+    if (typeof mmkvModule.createMMKV === 'function') {
+      _mmkv = mmkvModule.createMMKV({ id: 'muzix' });
+    } else if (typeof mmkvModule.MMKV === 'function') {
+      _mmkv = new mmkvModule.MMKV({ id: 'muzix' });
+    } else {
+      throw new Error('no MMKV factory export (createMMKV/MMKV both missing)');
+    }
     return _mmkv;
   } catch (e) {
     console.warn('[storage] MMKV unavailable, falling back to in-memory:', e);
     return null;
   }
+}
+
+/** v4 renamed `delete(key)` to `remove(key)`. */
+function mmkvRemove(mmkv: any, key: string): boolean {
+  if (typeof mmkv.remove === 'function') return mmkv.remove(key);
+  if (typeof mmkv.delete === 'function') return mmkv.delete(key);
+  return false;
 }
 
 export const safeStorage = {
@@ -62,7 +78,7 @@ export const safeStorage = {
     }
     const mmkv = getMMKV();
     if (mmkv) {
-      mmkv.delete(key);
+      mmkvRemove(mmkv, key);
       return;
     }
     memoryStorage.delete(key);

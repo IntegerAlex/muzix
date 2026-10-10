@@ -158,8 +158,12 @@ async function requestRaw<T>(path: string, options?: RequestOptions): Promise<T>
       }
     }
     apiError(path, res.status);
+    // `/stream/{id}` 404s are expected control flow, not failures: resolveAudio
+    // probes the catalog first and falls through to on-device extraction when
+    // the song isn't ours. Reporting them buries real errors in noise.
+    const expectedMiss = res.status === 404 && path.startsWith('/stream/');
     const requestId = res.headers.get('x-request-id');
-    if (requestId) {
+    if (requestId && !expectedMiss) {
       Sentry.withScope((scope) => {
         scope.setTag('request_id', requestId);
         scope.setTag('api_path', path);
@@ -356,6 +360,10 @@ export interface BingeIndex {
 export interface HomeMood {
   label: string;
   color: string;
+  energy?: number;
+  valence?: number;
+  confidence?: number;
+  based_on?: number;
 }
 
 export interface HomeActivityItem {
@@ -407,7 +415,7 @@ export const api = {
     }),
   me: (token: string) => requestAuthed<User>(`/auth/me`, token),
 
-  like: (songId: string, token: string) => requestAuthed<{ status: string }>(`/likes/${songId}`, token, { method: 'POST' }),
+  like: (songId: string, token: string, meta?: { title?: string; artist?: string; album?: string; genre?: string; duration_ms?: number; colors?: string[] }) => requestAuthed<{ status: string }>(`/likes/${songId}`, token, { method: 'POST', body: meta ? JSON.stringify(meta) : undefined }),
   unlike: (songId: string, token: string) => requestAuthed<{ status: string }>(`/likes/${songId}`, token, { method: 'DELETE' }),
   getLikes: (token: string) => requestAuthed<{ songIds: string[] }>(`/likes`, token),
 
