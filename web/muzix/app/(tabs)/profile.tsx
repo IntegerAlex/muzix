@@ -106,13 +106,13 @@ function ProfileSection({ icon: Icon, title, color, count, children }: {
   );
 }
 
-const TopSongRow = memo(function TopSongRow({ song, index, rank }: { song: Song; index: number; rank: number }) {
+const TopSongRow = memo(function TopSongRow({ song, index, rank, queue }: { song: Song; index: number; rank: number; queue: Song[] }) {
   const playSong = usePlayerStore((s) => s.playSong);
   const current = usePlayerStore((s) => s.current);
 
   return (
     <Pressable
-      onPress={() => playSong(song)}
+      onPress={() => playSong(song, queue, index)}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -147,13 +147,14 @@ const TopSongRow = memo(function TopSongRow({ song, index, rank }: { song: Song;
   );
 });
 
-const SongRow = memo(function SongRow({ song }: { song: Song }) {
+const SongRow = memo(function SongRow({ song, queue }: { song: Song; queue: Song[] }) {
   const playSong = usePlayerStore((s) => s.playSong);
   const current = usePlayerStore((s) => s.current);
+  const index = queue.findIndex((s) => s.id === song.id);
 
   return (
     <Pressable
-      onPress={() => playSong(song)}
+      onPress={() => playSong(song, queue, index >= 0 ? index : 0)}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -382,7 +383,7 @@ export default function ProfileScreen() {
             {derivedData?.recentSlice.length > 0 && (
               <ProfileSection icon={Clock} title="Recently Played" color={ACCENT}>
                 {derivedData.recentSlice.map((song, i) => (
-                  <TopSongRow key={song.id} song={song} index={i} rank={i + 1} />
+                  <TopSongRow key={song.id} song={song} index={i} rank={i + 1} queue={derivedData.recentSlice} />
                 ))}
               </ProfileSection>
             )}
@@ -390,7 +391,7 @@ export default function ProfileScreen() {
             {derivedData?.topSlice.length > 0 && (
               <ProfileSection icon={Music} title="Top Songs" color="#f59e0b">
                 {derivedData.topSlice.map((song, i) => (
-                  <TopSongRow key={song.id} song={song} index={i} rank={i + 1} />
+                  <TopSongRow key={song.id} song={song} index={i} rank={i + 1} queue={derivedData.topSlice} />
                 ))}
               </ProfileSection>
             )}
@@ -398,7 +399,7 @@ export default function ProfileScreen() {
             {derivedData?.likedSlice.length > 0 && (
               <ProfileSection icon={Heart} title="Liked Songs" color="#ec4899" count={likedList.length}>
                 {derivedData.likedSlice.map((song) => (
-                  <SongRow key={song.id} song={song} />
+                  <SongRow key={song.id} song={song} queue={derivedData.likedSlice} />
                 ))}
               </ProfileSection>
             )}
@@ -410,10 +411,10 @@ export default function ProfileScreen() {
                     {formatBytes(downloadsSize)} · {downloadedSongs.length} songs
                   </Text>
                 </View>
-                {downloadedSongs.map((song) => (
+                {downloadedSongs.map((song, i) => (
                   <Pressable
                     key={song.id}
-                    onPress={() => playSong(song)}
+                    onPress={() => playSong(song, downloadedSongs, i)}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
                       alignItems: 'center',

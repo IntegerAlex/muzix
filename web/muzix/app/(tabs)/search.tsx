@@ -231,19 +231,25 @@ function YouTubeResults({
       await resolveAudio(hit.id, null, (f) => {
         setProgress((p) => ({ ...p, [hit.id]: f }));
       });
-      const song: Song = {
-        id: hit.id,
-        title: hit.title,
+      // The tapped results become the queue (same convention as every list
+      // screen): otherwise "next" would walk whatever stale queue was loaded
+      // before, instead of continuing through these results / autoplay.
+      const toSong = (h: YouTubeSearchHit): Song => ({
+        id: h.id,
+        title: h.title,
         artist: 'YouTube',
         artistId: 'youtube',
         album: 'YouTube',
         albumId: 'youtube',
         genre: '',
-        duration: hit.durationSec ? formatTime(hit.durationSec * 1000) : '',
-        durationMs: hit.durationSec * 1000,
+        duration: h.durationSec ? formatTime(h.durationSec * 1000) : '',
+        durationMs: h.durationSec * 1000,
         colors: ['#6d28d9', '#db2777'],
-      };
-      playSong(song);
+        imageUrl: `https://i.ytimg.com/vi/${h.id}/mqdefault.jpg`,
+      });
+      const songs = hits.map(toSong);
+      const index = Math.max(0, songs.findIndex((s) => s.id === hit.id));
+      playSong(songs[index], songs, index);
     } catch (e: any) {
       usePlayerStore.setState({
         error: e?.message?.slice?.(0, 160) || 'Could not get that track from YouTube',
@@ -258,7 +264,7 @@ function YouTubeResults({
         return next;
       });
     }
-  }, [playSong, setLoading]);
+  }, [playSong, setLoading, hits]);
 
   return (
     <View style={{ marginTop: SPACING.xxl }}>
