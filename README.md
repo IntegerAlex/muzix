@@ -134,20 +134,19 @@ npx api-understanding dashboard analysis.json    # → interactive dashboard
 
 See [`algorithms/`](algorithms/) for documented runtime logic: ALS recommendation engine, Fisher-Yates shuffle, play-time tracking, analytics scoring, caching strategies, and more — 16 algorithms with actual code references, constants, and input/output specs.
 
-**What's newest:** the ALS model retraining now runs in the app lifespan as a background task (fit once on startup; subsequent requests serve the cached factor matrices). Mood is v2: genre vote blended with time-of-day energy, with energy/valence/confidence scores and a fallback for genre-less tracks.
+**What's newest:** the ALS model retraining now runs in the app lifespan as a background task (fit once on startup; subsequent requests serve the cached factor matrices). Mood is v3: audio energy (VibeNet) fused with lyrics sentiment (MuRIL) on Russell's circumplex, with skip/completion behavior weighting.
 
 ## Features
 
 - **Content sharing:** Generate share links for songs, albums, artists, playlists, lyrics. 30-day token expiry. Web Share API / native share sheet / clipboard fallback.
 - **Lyrics sharing:** Select up to 5 lyrics lines, share as image (16:9 PNG) or plain text. Synced scrolling with LRC support.
 - **Home screen dashboard:** 2x2 smart grid with current time, live weather (geolocation + wttr.in), mood derived from recently played song genres.
-- **Mood detection v2:** Blends today's genre vote with time-of-day energy; shows label + icon + energy bar + confidence. Genre-less YouTube tracks fall back to time-of-day instead of Neutral.
+- **Mood detection v3:** Fuses stored audio energy (VibeNet) with lyrics sentiment (MuRIL) on Russell's circumplex — an energetic heartbreak reads Intense, not Happy — blended with time-of-day and skip/completion behavior. Genre is now a tiebreaker, not the verdict.
 - **Genre enrichment:** Song genre metadata fetched from MusicBrainz + Wikipedia, stored per-track in the database.
 - **MMKV storage:** ~30x faster than AsyncStorage on native. Zustand persist + offline queue + play time tracker all use MMKV. Web falls back to localStorage.
 - **Audio playback:** Uses `expo-audio` for cross-platform playback; downloads audio to cache via `expo-file-system`. On Android, `expo-yt-dlp` extracts any YouTube track on-device as AAC `.m4a` (dev build required, no Expo Go). Falls back gracefully when native TrackPlayer module is unavailable.
 - **Autoplay:** When the queue ends, the app pulls a batch of similar tracks from the seed song's YouTube Mix and keeps playing. Toggle in the queue panel; preference persists.
 - **YouTube telemetry:** Plays, pauses, seeks, completes, and likes for on-device tracks carry full song metadata and auto-register the song server-side — they count toward stats, mood, and recommendations like any catalog track.
-- **Mood detection v2:** Genre vote blended with time-of-day energy, with energy/valence/confidence scores. Handles genre-less YouTube tracks via a time-of-day fallback instead of Neutral.
 - **Play time tracking:** Persistent per-song accumulator flushes deltas to `POST /telemetry/duration` every 30s. Survives app backgrounding and restarts.
 - **Queue management:** Slide-up panel with reorder (up/down arrows), remove, clear all, and an autoplay toggle.
 - **Keyboard shortcuts (web):** Space=play/pause, arrows=next/prev, N/P=next/prev, L=like, Q=queue, Esc=close.

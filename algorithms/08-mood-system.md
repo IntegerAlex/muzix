@@ -1,60 +1,63 @@
 # 08 — Mood System
 
-Genre-to-mood mapping with majority vote from today's listening activity,
-blended with time-of-day energy and confidence scoring (v2).
+Genre-to-mood mapping fused with stored audio/lyrics affect scores and
+behavior signals (v3). Genre alone cannot feel a song — see below.
 
 - **Type**: Custom
 - **File**: `backend/services/mood.py`
+- **Signals table**: `repositories/listening_events.py::get_mood_signals`
+- **Score producers**: `backend/analyze_lyrics.py` (MuRIL sentiment → `songs.lyrics_valence`), `backend/analyze_audio.py` (VibeNet energy/valence/danceability → `songs.audio_energy`, `songs.audio_valence`, `songs.danceability`)
+
+## Why genre alone fails
+
+Genre is marketing metadata, not feeling. A "bewafa" (heartbreak) track has
+wedding-level energy — dhol, 130+ BPM — over devastated lyrics; genre reads
+"punjabi pop" and says Happy. A meme song ("Careless Whisper") reads smooth
+jazz while its meaning is a 40-year-old joke. Content analysis can't catch
+memes at all — only behavior (replays, skips) can.
+
+The fix is Russell's circumplex: every song gets **arousal** (energy, from
+audio) and **valence** (positivity, from lyrics), fused per event.
+
+| | Lyrics positive | Lyrics negative |
+|---|---|---|
+| **High-energy audio** | Happy / Energetic | **Angry / Intense** ← the bewafa fix |
+| **Low-energy audio** | Calm / Relaxed | Sad / Soulful |
 
 ## How it works
 
-### 1. Genre-to-Mood Mapping
+### 1. Score tables (precomputed at import, never at request time)
 
-Hardcoded lookup table mapping ~45 genre strings to
-`(mood label, color, energy 0-1, valence 0-1)`:
+| Column | Producer | Range | Fallback when NULL |
+|---|---|---|---|
+| `audio_energy` | VibeNet (`analyze_audio.py`) | 0–1 | genre-implied energy, else time energy |
+| `audio_valence` | VibeNet | 0–1 | (kept for future use; fusion uses lyrics) |
+| `danceability` | VibeNet | 0–1 | unused by mood v3 (reserved) |
+| `lyrics_valence` | MuRIL sentiment (`analyze_lyrics.py`) | 0–1 | genre-implied valence, else 0.5 |
 
-| Genre | Mood | Color |
-|-------|------|-------|
-| pop | Happy | #f59e0b |
-| k-pop, dance, electronic, edm, house | Energetic | varies |
-| techno, dubstep, rock, metal, drill | Intense | varies |
-| punk | Rebellious | #e11d48 |
-| jazz | Relaxed | #8b5cf6 |
-| blues, soul | Soulful | varies |
-| classical, ambient | Calm | varies |
-| hip-hop, rap, trap | Confident | varies |
-| rnb, r&b | Smooth | #f43f5e |
-| folk, acoustic | Gentle | varies |
-| country | Easy | #eab308 |
-| indie | Creative | #a855f7 |
-| alternative | Thoughtful | #7c3aed |
-| lo-fi, lofi, reggae | Chill | varies |
-| funk | Groovy | #f97316 |
-| latin | Passionate | #ef4444 |
-| desi, bollywood, punjabi, bhangra | Festive / Energetic | varies |
-| trance, hyperpop, synthwave, phonk | Euphoric / Nostalgic / Dark / Chaotic | varies |
-| gospel | Uplifted | #f59e0b |
-| kids, comedy | Playful | #fbbf24 |
+FastAPI Cloud cannot run torch/transformers, so inference happens once per
+song on the import machine; request-time mood is one SQL query + arithmetic.
 
-### 2. Mood Computation (`compute_mood`)
+### 2. Per-event fusion (`compute_mood`)
 
 ```
-1. Get all genres from songs played today (00:00–23:59 UTC)
-2. Split compound genres on `, / & ; |` (e.g. "rock/pop" → ["rock", "pop"])
-3. Count occurrences with Counter
-4. If no genre signal but plays exist → time-of-day fallback
-   (Awake / Energetic / Focused / Unwinding / Chill / Late Night)
-5. If genre unknown → "{Genre} Mix" label with time color, or time fallback
-6. Else blend genre energy 70% + time energy 30%
-7. Confidence = min(1, plays/10) * (0.5 + 0.5 * concentration)
-8. Return label + color + energy + valence + confidence + based_on
+1. Fetch today's events with song scores (get_mood_signals, newest first)
+2. Per event:
+     arousal = audio_energy ?? genre energy ?? time energy
+     valence = lyrics_valence ?? genre valence ?? 0.5
+     weight  = recency decay (6h half-life) x completion boost
+               (complete = 1.5x; play/pause/seek scale 0.6–1.4 by completion)
+     skip events vote valence 0.25 at half weight (rejection, not endorsement)
+3. Aggregate weighted means -> (arousal, valence)
+4. Label: genre label wins UNLESS stored lyrics contradict it
+   (|lyrics - genre valence| > 0.3, lyrics negative, genre positive)
+   -> then the quadrant label (e.g. Intense for high/low)
+5. Unknown/unscored tracks -> time-of-day fallback, never bare Neutral
+6. Confidence = min(1, events/10) x (0.4 + 0.6 x scored-weight-fraction)
+   x (0.5 + 0.5 x genre concentration)
 ```
 
-**Substring match**: `if key in top` — so `"pop"` matches `"pop rock"`, `"indie pop"`, etc.
-
-**YouTube tracks**: genre is often empty (on-device extraction has no genre).
-They still count toward `based_on` and confidence, and the time fallback
-keeps the card alive instead of Neutral.
+**Substring match**: longest key first — `"pop"` never shadows `"punjabi pop"`.
 
 ## Constants
 
@@ -62,8 +65,10 @@ keeps the card alive instead of Neutral.
 |-----------|-------|-------|
 | Default mood | "Neutral" | Color: #6b7280, only when zero plays today |
 | Time window | Today (00:00–23:59 UTC) | Recomputed per request |
-| Genre count | ~45 genres | Hardcoded in GENRE_MOODS with energy/valence |
-| Energy blend | 70% genre + 30% time | So 2am metal reads calmer than noon metal |
+| Genre count | ~45 genres | Each with (label, color, energy, valence) |
+| Recency half-life | 6h | `0.5 ** (hours_old / 6)` |
+| Contradiction threshold | 0.3 | \|lyrics − genre valence\| with lyrics < 0.45, genre ≥ 0.55 |
+| Quadrant cutoffs | arousal 0.6, valence 0.55 | (Energetic \| Intense / Calm \| Soulful) |
 
 ## Input → Output
 
