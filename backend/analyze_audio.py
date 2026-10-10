@@ -9,8 +9,8 @@ audio arousal (high) fused with lyrics valence (low) resolves to Intense
 instead of Happy. See services/mood.py.
 
 Setup (import machine only — never FastAPI Cloud, never the app):
-    pip install torch --index-url https://download.pytorch.org/whl/cpu
-    pip install vibenet
+    uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+    uv pip install vibenet
 
     Install torch FIRST from the CPU index: the default PyPI torch wheel is
     a ~2GB CUDA build, while the CPU wheel is ~200MB. Installing vibenet
@@ -146,8 +146,8 @@ def main():
         from vibenet import load_model
     except ImportError:
         log("ERROR", "vibenet not installed. Run (torch CPU first!):")
-        log("ERROR", "  pip install torch --index-url https://download.pytorch.org/whl/cpu")
-        log("ERROR", "  pip install vibenet")
+        log("ERROR", "  uv pip install torch --index-url https://download.pytorch.org/whl/cpu")
+        log("ERROR", "  uv pip install vibenet")
         return
 
     from config import AUDIO_DIR

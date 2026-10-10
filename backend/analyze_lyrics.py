@@ -8,7 +8,7 @@ alone; its lyrics read Negative. compute_mood() fuses the two, so the mood
 resolves to the arousal/valence quadrant (Intense) instead of the genre label.
 
 Setup (import machine only — never FastAPI Cloud, never the app):
-    pip install transformers torch sentencepiece --extra-index-url https://download.pytorch.org/whl/cpu
+    uv pip install transformers torch sentencepiece --extra-index-url https://download.pytorch.org/whl/cpu
 
     (CPU torch keeps this to ~200MB instead of a 2GB CUDA build. Batch
     inference over ~2000 lyric rows takes minutes on a modern laptop.)
@@ -128,7 +128,7 @@ def main():
         from transformers import pipeline
     except ImportError:
         log("ERROR", "transformers not installed. Run:")
-        log("ERROR", "  pip install transformers torch sentencepiece --extra-index-url https://download.pytorch.org/whl/cpu")
+        log("ERROR", "  uv pip install transformers torch sentencepiece --extra-index-url https://download.pytorch.org/whl/cpu")
         return
 
     rows = asyncio.run(fetch_pending())
