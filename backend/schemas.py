@@ -296,6 +296,10 @@ class RecommendationResult(BaseModel):
 class MoodOut(BaseModel):
     label: str = Field(description="E.g. Energetic, Calm, Neutral")
     color: str = Field(description="Hex colour")
+    energy: float = Field(default=0.5, description="0.0 (calm) – 1.0 (intense)")
+    valence: float = Field(default=0.5, description="0.0 (blue) – 1.0 (happy)")
+    confidence: float = Field(default=0.0, description="0.0–1.0, based on play volume")
+    based_on: int = Field(default=0, description="Number of plays informing this mood")
 
 
 # ── Search ──────────────────────────────────────────────────────────────────
