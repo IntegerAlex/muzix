@@ -38,6 +38,22 @@ audio) and **valence** (positivity, from lyrics), fused per event.
 FastAPI Cloud cannot run torch/transformers, so inference happens once per
 song on the import machine; request-time mood is one SQL query + arithmetic.
 
+### 3. YouTube / on-device tracks (`backend/enrich_youtube.py`)
+
+On-device tracks arrive with no genre, no lyrics, and no scores — the fusion
+above would see only behavior + time. The enrich script fills the same
+columns the studio pipeline does, with free keyless sources:
+
+| Gap | Source | Notes |
+|---|---|---|
+| genre | iTunes Search API | 3s spacing (~20 req/min limit); only fills empty genres |
+| lyrics | LRCLIB search, duration-matched ±5s | also fixes the player (patchLyrics 404s without it) |
+| lyrics_valence | affect lexicon (English + romanized Hindi/Punjabi) | heuristic v0; MuRIL output overwrites the same column |
+
+Rows are selected by `r2_object_key IS NULL` (never imported). Nothing here
+touches catalog rows that already have genre/lyrics, and the fusion code
+needs no changes — enriched rows flow through `get_mood_signals` untouched.
+
 ### 2. Per-event fusion (`compute_mood`)
 
 ```
