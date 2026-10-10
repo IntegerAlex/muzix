@@ -55,7 +55,9 @@ async def create_share(
             metadata = {"title": meta["title"], "artist": meta["artist"], "image_url": meta["imageUrl"]}
             if selected_lyrics_lines and obj.lyrics:
                 lines = obj.lyrics.split("\n") if isinstance(obj.lyrics, str) else obj.lyrics
-                lyrics = [lines[i] for i in selected_lyrics_lines if i < len(lines)]
+                lyrics = "\n".join(
+                    lines[i] for i in selected_lyrics_lines if 0 <= i < len(lines)
+                ) or None
 
         share_token = secrets.token_urlsafe(12)
         expires_at = datetime.now(timezone.utc) + timedelta(days=SHARE_EXPIRY_DAYS)
@@ -106,7 +108,7 @@ async def get_share_by_token(share_token: str) -> dict | None:
             "title": share.title or "",
             "artist": share.artist or "",
             "image_url": share.image_url or "",
-            "lyrics": share.lyrics,
+            "lyrics": share.lyrics.split("\n") if share.lyrics else None,
             "selected_lyrics_lines": share.selected_lyrics_lines,
             "created_at": share.created_at.isoformat(),
             "expires_at": share.expires_at.isoformat(),
