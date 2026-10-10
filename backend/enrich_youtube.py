@@ -42,6 +42,8 @@ DRY_RUN = False  # True = print what would change, write nothing
 FORCE = False  # True = refill genre/lyrics even when present (valence only when NULL)
 ITUNES_SLEEP_S = 3.0  # iTunes allows ~20 req/min; stay well under it
 
+REQUIRED_COLUMNS = ("lyrics_valence",)
+
 ITUNES_URL = "https://itunes.apple.com/search"
 LRCLIB_SEARCH_URL = "https://lrclib.net/api/search"
 LRCLIB_GET_URL = "https://lrclib.net/api/get"
@@ -160,6 +162,26 @@ def lrclib_lyrics(title: str, artist: str, duration_ms: int) -> str | None:
     return None
 
 
+async def ensure_columns() -> bool:
+    """Fail fast when migration v3 hasn't run, instead of tracebacks."""
+    from db import DATABASE_URL
+
+    engine = create_async_engine(DATABASE_URL, echo=False)
+    async with engine.connect() as conn:
+        res = await conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'songs'
+        """))
+        have = {r[0] for r in res.all()}
+    await engine.dispose()
+    missing = [c for c in REQUIRED_COLUMNS if c not in have]
+    if missing:
+        log("ERROR", f"songs table is missing columns: {missing}")
+        log("ERROR", "Run the v3 migration first: uv run python migrate.py")
+        return False
+    return True
+
+
 async def fetch_pending() -> list[dict]:
     from db import DATABASE_URL
 
@@ -211,6 +233,9 @@ def main():
     log("INFO", "=" * 55)
     log("INFO", "YOUTUBE ENRICHMENT (iTunes genre + LRCLIB lyrics + lexicon)")
     log("INFO", "=" * 55)
+
+    if not asyncio.run(ensure_columns()):
+        return
 
     rows = asyncio.run(fetch_pending())
     if not rows:

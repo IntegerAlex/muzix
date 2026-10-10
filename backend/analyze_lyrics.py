@@ -48,6 +48,8 @@ LIMIT = 0  # 0 = all unscored rows
 DRY_RUN = False  # True = score 5 rows and print, write nothing
 FORCE = False  # True = rescore rows that already have lyrics_valence
 
+REQUIRED_COLUMNS = ("lyrics_valence",)
+
 DEVANAGARI_RE = re.compile(r"[\u0900-\u097f]")
 GURMUKHI_RE = re.compile(r"[\u0a00-\u0a7f]")
 
@@ -82,6 +84,26 @@ def probs_to_valence(scores: list[dict]) -> float:
     if wsum <= 0:
         return 0.5
     return max(0.0, min(1.0, total / wsum))
+
+
+async def ensure_columns() -> bool:
+    """Fail fast when migration v3 hasn't run, instead of tracebacks."""
+    from db import DATABASE_URL
+
+    engine = create_async_engine(DATABASE_URL, echo=False)
+    async with engine.connect() as conn:
+        res = await conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'songs'
+        """))
+        have = {r[0] for r in res.all()}
+    await engine.dispose()
+    missing = [c for c in REQUIRED_COLUMNS if c not in have]
+    if missing:
+        log("ERROR", f"songs table is missing columns: {missing}")
+        log("ERROR", "Run the v3 migration first: uv run python migrate.py")
+        return False
+    return True
 
 
 async def fetch_pending() -> list[dict]:
@@ -123,6 +145,9 @@ def main():
     log("INFO", "=" * 55)
     log("INFO", "LYRICS VALENCE ANALYSIS (MuRIL sentiment)")
     log("INFO", "=" * 55)
+
+    if not asyncio.run(ensure_columns()):
+        return
 
     try:
         from transformers import pipeline

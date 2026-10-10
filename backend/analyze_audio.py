@@ -45,6 +45,8 @@ LIMIT = 0  # 0 = all unscored rows with a local file
 DRY_RUN = False  # True = score 3 files and print, write nothing
 FORCE = False  # True = rescore rows that already have audio_energy
 
+REQUIRED_COLUMNS = ("audio_energy", "audio_valence", "danceability")
+
 
 def log(severity: str, msg: str):
     ts = time.strftime("%H:%M:%S")
@@ -81,6 +83,26 @@ def _clamp01(v: float | None) -> float | None:
     return max(0.0, min(1.0, v))
 
 
+async def ensure_columns() -> bool:
+    """Fail fast when migration v3 hasn't run, instead of tracebacks."""
+    from db import DATABASE_URL
+
+    engine = create_async_engine(DATABASE_URL, echo=False)
+    async with engine.connect() as conn:
+        res = await conn.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'songs'
+        """))
+        have = {r[0] for r in res.all()}
+    await engine.dispose()
+    missing = [c for c in REQUIRED_COLUMNS if c not in have]
+    if missing:
+        log("ERROR", f"songs table is missing columns: {missing}")
+        log("ERROR", "Run the v3 migration first: uv run python migrate.py")
+        return False
+    return True
+
+
 async def fetch_pending(audio_dir: str) -> list[dict]:
     from db import DATABASE_URL
 
@@ -97,11 +119,12 @@ async def fetch_pending(audio_dir: str) -> list[dict]:
     async with engine.connect() as conn:
         for i in range(0, len(ids), 500):
             chunk = ids[i:i + 500]
+            # NB: asyncpg has no tuple expansion for IN :ids — use = ANY(:ids).
             q = """
-                SELECT id, title, artist FROM songs WHERE id IN :ids
+                SELECT id, title, artist FROM songs WHERE id = ANY(:ids)
                   AND (audio_energy IS NULL""" + (" OR TRUE" if FORCE else "") + """)
             """
-            res = await conn.execute(text(q), {"ids": tuple(chunk)})
+            res = await conn.execute(text(q), {"ids": chunk})
             for r in res.all():
                 rows.append({"id": r[0], "title": r[1], "artist": r[2]})
     await engine.dispose()
@@ -141,6 +164,9 @@ def main():
     log("INFO", "=" * 55)
     log("INFO", "AUDIO MOOD ANALYSIS (VibeNet energy/valence/danceability)")
     log("INFO", "=" * 55)
+
+    if not asyncio.run(ensure_columns()):
+        return
 
     try:
         from vibenet import load_model
