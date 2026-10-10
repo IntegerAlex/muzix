@@ -1,10 +1,10 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { Pressable, useWindowDimensions, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, withSpring, useAnimatedStyle, runOnJS } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
 import type { RenderItem } from 'react-native-draggable-flatlist';
-import { X, ListMusic, Trash2, Sparkles } from '@/lib/icons';
+import { X, ListMusic, Trash2, Sparkles, Moon } from '@/lib/icons';
 import { View, Text } from 'tamagui';
 import { Artwork } from '@/components/Artwork';
 import { usePlayerStore } from '@/store/playerStore';
@@ -53,7 +53,45 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
   const clearQueue = usePlayerStore((s) => s.clearQueue);
   const autoplay = usePlayerStore((s) => s.autoplay);
   const setAutoplay = usePlayerStore((s) => s.setAutoplay);
+  const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
+  const sleepAfterTrack = usePlayerStore((s) => s.sleepAfterTrack);
+  const setSleepTimer = usePlayerStore((s) => s.setSleepTimer);
+  const setSleepAfterTrack = usePlayerStore((s) => s.setSleepAfterTrack);
   const { impact } = useHaptics();
+
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (sleepTimerEndsAt == null) return;
+    const t = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, [sleepTimerEndsAt]);
+
+  const sleepLabel = sleepAfterTrack
+    ? 'End of track'
+    : sleepTimerEndsAt != null
+      ? (() => {
+          const ms = Math.max(0, sleepTimerEndsAt - now);
+          const m = Math.floor(ms / 60000);
+          const s = Math.floor((ms % 60000) / 1000);
+          return `${m}:${String(s).padStart(2, '0')} left`;
+        })()
+      : 'Off';
+
+  const pressSleepPreset = (minutes: number | 'track') => {
+    impact('light');
+    if (minutes === 'track') {
+      setSleepAfterTrack(!sleepAfterTrack);
+      return;
+    }
+    // Chips always switch to the tapped duration; clearing is explicit via Off.
+    setSleepTimer(minutes);
+  };
+
+  const pressSleepOff = () => {
+    impact('light');
+    setSleepTimer(null);
+    setSleepAfterTrack(false);
+  };
 
   const translateY = useSharedValue(screenHeight);
 
@@ -229,6 +267,72 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
               showsVerticalScrollIndicator={false}
               dragItemOverflow={false}
             />
+
+            <View
+              style={{
+                marginHorizontal: SPACING.lg,
+                marginTop: SPACING.sm,
+                paddingTop: SPACING.md,
+                borderTopWidth: 1,
+                borderTopColor: BORDER,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm }}>
+                <Moon size={16} color={sleepTimerEndsAt != null || sleepAfterTrack ? ACCENT : TEXT_MUTED} />
+                <Text fontSize={14} fontWeight="600" color={sleepTimerEndsAt != null || sleepAfterTrack ? ACCENT : TEXT_MUTED}>
+                  Sleep {sleepTimerEndsAt != null || sleepAfterTrack ? `• ${sleepLabel}` : ''}
+                </Text>
+                {(sleepTimerEndsAt != null || sleepAfterTrack) && (
+                  <Pressable
+                    onPress={pressSleepOff}
+                    hitSlop={8}
+                    style={{ marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: SURFACE_ELEVATED }}
+                    accessibilityLabel="Cancel sleep timer"
+                    accessibilityRole="button"
+                  >
+                    <Text fontSize={12} fontWeight="600" color={TEXT_SECONDARY}>Off</Text>
+                  </Pressable>
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+                {([15, 30, 60] as const).map((m) => (
+                  <Pressable
+                    key={m}
+                    onPress={() => pressSleepPreset(m)}
+                    hitSlop={8}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 6,
+                      borderRadius: 9999,
+                      backgroundColor: SURFACE_ELEVATED,
+                      borderWidth: 1,
+                      borderColor: BORDER,
+                    }}
+                    accessibilityLabel={`Sleep in ${m} minutes`}
+                    accessibilityRole="button"
+                  >
+                    <Text fontSize={13} fontWeight="600" color={TEXT_PRIMARY}>{m}m</Text>
+                  </Pressable>
+                ))}
+                <Pressable
+                  onPress={() => pressSleepPreset('track')}
+                  hitSlop={8}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 6,
+                    borderRadius: 9999,
+                    backgroundColor: sleepAfterTrack ? ACCENT : SURFACE_ELEVATED,
+                    borderWidth: 1,
+                    borderColor: sleepAfterTrack ? ACCENT : BORDER,
+                  }}
+                  accessibilityLabel="Stop at end of track"
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: sleepAfterTrack }}
+                >
+                  <Text fontSize={13} fontWeight="600" color={sleepAfterTrack ? 'white' : TEXT_PRIMARY}>Track end</Text>
+                </Pressable>
+              </View>
+            </View>
 
             <View
               style={{

@@ -104,6 +104,10 @@ interface PlayerState {
   recentlyPlayed: string[];
   /** When the queue runs out, keep playing similar tracks from YouTube. */
   autoplay: boolean;
+  /** Epoch ms at which playback should stop, or null. Not persisted. */
+  sleepTimerEndsAt: number | null;
+  /** Stop after the current track finishes instead of advancing. Not persisted. */
+  sleepAfterTrack: boolean;
 
   /**
    * Start playing a song.
@@ -144,6 +148,12 @@ interface PlayerState {
    * Resolves to true when the queue grew (caller can then advance).
    */
   extendQueueFromAutoplay: () => Promise<boolean>;
+  /** Stop playback after N minutes (null clears). Mutually exclusive with sleep-after-track. */
+  setSleepTimer: (minutes: number | null) => void;
+  /** Stop after the current track finishes (toggles). Mutually exclusive with timed sleep. */
+  setSleepAfterTrack: (v: boolean) => void;
+  /** Clear any sleep timer. */
+  clearSleepTimer: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -202,6 +212,8 @@ export const usePlayerStore = create<PlayerState>()(
       totalListeningMs: 0,
       recentlyPlayed: [],
       autoplay: true,
+      sleepTimerEndsAt: null,
+      sleepAfterTrack: false,
 
       playSong: (song, queue, index) => {
         // Explicit play = new seed for autoplay; clear the once-per-seed guard.
@@ -499,6 +511,14 @@ export const usePlayerStore = create<PlayerState>()(
 
       setAutoplay: (v) => set({ autoplay: v }),
 
+      setSleepTimer: (minutes) => set({
+        sleepTimerEndsAt: minutes == null ? null : Date.now() + minutes * 60_000,
+        sleepAfterTrack: false,
+      }),
+
+      setSleepAfterTrack: (v) => set({ sleepAfterTrack: v, sleepTimerEndsAt: null }),
+
+      clearSleepTimer: () => set({ sleepTimerEndsAt: null, sleepAfterTrack: false }),
       extendQueueFromAutoplay: async () => {
         const { autoplay, current } = get();
         if (!autoplay || !current) return false;

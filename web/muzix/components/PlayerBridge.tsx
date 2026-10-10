@@ -400,6 +400,14 @@ export function PlayerBridge() {
     if (!current) return;
     didJustFinishRef.current = true;
     recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'complete', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: current.durationMs, completion_percentage: 100, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
+    if (usePlayerStore.getState().sleepAfterTrack) {
+      // Sleep-after-track: stop here instead of advancing the queue.
+      usePlayerStore.getState().clearSleepTimer();
+      playTimeTracker.flushDelta(current.id);
+      try { player.pause(); } catch {}
+      usePlayerStore.getState().setPlaying(false);
+      return;
+    }
     if (usePlayerStore.getState().repeat === 'one') {
       playTimeTracker.flushDelta(current.id);
       player.seekTo(0);
@@ -421,6 +429,15 @@ export function PlayerBridge() {
 
   useEffect(() => {
     if (!current || positionTrackRef.current !== current.id) return;
+    // Sleep timer: stop when the deadline passes, wherever playback is.
+    const endsAt = usePlayerStore.getState().sleepTimerEndsAt;
+    if (endsAt != null && isPlaying && Date.now() >= endsAt) {
+      usePlayerStore.getState().clearSleepTimer();
+      playTimeTracker.flushDelta(current.id);
+      try { player.pause(); } catch {}
+      usePlayerStore.getState().setPlaying(false);
+      return;
+    }
     if (!status.duration || status.duration <= 0) return;
     const curr = status.currentTime;
     if (curr < prevTimeRef.current - 0.5) {
