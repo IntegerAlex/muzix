@@ -181,6 +181,12 @@ class ListeningEvent(Base):
     source = Column(String(32), nullable=True)
     source_id = Column(String(64), nullable=True)
     position_in_queue = Column(Integer, nullable=True)
+    # Client-generated idempotency key (one UUID per emitted row; retries and
+    # offline replays with the same key no-op on the unique index below).
+    client_event_id = Column(String(64), nullable=True)
+    # Where the audio bytes came from: cache | catalog | device | remote.
+    # (Kept separate from `source`, which is the discovery surface.)
+    audio_origin = Column(String(32), nullable=True)
 
     # Device/session context
     device_type = Column(String(32), nullable=True)
@@ -200,6 +206,7 @@ class ListeningEvent(Base):
         Index("ix_listening_events_user_event_started", "user_id", "event_type", "started_at"),
         Index("ix_listening_events_song_started", "song_id", "started_at"),
         Index("ix_listening_events_session", "session_id", "started_at"),
+        Index("uq_listening_events_user_client", "user_id", "client_event_id", unique=True),
     )
 
 

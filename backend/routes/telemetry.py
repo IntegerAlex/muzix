@@ -24,6 +24,12 @@ class TelemetryEventIn(BaseModel):
     position_in_queue: int | None = None
     device_type: str = "web"
     app_version: str | None = None
+    # Client-generated UUID per emitted row. Retries and offline replays carry
+    # the same id, so the server inserts once (unique index) instead of
+    # double-counting the listen.
+    client_event_id: str | None = None
+    # Byte origin of the audio: cache | catalog | device | remote.
+    audio_origin: str | None = None
     # Optional song metadata — used to auto-register YouTube / on-device
     # tracks that are not yet in the catalog, so their plays still count
     # toward telemetry, mood, and recommendations instead of FK-failing.

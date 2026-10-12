@@ -22,7 +22,7 @@ load_dotenv()
 # Bump when the schema changes. migrate() runs all DDL below only when the
 # recorded version is older, then records the new version atomically — so a
 # normal restart costs one round-trip (~1s) instead of a full DDL pass.
-MIGRATION_VERSION = 3
+MIGRATION_VERSION = 4
 
 
 async def _current_version(conn) -> int:
@@ -419,7 +419,9 @@ async def migrate() -> None:
                     source_id TEXT,
                     position_in_queue INTEGER,
                     device_type TEXT,
-                    app_version TEXT
+                    app_version TEXT,
+                    client_event_id TEXT,
+                    audio_origin TEXT
                 );
                 """
             )
@@ -441,6 +443,18 @@ async def migrate() -> None:
         )
         await conn.execute(
             text("ALTER TABLE listening_events ADD COLUMN IF NOT EXISTS day_of_week INTEGER;")
+        )
+        await conn.execute(
+            text("ALTER TABLE listening_events ADD COLUMN IF NOT EXISTS client_event_id TEXT;")
+        )
+        await conn.execute(
+            text("ALTER TABLE listening_events ADD COLUMN IF NOT EXISTS audio_origin TEXT;")
+        )
+        # Idempotency key for telemetry retries / offline replays: the same
+        # client_event_id from one user inserts once; replays no-op.
+        # NULLs stay distinct in Postgres, so pre-v4 rows are unaffected.
+        await conn.execute(
+            text("CREATE UNIQUE INDEX IF NOT EXISTS uq_listening_events_user_client ON listening_events (user_id, client_event_id);")
         )
         await conn.execute(
             text("CREATE INDEX IF NOT EXISTS ix_listening_events_hour ON listening_events (hour_of_day);")

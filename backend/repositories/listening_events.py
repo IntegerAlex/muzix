@@ -88,6 +88,8 @@ async def record_events(user_id: str, events: list[dict]) -> int:
                         position_in_queue=e.get("position_in_queue"),
                         device_type=e.get("device_type", "web"),
                         app_version=e.get("app_version"),
+                        client_event_id=e.get("client_event_id"),
+                        audio_origin=e.get("audio_origin"),
                         hour_of_day=started_at.hour,
                         day_of_week=started_at.weekday(),
                     ))
