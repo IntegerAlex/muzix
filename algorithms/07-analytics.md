@@ -3,7 +3,25 @@
 Statistical computations for user listening behavior: skip rate, completion rate, discovery, affinity, trends, and binge index.
 
 - **Type**: Custom
-- **File**: `backend/repositories/listening_events.py`, lines 256–681
+- **File**: `backend/repositories/listening_events.py`
+
+## Counting rules
+
+All listen-counting queries share one definition — `PLAY_TYPES = ("play", "complete")`:
+legacy per-start `play` rows plus the single terminal `complete` row per qualified
+listen. `skip` rows are terminal but never counted as plays (skip-rate only).
+
+- **Listening time** is `SUM(duration_played_ms)` over in-period rows (real heard
+  time, pause-exclusive). The old `SongDuration` lifetime-counter lookup
+  over-credited every touched song's full lifetime to the period.
+- **Completion averages** (`completion-rate`, `source-effectiveness`) aggregate
+  terminal rows (`complete`, `skip`) only — legacy `play`/`pause`/`seek` rows all
+  carry 0 and diluted every average toward zero.
+- **Recent activity** filters to `PLAY_TYPES`, so the feed shows tracks, not
+  pause/seek noise.
+- **`source`** is now the discovery surface (`home/search/album/.../autoplay`);
+  byte origin moved to `audio_origin`. Pre-v4 rows carry byte-origin values in
+  `source`, so long-window source breakdowns mix both eras.
 
 ## Algorithms
 

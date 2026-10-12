@@ -10,7 +10,7 @@ Runtime logic, data transformations, and deterministic flows used across the Muz
 
 ## Maintenance
 
-- **Last audited**: 2026-10-10
+- **Last audited**: 2026-10-12
 - Line numbers referenced in these docs were valid as of the audit date. If files have been refactored, grep for the function name to find the current location.
 - Known discrepancy: the SQL aggregation in `get_all_user_interactions` uses `skip=-0.5`, while `_compute_weight` uses `skip=-1.0`. This is intentional — the aggregated SQL version uses a softer negative signal for batch processing.
 
@@ -22,7 +22,7 @@ Runtime logic, data transformations, and deterministic flows used across the Muz
 | 02 | [interaction-scoring](02-interaction-scoring.md) | Scoring | Event weight computation, SQL aggregation, user features | Custom |
 | 03 | [shuffle](03-shuffle.md) | Playback | Fisher-Yates shuffle + unshuffle toggle | Known + Custom |
 | 04 | [player-logic](04-player-logic.md) | Playback | Next/prev navigation, queue reorder, completion detection | Custom |
-| 05 | [play-time-tracking](05-play-time-tracking.md) | Tracking | Delta accumulator, periodic flush, server upsert | Custom |
+| 05 | [play-time-tracking](05-play-time-tracking.md) | Tracking | Single terminal row per listen, pause-exclusive heard time, idempotent delivery | Custom |
 | 06 | [offline-queue](06-offline-queue.md) | Offline | FIFO request queue, promise queue, retry on reconnect | Custom |
 | 07 | [analytics](07-analytics.md) | Analytics | Skip rate, affinity, discovery, trends, binge index | Custom |
 | 08 | [mood-system](08-mood-system.md) | Personalization | Audio+lyrics circumplex fusion, contradiction override | Custom |

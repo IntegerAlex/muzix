@@ -70,9 +70,9 @@ onStatusChange((online) => { if (online) flushQueue(); });
 
 ## Relationship to play-time tracking
 
-- `05-play-time-tracking.md` handles duration accumulation and server upsert
+- `05-play-time-tracking.md` handles listen rows and heard-time math
 - `06-offline-queue.md` handles failed HTTP request retry
-- They are separate: playTimeTracker owns duration math; offlineQueue owns failed request retry
+- They are separate: the PlayerBridge listen tracker owns duration math; offlineQueue owns failed request retry
 
 ## Input → Output
 

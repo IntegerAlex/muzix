@@ -1,65 +1,43 @@
 # 05 — Play-Time Tracking
 
-Client-side delta accumulator with periodic flush and server-side duration upsert.
+Single-listen telemetry: one terminal row per track, pause-exclusive heard time, idempotent delivery.
 
 - **Type**: Custom
-- **File**: `web/muzix/services/playTimeTracker.ts`, lines 1–103
-- **File**: `backend/repositories/listening_events.py`, lines 9–24 (server upsert)
+- **File**: `web/muzix/components/PlayerBridge.tsx` (ActiveListen block, `beginListen` / `markListenResolved` / `accrueListen` / `endListen`)
+- **File**: `backend/repositories/listening_events.py` (`record_events`, `PLAY_TYPES`)
 
 ## How it works
 
-### 1. Delta Accumulation (playTimeTracker.ts)
+### 1. Listen lifecycle (client)
 
-Tracks per-song play time in memory and on disk.
+One `ActiveListen` at a time per client:
 
-**State**:
-```typescript
-interface SongPlayRecord {
-  totalMs: number;   // total accumulated play time
-  flushedMs: number; // amount already sent to server
-}
-```
+1. `beginListen(song, position, surface)` — opens on track load. `playedMs = 0`, `stamp = null`, `resolved = false`. Surface is read from the queue slot (`queue[currentIndex].surface`), so shuffled queues and autoplay tails keep per-track attribution.
+2. `markListenResolved(audioOrigin, playing)` — fires when `player.replace()` lands. Starts the heard-time anchor (`stamp = now`) only if still playing; a user who paused mid-load accrues nothing.
+3. `accrueListen()` — banks `now - stamp` into `playedMs` on pause, seek, sleep-deadline, and track switch; `stamp` is `null` while paused, so pause-time never counts. Seek restarts the anchor after the jump, so skipped-over audio is never counted as heard.
+4. `endListen(outcome)` — emits the single terminal row. Natural end → `complete` (100%); any advance away → `skip` with real `playedMs` and computed pct. `playedMs` is clamped to the track duration. Rows for audio never heard (`!resolved && playedMs <= 0`, e.g. load errors) are dropped — failures are not listens.
 
-**Flow**:
-1. `startPlaying(songId)` — records `trackRef.since = Date.now()`
-2. `pausePlaying()` — calculates `elapsed = Date.now() - trackRef.since`, adds to `totalMs`, saves to storage, calls `flushDelta`
-3. `flushDelta(songId?)` — calculates `delta = totalMs - flushedMs`, sends to server via `api.recordDuration()`, updates `flushedMs` on success
+Pause/resume/seek emit nothing. The old per-transition `play`/`pause`/`seek` rows (which multiplied `play_count` on every resume) and the `playTimeTracker.ts` dual pipeline (removed; its concurrent read-modify-write flushes double-counted under race) are gone.
 
-**Key detail**: If the currently playing song is being flushed, elapsed time is calculated live (line 70–74) rather than using the stored value.
+### 2. Idempotent delivery
 
-### 2. Periodic Flush (lines 91–96)
+Every emitted row carries a client-generated `client_event_id` UUID (`genEventId`). Retries, buffer re-queues, and offline replays resend the same id; the server's `UNIQUE(user_id, client_event_id)` index (`uq_listening_events_user_client`, migration v4) makes replays no-op. Pre-v4 rows have `NULL` keys (distinct under the index) and are unaffected.
 
-```typescript
-const FLUSH_INTERVAL_MS = 30_000;  // 30 seconds
+### 3. Server aggregation
 
-startPeriodicFlush() → setInterval(flushDelta, FLUSH_INTERVAL_MS)
-```
+Listening time is `SUM(duration_played_ms)` over in-period rows — never the lifetime-cumulative `song_durations` counters (one in-period play used to credit a song's entire lifetime). The `/telemetry/duration` endpoint and `upsert_duration` are retained only for old app versions still calling them.
 
-### 3. Persistence
-
-- State is stored in `safeStorage` (MMKV on native, localStorage on web) under key `muzix-playtime`
-- On flush failure, `flushedMs` is left unchanged so the delta will be retried on next flush (line 86)
-
-### 4. Server-Side Upsert (`upsert_duration`, listening_events.py lines 9–24)
-
-```python
-async def upsert_duration(user_id, song_id, delta_ms):
-    row = session.execute(select(SongDuration).where(...))
-    if row:
-        row.total_ms += delta_ms          # accumulate
-        row.last_updated = datetime.now(timezone.utc)
-    else:
-        row = SongDuration(user_id=user_id, song_id=song_id, total_ms=delta_ms)
-```
+`source` is the discovery surface (`home | search | album | artist | playlist | library | profile | autoplay`, stamped onto queue slots at `playSong` time); `audio_origin` (`cache | catalog | device | remote`) records where the bytes came from. They were previously conflated in `source`.
 
 ## Constants
 
 | Parameter | Value | Notes |
 |-----------|-------|-------|
-| Flush interval | 30,000ms (30s) | Client-side periodic flush |
-| Storage key | `muzix-playtime` | Persisted to safeStorage |
+| Flush cadence | 10s when buffered | `flushEvents`, 50-row cap, 3 retries then discard |
+| Offline cap | 100 rows | `localStorage` persist/restore (web) |
+| Batch cap | 50 events / request | `POST /telemetry/events` |
 
 ## Input → Output
 
-- **Input**: Song ID + playback time deltas
-- **Output**: Accumulated `total_ms` per user per song in `song_durations` table
+- **Input**: Track loads, play/pause/seek transitions, queue-slot surfaces
+- **Output**: One terminal `complete|skip` row per heard track with real `duration_played_ms`, `completion_percentage`, `source`, `audio_origin`, `client_event_id`
