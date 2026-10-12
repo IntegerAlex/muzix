@@ -1,7 +1,7 @@
 """Listening event repository: database operations for telemetry/analytics."""
 import uuid
 from datetime import datetime, timezone, timedelta
-from sqlalchemy import BigInteger, select, func, case, text
+from sqlalchemy import select, func, text
 from db import SessionLocal
 from models import ListeningEvent, Song, UserSession, SongDuration
 
@@ -51,31 +51,51 @@ async def record_events(user_id: str, events: list[dict]) -> int:
         # will still record events whose song_id already exists.
         pass
 
+    recorded = 0
     async with SessionLocal() as session:
         for e in events:
-            started_at = datetime.fromisoformat(e["started_at"].replace("Z", "+00:00"))
-            event = ListeningEvent(
-                id=str(uuid.uuid4()),
-                user_id=user_id,
-                song_id=e["song_id"],
-                session_id=e["session_id"],
-                event_type=e.get("event_type", "play"),
-                started_at=started_at,
-                ended_at=datetime.fromisoformat(e["ended_at"].replace("Z", "+00:00")) if e.get("ended_at") else None,
-                duration_played_ms=e.get("duration_played_ms", 0),
-                song_duration_ms=e.get("song_duration_ms"),
-                completion_percentage=e.get("completion_percentage", 0),
-                source=e.get("source"),
-                source_id=e.get("source_id"),
-                position_in_queue=e.get("position_in_queue"),
-                device_type=e.get("device_type", "web"),
-                app_version=e.get("app_version"),
-                hour_of_day=started_at.hour,
-                day_of_week=started_at.weekday(),
-            )
-            session.add(event)
+            song_id = e.get("song_id")
+            try:
+                started_at = datetime.fromisoformat(str(e["started_at"]).replace("Z", "+00:00"))
+            except (KeyError, ValueError, AttributeError, TypeError):
+                continue
+            try:
+                ended_raw = e.get("ended_at")
+                ended_at = (
+                    datetime.fromisoformat(str(ended_raw).replace("Z", "+00:00"))
+                    if ended_raw
+                    else None
+                )
+            except (ValueError, AttributeError, TypeError):
+                ended_at = None
+            try:
+                # Savepoint per event: one bad song_id or malformed row must
+                # not wipe the other events in the batch.
+                async with session.begin_nested():
+                    session.add(ListeningEvent(
+                        id=str(uuid.uuid4()),
+                        user_id=user_id,
+                        song_id=song_id,
+                        session_id=e["session_id"],
+                        event_type=e.get("event_type", "play"),
+                        started_at=started_at,
+                        ended_at=ended_at,
+                        duration_played_ms=e.get("duration_played_ms", 0),
+                        song_duration_ms=e.get("song_duration_ms"),
+                        completion_percentage=e.get("completion_percentage", 0),
+                        source=e.get("source"),
+                        source_id=e.get("source_id"),
+                        position_in_queue=e.get("position_in_queue"),
+                        device_type=e.get("device_type", "web"),
+                        app_version=e.get("app_version"),
+                        hour_of_day=started_at.hour,
+                        day_of_week=started_at.weekday(),
+                    ))
+                recorded += 1
+            except Exception:
+                continue
         await session.commit()
-    return len(events)
+    return recorded
 
 
 def _since_from_period(period: str) -> datetime:
@@ -119,6 +139,8 @@ def _period_bounds(period: str) -> tuple[datetime, datetime, datetime]:
 async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
     since = _since_from_period(period)
     async with SessionLocal() as session:
+        # NOTE: durations are fetched separately below. Joining SongDuration
+        # here fans out: SUM(total_ms) would be multiplied by play count.
         stmt = select(
             ListeningEvent.song_id,
             Song.title.label("song_title"),
@@ -129,14 +151,9 @@ async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
             Song.duration_ms.label("song_duration_ms"),
             Song.colors.label("song_colors"),
             func.count(ListeningEvent.id).label("play_count"),
-            func.coalesce(func.cast(func.sum(SongDuration.total_ms), BigInteger), 0).label("total_ms"),
             func.count(func.distinct(ListeningEvent.session_id)).label("sessions"),
         ).select_from(
-            ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True).outerjoin(
-                SongDuration,
-                (ListeningEvent.user_id == SongDuration.user_id)
-                & (ListeningEvent.song_id == SongDuration.song_id),
-            )
+            ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True)
         ).where(
             ListeningEvent.user_id == user_id,
             ListeningEvent.event_type == "play",
@@ -148,6 +165,17 @@ async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
 
         result = await session.execute(stmt)
         rows = result.all()
+
+        totals: dict[str, int] = {}
+        song_ids = [r.song_id for r in rows if r.song_id]
+        if song_ids:
+            dur_result = await session.execute(
+                select(SongDuration.song_id, SongDuration.total_ms).where(
+                    SongDuration.user_id == user_id,
+                    SongDuration.song_id.in_(song_ids),
+                )
+            )
+            totals = {r[0]: int(r[1] or 0) for r in dur_result.all()}
 
         return [
             {
@@ -162,7 +190,7 @@ async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
                     "colors": r.song_colors,
                 } if r.song_title else {"id": r.song_id, "title": "Unknown"},
                 "play_count": r.play_count,
-                "total_listening_ms": r.total_ms,
+                "total_listening_ms": totals.get(r.song_id, 0),
                 "sessions": r.sessions,
             }
             for r in rows if r.song_id
@@ -186,20 +214,32 @@ async def get_stats(
         filters.append(ListeningEvent.started_at < before)
     base_filter = tuple(filters)
     async with SessionLocal() as session:
+        # NOTE: durations live in a separate one-row-per-song table. Joining
+        # it here would fan out: SUM(total_ms) gets multiplied by the event
+        # count. Aggregate plays and durations independently.
         stats_result = await session.execute(
             select(
-                func.coalesce(func.cast(func.sum(SongDuration.total_ms), BigInteger), 0).label("total_ms"),
                 func.count(func.distinct(ListeningEvent.song_id)).label("unique_songs"),
                 func.count(ListeningEvent.id).label("total_plays"),
             ).select_from(
-                ListeningEvent.__table__.outerjoin(
-                    SongDuration,
-                    (ListeningEvent.user_id == SongDuration.user_id)
-                    & (ListeningEvent.song_id == SongDuration.song_id),
-                )
+                ListeningEvent.__table__
             ).where(*base_filter)
         )
         stats = stats_result.one()
+
+        song_sub = (
+            select(ListeningEvent.song_id)
+            .where(*base_filter)
+            .distinct()
+            .subquery()
+        )
+        dur_result = await session.execute(
+            select(func.coalesce(func.sum(SongDuration.total_ms), 0)).where(
+                SongDuration.user_id == user_id,
+                SongDuration.song_id.in_(select(song_sub.c.song_id)),
+            )
+        )
+        total_ms = int(dur_result.scalar() or 0)
 
         artists_result = await session.execute(
             select(func.count(func.distinct(Song.artist_id)))
@@ -216,7 +256,6 @@ async def get_stats(
             )
         )
         sessions = sessions_result.scalar() or 0
-        total_ms = int(stats.total_ms)
 
         return {
             "total_ms": total_ms,

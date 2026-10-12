@@ -1,11 +1,9 @@
 """Like repository: database operations for user likes."""
-import logging
 import uuid
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from db import SessionLocal
 from models import UserLike
-
-logger = logging.getLogger("muzix.likes")
 
 
 async def get_user_likes(user_id: str) -> list[str]:
@@ -17,17 +15,22 @@ async def get_user_likes(user_id: str) -> list[str]:
 
 
 async def add_like(user_id: str, song_id: str) -> bool:
-    """Returns True if liked, False if already exists."""
+    """Returns True if liked, False if already exists.
+
+    Only duplicate-key conflicts map to False. Anything else (FK violation,
+    connection loss) is re-raised so callers never report failure as success.
+    """
     async with SessionLocal() as session:
         try:
             like = UserLike(id=str(uuid.uuid4()), user_id=user_id, song_id=song_id)
             session.add(like)
             await session.commit()
             return True
-        except Exception as exc:
+        except IntegrityError as exc:
             await session.rollback()
-            logger.error("Failed to add like: %s", exc, exc_info=True)
-            return False
+            if "uq_user_song_like" in str(exc.orig):
+                return False
+            raise
 
 
 async def remove_like(user_id: str, song_id: str) -> bool:

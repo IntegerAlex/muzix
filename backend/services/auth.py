@@ -1,7 +1,7 @@
 """Auth service: registration, login, token refresh with opaque rotation."""
 import hashlib
 import uuid
-from datetime import timedelta, datetime, timezone
+from datetime import timedelta
 
 from fastapi import HTTPException
 
@@ -48,28 +48,21 @@ async def refresh(raw_token: str) -> dict:
         raise HTTPException(status_code=400, detail="Refresh token required")
 
     token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-    record = await refresh_token_repo.find_by_hash(token_hash)
+    rotated = await refresh_token_repo.rotate_if_valid(token_hash)
 
-    # Token not found — invalid token
-    if not record:
+    if rotated is None:
+        # Unknown, expired, or already consumed. Distinguish reuse (theft)
+        # from invalid: a revoked row means this token was already rotated.
+        existing = await refresh_token_repo.find_by_hash(token_hash)
+        if existing is not None and existing.is_revoked:
+            await refresh_token_repo.revoke_family(existing.family_id)
+            raise HTTPException(status_code=401, detail="Refresh token has been revoked. Please login again.")
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    # Token already revoked — possible theft (double-use)
-    if record.is_revoked:
-        await refresh_token_repo.revoke_family(record.family_id)
-        raise HTTPException(status_code=401, detail="Refresh token has been revoked. Please login again.")
-
-    # Token expired
-    if record.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=401, detail="Refresh token expired")
-
-    # Rotate: revoke current, issue new in same family
-    await refresh_token_repo.revoke(record.id)
-
-    user = await user_repo.get_user_by_id(record.user_id)
+    user = await user_repo.get_user_by_id(rotated["user_id"])
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
 
     token = create_token(user.id, timedelta(hours=ACCESS_TOKEN_EXPIRY_HOURS))
-    new_refresh = await generate_refresh_token(user.id, family_id=record.family_id)
+    new_refresh = await generate_refresh_token(user.id, family_id=rotated["family_id"])
     return {"token": token, "refreshToken": new_refresh, "user": user.to_dict()}
