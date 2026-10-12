@@ -538,10 +538,16 @@ export const usePlayerStore = create<PlayerState>()(
         // be re-fetched every time the queue runs dry.
         if (_autoplayTriedFor === current.id) return false;
         _autoplayTriedFor = current.id;
+        const seedId = current.id;
 
         try {
           const { fetchUpNext } = await import('@/services/autoQueue');
           const fresh = await fetchUpNext(current.id, current, AUTOPLAY_LIMIT);
+          // The Mix fetch takes seconds. If the user started another track
+          // while it was in flight, these results belong to the old seed —
+          // appending them would make that track's "next" play the previous
+          // song's recommendations (a genre flip by another name).
+          if (get().current?.id !== seedId) return false;
           if (!fresh.length) return false;
 
           const seen = new Set(get().queue.map((q) => q.id));
