@@ -53,9 +53,11 @@ interface SongRowProps {
   subtitle?: string;
   onShare?: (song: Song) => void;
   isSharing?: boolean;
+  /** Discovery surface stamped onto fresh queue slots (home/search/...). */
+  source?: string;
 }
 
-export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, subtitle, onShare, isSharing }: SongRowProps) {
+export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, subtitle, onShare, isSharing, source }: SongRowProps) {
   const playSong = usePlayerStore((s) => s.playSong);
   const queueRef = useRef(queue);
   const { isOnline } = useConnectivity();
@@ -74,8 +76,8 @@ export const SongRow = memo(function SongRow({ song, index, queue, isCurrent, su
 
   const handlePress = useCallback(() => {
     impact('light');
-    playSong(song, queueRef.current, index);
-  }, [playSong, song, index, impact]);
+    playSong(song, queueRef.current, index, source);
+  }, [playSong, song, index, impact, source]);
 
   const handleDownload = useCallback(async () => {
     if (cached || downloading || !isOnline) return;

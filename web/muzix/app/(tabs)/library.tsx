@@ -264,7 +264,7 @@ export default function LibraryScreen() {
                   {downloadsSize > 0 ? `${(downloadsSize / (1024 * 1024)).toFixed(1)} MB cached` : 'Available offline'}
                 </Text>
                 {downloadedSongs.map((song, i) => (
-                  <SongRow key={song.id} song={song} index={i} queue={downloadedSongs} isCurrent={false} />
+                  <SongRow key={song.id} song={song} index={i} queue={downloadedSongs} isCurrent={false} source="library" />
                 ))}
               </View>
             </>

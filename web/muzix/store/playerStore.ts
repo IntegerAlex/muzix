@@ -99,8 +99,6 @@ interface PlayerState {
   positionMs: number;
   durationSec: number;
   connectionStatus: 'online' | 'offline';
-  totalPlays: number;
-  totalListeningMs: number;
   recentlyPlayed: string[];
   /** When the queue runs out, keep playing similar tracks from YouTube. */
   autoplay: boolean;
@@ -113,8 +111,11 @@ interface PlayerState {
    * Start playing a song.
    * `queue` may be Song[] (from list screens) or QueueItem[] (internal).
    * Each element will be wrapped into a QueueItem if it isn't one already.
+   * `source` stamps the discovery surface (home/search/album/...) onto fresh
+   * queue slots so telemetry can attribute the listen. Slots that already
+   * carry a stamp (reorder, up-next taps) keep theirs.
    */
-  playSong: (song: Song, queue?: (Song | QueueItem)[], index?: number) => void;
+  playSong: (song: Song, queue?: (Song | QueueItem)[], index?: number, source?: string) => void;
   setPlaying: (v: boolean) => void;
   setLoading: (id: string | null) => void;
   setShowNowPlaying: (v: boolean) => void;
@@ -210,15 +211,13 @@ export const usePlayerStore = create<PlayerState>()(
       durationSec: 0,
       error: null,
       connectionStatus: 'online',
-      totalPlays: 0,
-      totalListeningMs: 0,
       recentlyPlayed: [],
       autoplay: true,
       retryNonce: 0,
       sleepTimerEndsAt: null,
       sleepAfterTrack: false,
 
-      playSong: (song, queue, index) => {
+      playSong: (song, queue, index, source) => {
         // Explicit play = new seed for autoplay; clear the once-per-seed guard.
         _autoplayTriedFor = null;
 
@@ -227,6 +226,15 @@ export const usePlayerStore = create<PlayerState>()(
           : get().queue.length
           ? get().queue
           : [toQueueItem(song)];
+
+        // Stamp the discovery surface onto unstamped slots. Autoplay tails
+        // and reordered slots keep the stamp they were created with, so a
+        // mixed queue still attributes each listen correctly.
+        if (source) {
+          for (const item of nextQueue) {
+            if (item.surface == null) item.surface = source;
+          }
+        }
 
         // Find the slot index. Prefer the explicit index; fall back to
         // finding the first slot whose underlying song.id matches.
@@ -247,8 +255,6 @@ export const usePlayerStore = create<PlayerState>()(
           isPlaying: true,
           history: [],
           error: null,
-          totalPlays: get().totalPlays + 1,
-          totalListeningMs: get().totalListeningMs + song.durationMs,
           recentlyPlayed: deduped,
         });
         patchLyrics(song);
@@ -271,7 +277,7 @@ export const usePlayerStore = create<PlayerState>()(
           if (repeat === 'all') {
             const item = queue[0];
             if (!item) return;
-            set({ current: item, currentIndex: 0, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + item.durationMs });
+            set({ current: item, currentIndex: 0, history: [...get().history, currentIndex], error: null });
             patchLyrics(item);
             return;
           }
@@ -300,7 +306,7 @@ export const usePlayerStore = create<PlayerState>()(
         }
 
         const item = queue[ni];
-        set({ current: item, currentIndex: ni, history: [...get().history, currentIndex], error: null, totalPlays: get().totalPlays + 1, totalListeningMs: get().totalListeningMs + item.durationMs });
+        set({ current: item, currentIndex: ni, history: [...get().history, currentIndex], error: null });
         patchLyrics(item);
       },
 
@@ -542,7 +548,7 @@ export const usePlayerStore = create<PlayerState>()(
           const additions = fresh.filter((s) => !seen.has(s.id));
           if (!additions.length) return false;
 
-          const wrapped: QueueItem[] = additions.map((s) => ({ ...s, queueItemId: generateQueueItemId() }));
+          const wrapped: QueueItem[] = additions.map((s) => ({ ...s, queueItemId: generateQueueItemId(), surface: 'autoplay' }));
           const newQueue = [...get().queue, ...wrapped];
           set({ queue: newQueue, error: null });
           saveQueue({
@@ -563,8 +569,6 @@ export const usePlayerStore = create<PlayerState>()(
       partialize: (state) => ({
         likedSongs: state.likedSongs,
         recentlyPlayed: state.recentlyPlayed,
-        totalPlays: state.totalPlays,
-        totalListeningMs: state.totalListeningMs,
         autoplay: state.autoplay,
       }),
     }

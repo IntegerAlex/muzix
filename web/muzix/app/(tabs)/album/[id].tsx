@@ -72,7 +72,7 @@ export default function AlbumDetail() {
   const handleShuffle = useCallback(() => {
     if (songs.length === 0) return;
     const shuffled = [...songs].sort(() => Math.random() - 0.5);
-    playSong(shuffled[0], shuffled, 0);
+    playSong(shuffled[0], shuffled, 0, 'album');
   }, [songs, playSong]);
 
   const handleShare = useCallback(async () => {
@@ -161,7 +161,7 @@ export default function AlbumDetail() {
               <Shuffle size={14} color={TEXT_PRIMARY} />
             </Pressable>
               <Pressable
-                onPress={() => { if (songs.length === 0) return; playSong(songs[0], songs, 0); }}
+                onPress={() => { if (songs.length === 0) return; playSong(songs[0], songs, 0, 'album'); }}
                 style={{ borderRadius: 9999, backgroundColor: 'white', paddingHorizontal: SPACING.xxl, paddingVertical: SPACING.sm }}
                 accessibilityLabel="Play album"
                 accessibilityRole="button"
@@ -184,6 +184,7 @@ export default function AlbumDetail() {
               index={index}
               queue={songs}
               isCurrent={current?.id === song.id}
+              source="album"
             />
           ))}
           {!songsLoading && songs.length === 0 && (

@@ -95,6 +95,7 @@ function OfflineEmptyView({ downloadedSongs, onShare, isSharing, current }: { do
                   song={songItem}
                   index={i}
                   queue={downloadedSongs}
+                  source="home"
                   isCurrent={current?.id === songItem.id}
                   onShare={onShare}
                   isSharing={isSharing}
@@ -352,6 +353,7 @@ export default function HomeScreen() {
                         song={songItem}
                         index={i}
                         queue={recentSongs}
+                        source="home"
                         isCurrent={current?.id === songItem.id}
                         onShare={handleShare}
                         isSharing={isSharing}
@@ -375,6 +377,7 @@ export default function HomeScreen() {
                       song={songItem}
                       index={i}
                       queue={topPicks}
+                      source="home"
                       isCurrent={current?.id === songItem.id}
                       onShare={handleShare}
                       isSharing={isSharing}

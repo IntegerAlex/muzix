@@ -154,6 +154,7 @@ function SearchResults({ results, current, onShare, isSharing, showSongs, showAl
             queue={results.songs}
             isCurrent={current?.id === songItem.id}
             onShare={onShare}
+            source="search"
             isSharing={isSharing}
           />
         </AnimatedEntrance>
@@ -249,7 +250,7 @@ function YouTubeResults({
       });
       const songs = hits.map(toSong);
       const index = Math.max(0, songs.findIndex((s) => s.id === hit.id));
-      playSong(songs[index], songs, index);
+      playSong(songs[index], songs, index, 'search');
     } catch (e: any) {
       usePlayerStore.setState({
         error: e?.message?.slice?.(0, 160) || 'Could not get that track from YouTube',

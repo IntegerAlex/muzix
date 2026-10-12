@@ -112,7 +112,7 @@ const TopSongRow = memo(function TopSongRow({ song, index, rank, queue }: { song
 
   return (
     <Pressable
-      onPress={() => playSong(song, queue, index)}
+      onPress={() => playSong(song, queue, index, 'profile')}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -404,7 +404,7 @@ export default function ProfileScreen() {
             {derivedData?.likedSlice.length > 0 && (
               <ProfileSection icon={Heart} title="Liked Songs" color="#ec4899" count={likedList.length}>
                 {derivedData.likedSlice.map((song) => (
-                  <SongRow key={song.id} song={song} queue={derivedData.likedSlice} />
+                  <SongRow key={song.id} song={song} queue={derivedData.likedSlice} source="profile" />
                 ))}
               </ProfileSection>
             )}
@@ -419,7 +419,7 @@ export default function ProfileScreen() {
                 {downloadedSongs.map((song, i) => (
                   <Pressable
                     key={song.id}
-                    onPress={() => playSong(song, downloadedSongs, i)}
+                    onPress={() => playSong(song, downloadedSongs, i, 'library')}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
                       alignItems: 'center',

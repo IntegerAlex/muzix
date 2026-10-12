@@ -2,12 +2,11 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus, type AudioPlayer } from 'expo-audio';
 import { router } from 'expo-router';
-import { api, ApiError } from '@/services/api';
+import { ApiError } from '@/services/api';
 import { resolveAudio } from '@/services/audioSource';
 import { usePlayerStore } from '@/store/playerStore';
 import { useAuthStore } from '@/store/authStore';
 import { API_URL } from '@/lib/config';
-import * as playTimeTracker from '@/services/playTimeTracker';
 import { trackPlay } from '@/services/metrics';
 import {
   activateLockScreen,
@@ -24,6 +23,8 @@ let _globalPlayer: AudioPlayer | null = null;
 const SESSION_ID = Math.random().toString(36).substring(2, 15);
 
 interface TelemetryEvent {
+  /** Client-generated UUID: retries and offline replays carry the same id, so the server inserts once. */
+  client_event_id: string;
   song_id: string;
   session_id: string;
   event_type: 'play' | 'pause' | 'complete' | 'skip' | 'seek';
@@ -32,8 +33,11 @@ interface TelemetryEvent {
   duration_played_ms: number;
   song_duration_ms: number | null;
   completion_percentage: number;
+  /** Discovery surface: home | search | album | playlist | queue | autoplay | ... */
   source: string | null;
   source_id: string | null;
+  /** Byte origin: cache | catalog | device | remote. */
+  audio_origin: string | null;
   position_in_queue: number | null;
   device_type: string;
   app_version: string | null;
@@ -87,9 +91,14 @@ async function flushEvents() {
   }
 }
 
-function recordEvent(event: Omit<TelemetryEvent, 'device_type' | 'app_version'>) {
+function genEventId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+}
+
+function recordEvent(event: Omit<TelemetryEvent, 'device_type' | 'app_version' | 'client_event_id'>) {
   EVENT_BUFFER.push({
     ...event,
+    client_event_id: genEventId(),
     device_type: Platform.OS,
     app_version: '1.0.0',
   });
@@ -97,16 +106,105 @@ function recordEvent(event: Omit<TelemetryEvent, 'device_type' | 'app_version'>)
   else if (!flushTimeout) { flushTimeout = setTimeout(flushEvents, 10000); }
 }
 
-function songMeta(song: { id: string; title: string; artist: string; album: string; genre: string; colors: [string, string]; durationMs: number }) {
-  return {
-    song_id: song.id,
+// ---------------------------------------------------------------------------
+// Single-listen tracking. Exactly one terminal row (complete|skip) is emitted
+// per track when it ends — never on pause/resume/seek. Pause-time is excluded
+// via the wall-clock anchor: accrueListen() banks (now - stamp) on every
+// transition and stamp is null while paused, so only heard time lands in
+// playedMs. playedMs is clamped to the track duration at emit: seek-forward
+// jumps would otherwise count skipped-over audio as heard.
+// ---------------------------------------------------------------------------
+interface ActiveListen {
+  songId: string;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  genre: string | null;
+  colors: string[] | null;
+  songDurationMs: number | null;
+  startedAt: string;
+  playedMs: number;
+  stamp: number | null;
+  resolved: boolean;
+  position: number | null;
+  surface: string | null;
+  audioOrigin: string | null;
+}
+
+let activeListen: ActiveListen | null = null;
+/** Track id whose terminal row was already emitted (natural end / sleep / repeat). */
+let completedListenId: string | null = null;
+let lastAudioOrigin: string | null = null;
+
+function accrueListen() {
+  if (activeListen?.stamp != null) {
+    activeListen.playedMs += Math.max(0, Date.now() - activeListen.stamp);
+    activeListen.stamp = Date.now();
+  }
+}
+
+function beginListen(
+  song: { id: string; title: string; artist: string; album: string; genre: string; colors: string[]; durationMs: number },
+  position: number | null,
+  surface: string | null,
+) {
+  activeListen = {
+    songId: song.id,
     title: song.title?.slice(0, 512) ?? null,
     artist: song.artist?.slice(0, 512) ?? null,
     album: song.album?.slice(0, 512) ?? null,
     genre: song.genre?.slice(0, 128) ?? null,
     colors: song.colors ?? null,
-    song_duration_ms: song.durationMs ?? null,
+    songDurationMs: song.durationMs ?? null,
+    startedAt: new Date().toISOString(),
+    playedMs: 0,
+    stamp: null,
+    resolved: false,
+    position,
+    surface,
+    audioOrigin: null,
   };
+  completedListenId = null;
+}
+
+function markListenResolved(audioOrigin: string | null, playing: boolean) {
+  lastAudioOrigin = audioOrigin;
+  if (!activeListen) return;
+  activeListen.resolved = true;
+  activeListen.audioOrigin = audioOrigin;
+  if (playing) activeListen.stamp = Date.now();
+}
+
+/** Emit the terminal row for the active listen and clear it. */
+function endListen(outcome: 'complete' | 'skip') {
+  const l = activeListen;
+  activeListen = null;
+  if (!l) return;
+  if (l.stamp != null) l.playedMs += Math.max(0, Date.now() - l.stamp);
+  // Never heard a second of audio (load error, instant switch): not a listen.
+  if (!l.resolved && l.playedMs <= 0) return;
+  const durationMs = l.songDurationMs && l.songDurationMs > 0 ? l.songDurationMs : null;
+  const playedMs = Math.round(durationMs != null ? Math.min(l.playedMs, durationMs) : l.playedMs);
+  recordEvent({
+    song_id: l.songId,
+    title: l.title,
+    artist: l.artist,
+    album: l.album,
+    genre: l.genre,
+    colors: l.colors,
+    song_duration_ms: durationMs,
+    session_id: SESSION_ID,
+    event_type: outcome,
+    started_at: l.startedAt,
+    ended_at: new Date().toISOString(),
+    duration_played_ms: playedMs,
+    completion_percentage:
+      outcome === 'complete' ? 100 : durationMs ? Math.min(100, Math.round((playedMs / durationMs) * 100)) : 0,
+    source: l.surface,
+    source_id: null,
+    audio_origin: l.audioOrigin,
+    position_in_queue: l.position,
+  });
 }
 
 let sessionStarted = false;
@@ -139,7 +237,6 @@ function recordSessionEnd(exitReason = 'user_close') {
 
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   const persistPendingEvents = () => {
-    playTimeTracker.flushDelta();
     try {
       const pending = EVENT_BUFFER.splice(0, EVENT_BUFFER.length);
       if (pending.length > 0) {
@@ -196,7 +293,6 @@ export function PlayerBridge() {
   );
 
   const currentUrlRef = useRef<string | null>(null);
-  const audioSourceRef = useRef<{ id: string; source: string } | null>(null);
   const retryCountRef = useRef(0);
   const bufferedTrackRef = useRef<string | null>(null);
   const bufferedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -215,10 +311,8 @@ export function PlayerBridge() {
     _globalPlayer = player;
     setActivePlayer(player);
     recordSessionStart();
-    playTimeTracker.startPeriodicFlush();
     try { player.pause(); } catch {}
     return () => {
-      playTimeTracker.stopPeriodicFlush();
       if (lockScreenActiveRef.current) {
         clearLockScreenControls(player);
         lockScreenActiveRef.current = false;
@@ -238,6 +332,13 @@ export function PlayerBridge() {
     try { player.pause(); } catch {}
     loadInFlightRef.current = current.id;
     setLoading(current.id);
+    // Open the listen row now; the heard-time anchor starts when audio
+    // actually resolves (markListenResolved). Surface comes from the queue
+    // slot so shuffled/autoplay tails keep their own attribution.
+    {
+      const ps = usePlayerStore.getState();
+      beginListen(current, ps.currentIndex, ps.queue[ps.currentIndex]?.surface ?? null);
+    }
 
     const attemptLoad = async () => {
       try {
@@ -246,9 +347,6 @@ export function PlayerBridge() {
         if (cancelled) return;
 
         currentUrlRef.current = playUri;
-        // Remember how this track was sourced so pause/complete/seek events
-        // carry the same attribution (needed for source-effectiveness).
-        audioSourceRef.current = { id: current.id, source: audioOrigin };
 
         player.replace({ uri: playUri });
         player.volume = volume;
@@ -256,6 +354,7 @@ export function PlayerBridge() {
         // The user may have paused (or switched again) while this track was
         // still resolving — don't barge in if playback is no longer wanted.
         const shouldPlay = usePlayerStore.getState().isPlaying;
+        markListenResolved(audioOrigin, shouldPlay);
         if (shouldPlay) {
           player.play();
         }
@@ -278,7 +377,6 @@ export function PlayerBridge() {
         if (shouldPlay) {
           setPlaying(true);
           trackPlay();
-          playTimeTracker.startPlaying(current.id);
         }
         retryCountRef.current = 0;
         positionTrackRef.current = current.id;
@@ -291,9 +389,6 @@ export function PlayerBridge() {
             bufferedTrackRef.current = null;
           }
         }, 10000);
-        if (shouldPlay) {
-          recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, completion_percentage: 0, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
-        }
       } catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) {
@@ -322,7 +417,10 @@ export function PlayerBridge() {
     attemptLoad();
     return () => {
       cancelled = true;
-      playTimeTracker.flushDelta();
+      // Outgoing track ends here. Natural ends already emitted their terminal
+      // row (activeListen is null then); anything still open was abandoned.
+      if (activeListen && completedListenId !== current.id) endListen('skip');
+      completedListenId = null;
       if (bufferedTimeoutRef.current) clearTimeout(bufferedTimeoutRef.current);
       bufferedTimeoutRef.current = null;
     };
@@ -390,12 +488,12 @@ export function PlayerBridge() {
     if (!current) return;
     if (prevIsPlayingRef.current !== isPlaying) {
       if (isPlaying) {
-        playTimeTracker.startPlaying(current.id);
-        recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'play', started_at: new Date().toISOString(), ended_at: null, duration_played_ms: 0, completion_percentage: 0, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
+        // Resume: restart the heard-time anchor. Pauses banked nothing and
+        // emitted nothing — one listen, one terminal row.
+        if (activeListen && activeListen.songId === current.id) activeListen.stamp = Date.now();
       } else {
-        const now = new Date();
-        playTimeTracker.pausePlaying();
-        recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'pause', started_at: now.toISOString(), ended_at: now.toISOString(), duration_played_ms: 0, completion_percentage: 0, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
+        accrueListen();
+        if (activeListen) activeListen.stamp = null;
       }
     }
     prevIsPlayingRef.current = isPlaying;
@@ -407,22 +505,27 @@ export function PlayerBridge() {
   const handleTrackComplete = () => {
     if (!current) return;
     didJustFinishRef.current = true;
-    recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'complete', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: current.durationMs, completion_percentage: 100, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
+    // Natural end: the single terminal row for this listen (100%).
+    completedListenId = current.id;
+    endListen('complete');
     if (usePlayerStore.getState().sleepAfterTrack) {
       // Sleep-after-track: stop here instead of advancing the queue.
       usePlayerStore.getState().clearSleepTimer();
-      playTimeTracker.flushDelta(current.id);
       try { player.pause(); } catch {}
       usePlayerStore.getState().setPlaying(false);
       return;
     }
     if (usePlayerStore.getState().repeat === 'one') {
-      playTimeTracker.flushDelta(current.id);
       player.seekTo(0);
       player.play();
+      // Same track replays: open a fresh listen; the bytes are already loaded.
+      {
+        const ps = usePlayerStore.getState();
+        beginListen(current, ps.currentIndex, ps.queue[ps.currentIndex]?.surface ?? null);
+        markListenResolved(lastAudioOrigin, true);
+      }
       return;
     }
-    playTimeTracker.flushDelta(current.id);
     usePlayerStore.getState().next();
   };
 
@@ -441,7 +544,10 @@ export function PlayerBridge() {
     const endsAt = usePlayerStore.getState().sleepTimerEndsAt;
     if (endsAt != null && isPlaying && Date.now() >= endsAt) {
       usePlayerStore.getState().clearSleepTimer();
-      playTimeTracker.flushDelta(current.id);
+      // Deadline hit mid-track: bank heard time like a pause and keep the
+      // listen open — resume continues the same listen, track change ends it.
+      accrueListen();
+      if (activeListen) activeListen.stamp = null;
       try { player.pause(); } catch {}
       usePlayerStore.getState().setPlaying(false);
       return;
@@ -461,10 +567,11 @@ export function PlayerBridge() {
     if (seekPosition == null || !current) return;
     const clampedFraction = Math.max(0, Math.min(seekPosition, 1));
     const durationSec = status.duration > 0 ? status.duration : (current.durationMs ?? 0) / 1000;
-    playTimeTracker.flushDelta(current.id);
+    // Bank heard time up to the seek point; the anchor restarts after the
+    // jump so skipped-over audio is never counted as heard. No row emitted.
+    accrueListen();
     player.seekTo(clampedFraction * durationSec);
     usePlayerStore.getState().setPlaybackPosition(clampedFraction * durationSec * 1000, durationSec);
-    recordEvent({ ...songMeta(current), session_id: SESSION_ID, event_type: 'seek', started_at: new Date().toISOString(), ended_at: new Date().toISOString(), duration_played_ms: 0, completion_percentage: current.durationMs > 0 ? Math.round(clampedFraction * 100) : 0, source: audioSourceRef.current?.id === current.id ? audioSourceRef.current.source : null, source_id: null, position_in_queue: usePlayerStore.getState().currentIndex });
     setSeekPosition(null);
   }, [seekPosition, current, player, status.duration, setSeekPosition]);
 

@@ -113,6 +113,7 @@ export default function PlaylistDetail() {
           index={index}
           queue={playlistSongs}
           isCurrent={current?.id === item.id}
+          source="playlist"
         />
       </View>
       {editing ? (
@@ -255,7 +256,7 @@ export default function PlaylistDetail() {
                 </>
               )}
                 <Pressable
-                  onPress={() => { if (songs.length === 0) return; playSong(songs[0], songs, 0); }}
+                  onPress={() => { if (songs.length === 0) return; playSong(songs[0], songs, 0, 'playlist'); }}
                   style={{ borderRadius: 9999, backgroundColor: 'white', paddingHorizontal: 24, paddingVertical: SPACING.sm }}
                   accessibilityLabel="Play playlist"
                   accessibilityRole="button"

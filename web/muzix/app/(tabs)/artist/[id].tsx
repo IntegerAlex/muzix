@@ -138,6 +138,7 @@ export default function ArtistDetail() {
                song={item}
                index={index}
                queue={popular}
+               source="artist"
                isCurrent={current?.id === item.id}
                subtitle={item.album}
              />
