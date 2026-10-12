@@ -131,6 +131,10 @@ interface RequestOptions {
   headers?: Record<string, string>;
   skipRetry?: boolean;
   isRetry?: boolean;
+  // The refresh endpoint must never trigger handleAuthError: on 401 it would
+  // call handleAuthError again, which awaits the in-flight refresh promise —
+  // itself. The promise never settles and every authed request hangs forever.
+  skipAuthRetry?: boolean;
 }
 
 async function requestRaw<T>(path: string, options?: RequestOptions): Promise<T> {
@@ -148,7 +152,7 @@ async function requestRaw<T>(path: string, options?: RequestOptions): Promise<T>
 
   if (!res.ok) {
     const msg = await parseErrorBody(res);
-    if (res.status === 401 && !options?.isRetry) {
+    if (res.status === 401 && !options?.isRetry && !options?.skipAuthRetry) {
       const refreshed = await handleAuthError();
       if (refreshed) {
         const newToken = useAuthStore.getState().token;
@@ -184,14 +188,26 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   // Mutations are never retried: replaying a POST/PUT/DELETE on a 5xx or
   // timeout duplicates playlists, likes, and registrations. GET-only retry.
   if (options?.skipRetry || (options?.method ?? 'GET') !== 'GET') return requestRaw<T>(path, options);
-  // Deduplicate concurrent requests to the same path
-  const key = `${options?.method ?? 'GET'}:${path}`;
+  // Deduplicate concurrent requests. The key includes a hash of the auth
+  // header + body: without it, concurrent POSTs with different payloads (or
+  // authed vs unauthed GETs) collapse into one promise and the second caller
+  // gets the wrong data / loses its mutation.
+  const key = `${options?.method ?? 'GET'}:${path}:${hashKey((options?.headers?.['Authorization'] ?? '') + (options?.body ?? ''))}`;
   const existing = inFlight.get(key);
   if (existing) return existing as Promise<T>;
   const promise = retryWithBackoff(() => requestRaw<T>(path, options));
   inFlight.set(key, promise);
-  promise.finally(() => inFlight.delete(key));
+  promise.then(
+    () => inFlight.delete(key),
+    () => inFlight.delete(key),
+  );
   return promise;
+}
+
+function hashKey(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
 }
 
 async function requestAuthed<T>(path: string, token: string, options?: RequestOptions): Promise<T> {
@@ -414,6 +430,7 @@ export const api = {
     request<AuthResponse>(`/auth/refresh`, {
       method: 'POST',
       body: JSON.stringify({ refreshToken }),
+      skipAuthRetry: true,
     }),
   me: (token: string) => requestAuthed<User>(`/auth/me`, token),
 

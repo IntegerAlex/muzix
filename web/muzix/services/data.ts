@@ -272,7 +272,7 @@ export function useSongs(): QueryResult<Song[]> {
     return fresh;
   }, [], staleData);
 
-  const resolved = data.length > 0 ? data : staleData;
+  const resolved = !loading || data.length > 0 ? data : staleData;
   return { data: resolved, loading: loading && resolved.length === 0, error, refetch };
 }
 
@@ -300,7 +300,7 @@ export function useAlbums(): QueryResult<Album[]> {
     return fresh;
   }, [], staleData);
 
-  const resolvedAlbums = data.length > 0 ? data : staleData;
+  const resolvedAlbums = !loading || data.length > 0 ? data : staleData;
   return { data: resolvedAlbums, loading: loading && resolvedAlbums.length === 0, error, refetch };
 }
 
@@ -328,7 +328,7 @@ export function useArtists(): QueryResult<Artist[]> {
     return fresh;
   }, [], staleData);
 
-  const resolvedArtists = data.length > 0 ? data : staleData;
+  const resolvedArtists = !loading || data.length > 0 ? data : staleData;
   return { data: resolvedArtists, loading: loading && resolvedArtists.length === 0, error, refetch };
 }
 
@@ -358,7 +358,7 @@ export function usePlaylists(): QueryResult<Playlist[]> {
     return fresh;
   }, [], staleData);
 
-  const resolvedPlaylists = data.length > 0 ? data : staleData;
+  const resolvedPlaylists = !loading || data.length > 0 ? data : staleData;
   return { data: resolvedPlaylists, loading: loading && resolvedPlaylists.length === 0, error, refetch };
 }
 

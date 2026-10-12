@@ -55,7 +55,7 @@ async function flushEvents() {
   const eventsToSend = EVENT_BUFFER.splice(0, EVENT_BUFFER.length);
   try {
     const token = useAuthStore.getState().token;
-    await fetch(`${API_URL}/telemetry/events`, {
+    const res = await fetch(`${API_URL}/telemetry/events`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -63,6 +63,9 @@ async function flushEvents() {
       },
       body: JSON.stringify(eventsToSend),
     });
+    // fetch resolves on 4xx/5xx: without this check every rejection and
+    // every 401 (logged-out flush) is treated as delivered and dropped.
+    if (!res.ok) throw new Error(`telemetry ${res.status}`);
     flushRetries = 0;
   } catch {
     flushRetries++;
@@ -73,10 +76,14 @@ async function flushEvents() {
     // else: discard events after max retries to prevent infinite loop
   }
   if (flushTimeout) clearTimeout(flushTimeout);
-  if (EVENT_BUFFER.length > 0 || flushRetries < MAX_FLUSH_RETRIES) {
+  // Reschedule only while events remain. The old
+  // `|| flushRetries < MAX` condition was always true after a success
+  // (retries reset to 0), spinning a 10s timer forever on every app open.
+  if (EVENT_BUFFER.length > 0) {
     flushTimeout = setTimeout(flushEvents, 10000);
   } else {
     flushTimeout = null;
+    flushRetries = 0;
   }
 }
 

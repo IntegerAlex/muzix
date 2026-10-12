@@ -136,8 +136,17 @@ function unwrapEnvelope<T>(raw: T): T {
   return raw;
 }
 
+function hashToken(token?: string): string {
+  if (!token) return 'anon';
+  let h = 5381;
+  for (let i = 0; i < token.length; i++) h = ((h << 5) + h + token.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+}
+
 export async function cachedFetch<T>(path: string, token?: string, ttlMs?: number): Promise<T> {
-  const key = `api:${path}`;
+  // Token-scoped key: without it, user B logging in within the TTL reads
+  // user A's cached /playlists, /home and /likes payloads.
+  const key = `api:${path}:${hashToken(token)}`;
   const cached = await readDisk(key);
 
   if (cached && !isExpired(cached)) {
@@ -192,7 +201,6 @@ export async function cachedFetch<T>(path: string, token?: string, ttlMs?: numbe
       (raw && typeof raw === 'object' && 'data' in raw ? raw.data : raw) as T
     );
 
-    if (Array.isArray(data) && data.length === 0 && cached && !isExpired(cached)) return unwrapEnvelope<T>(cached.data as T);
     const ttl = ttlMs ?? getTTL(path);
     await writeDisk(key, { etag, data, timestamp: Date.now(), accessTime: Date.now(), ttl });
     return data;
