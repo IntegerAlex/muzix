@@ -29,10 +29,10 @@ async def end_session(session_id: str, user_id: str, exit_reason: str | None) ->
         agg = await session.execute(
             select(
                 func.coalesce(func.sum(ListeningEvent.duration_played_ms), 0).label("total_ms"),
-                func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "play").label("songs_played"),
+                func.count(ListeningEvent.id).filter(ListeningEvent.event_type.in_(("play", "complete"))).label("songs_played"),
                 func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "complete").label("songs_completed"),
                 func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "skip").label("songs_skipped"),
-                func.count(func.distinct(ListeningEvent.song_id)).label("unique_songs"),
+                func.count(func.distinct(ListeningEvent.song_id)).filter(ListeningEvent.event_type.in_(("play", "complete"))).label("unique_songs"),
             ).where(
                 ListeningEvent.session_id == session_id,
                 ListeningEvent.user_id == user_id,
@@ -46,6 +46,7 @@ async def end_session(session_id: str, user_id: str, exit_reason: str | None) ->
             .where(
                 ListeningEvent.session_id == session_id,
                 ListeningEvent.user_id == user_id,
+                ListeningEvent.event_type.in_(("play", "complete")),
             )
         )
         unique_artists = unique_artists_result.scalar() or 0

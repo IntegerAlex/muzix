@@ -3,7 +3,13 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import select, func, text
 from db import SessionLocal
-from models import ListeningEvent, Song, UserSession, SongDuration
+from models import ListeningEvent, Song, UserSession
+
+# Event types that count as a listen: legacy per-start 'play' rows plus the
+# single terminal 'complete' row the client now emits per qualified listen.
+# Pause/resume/seek rows were retired client-side; 'skip' rows are terminal
+# but counted separately (skip-rate), never as plays.
+PLAY_TYPES = ("play", "complete")
 
 
 async def upsert_duration(user_id: str, song_id: str, delta_ms: int) -> None:
@@ -141,8 +147,9 @@ def _period_bounds(period: str) -> tuple[datetime, datetime, datetime]:
 async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
     since = _since_from_period(period)
     async with SessionLocal() as session:
-        # NOTE: durations are fetched separately below. Joining SongDuration
-        # here fans out: SUM(total_ms) would be multiplied by play count.
+        # total_listening_ms is summed from in-period rows: the old
+        # SongDuration lookup was lifetime-cumulative per song, so one play
+        # in the period credited the entire lifetime to that period.
         stmt = select(
             ListeningEvent.song_id,
             Song.title.label("song_title"),
@@ -152,32 +159,23 @@ async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
             Song.album_id.label("song_album_id"),
             Song.duration_ms.label("song_duration_ms"),
             Song.colors.label("song_colors"),
-            func.count(ListeningEvent.id).label("play_count"),
+            func.count(ListeningEvent.id).filter(ListeningEvent.event_type.in_(PLAY_TYPES)).label("play_count"),
+            func.coalesce(func.sum(ListeningEvent.duration_played_ms), 0).label("total_ms"),
             func.count(func.distinct(ListeningEvent.session_id)).label("sessions"),
         ).select_from(
             ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True)
         ).where(
             ListeningEvent.user_id == user_id,
-            ListeningEvent.event_type == "play",
             ListeningEvent.started_at >= since,
         ).group_by(
             ListeningEvent.song_id, Song.title, Song.artist, Song.artist_id,
             Song.album, Song.album_id, Song.duration_ms, Song.colors,
-        ).order_by(func.count(ListeningEvent.id).desc()).limit(limit)
+        ).having(
+            func.count(ListeningEvent.id).filter(ListeningEvent.event_type.in_(PLAY_TYPES)) > 0
+        ).order_by(func.count(ListeningEvent.id).filter(ListeningEvent.event_type.in_(PLAY_TYPES)).desc()).limit(limit)
 
         result = await session.execute(stmt)
         rows = result.all()
-
-        totals: dict[str, int] = {}
-        song_ids = [r.song_id for r in rows if r.song_id]
-        if song_ids:
-            dur_result = await session.execute(
-                select(SongDuration.song_id, SongDuration.total_ms).where(
-                    SongDuration.user_id == user_id,
-                    SongDuration.song_id.in_(song_ids),
-                )
-            )
-            totals = {r[0]: int(r[1] or 0) for r in dur_result.all()}
 
         return [
             {
@@ -192,7 +190,7 @@ async def get_top_songs(user_id: str, period: str, limit: int) -> list[dict]:
                     "colors": r.song_colors,
                 } if r.song_title else {"id": r.song_id, "title": "Unknown"},
                 "play_count": r.play_count,
-                "total_listening_ms": totals.get(r.song_id, 0),
+                "total_listening_ms": int(r.total_ms or 0),
                 "sessions": r.sessions,
             }
             for r in rows if r.song_id
@@ -209,18 +207,19 @@ async def get_stats(
         since = _since_from_period(period)
     filters = [
         ListeningEvent.user_id == user_id,
-        ListeningEvent.event_type == "play",
+        ListeningEvent.event_type.in_(PLAY_TYPES),
         ListeningEvent.started_at >= since,
     ]
     if before is not None:
         filters.append(ListeningEvent.started_at < before)
     base_filter = tuple(filters)
     async with SessionLocal() as session:
-        # NOTE: durations live in a separate one-row-per-song table. Joining
-        # it here would fan out: SUM(total_ms) gets multiplied by the event
-        # count. Aggregate plays and durations independently.
+        # total_ms is summed from in-period rows' heard time. The old
+        # SongDuration lookup summed lifetime-cumulative counters, so any
+        # song touched in the period credited its entire lifetime here.
         stats_result = await session.execute(
             select(
+                func.coalesce(func.sum(ListeningEvent.duration_played_ms), 0).label("total_ms"),
                 func.count(func.distinct(ListeningEvent.song_id)).label("unique_songs"),
                 func.count(ListeningEvent.id).label("total_plays"),
             ).select_from(
@@ -228,20 +227,7 @@ async def get_stats(
             ).where(*base_filter)
         )
         stats = stats_result.one()
-
-        song_sub = (
-            select(ListeningEvent.song_id)
-            .where(*base_filter)
-            .distinct()
-            .subquery()
-        )
-        dur_result = await session.execute(
-            select(func.coalesce(func.sum(SongDuration.total_ms), 0)).where(
-                SongDuration.user_id == user_id,
-                SongDuration.song_id.in_(select(song_sub.c.song_id)),
-            )
-        )
-        total_ms = int(dur_result.scalar() or 0)
+        total_ms = int(stats.total_ms or 0)
 
         artists_result = await session.execute(
             select(func.count(func.distinct(Song.artist_id)))
@@ -272,6 +258,7 @@ async def get_recent_activity(user_id: str, limit: int, base_url: str = "") -> l
     async with SessionLocal() as session:
         stmt = select(ListeningEvent).where(
             ListeningEvent.user_id == user_id,
+            ListeningEvent.event_type.in_(PLAY_TYPES),
         ).order_by(ListeningEvent.started_at.desc()).limit(limit)
 
         result = await session.execute(stmt)
@@ -382,7 +369,7 @@ async def get_skip_rate(user_id: str, period: str, limit: int = 50) -> list[dict
             Song.album.label("song_album"),
             Song.duration_ms.label("song_duration_ms"),
             Song.colors.label("song_colors"),
-            func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "play").label("play_count"),
+            func.count(ListeningEvent.id).filter(ListeningEvent.event_type.in_(PLAY_TYPES)).label("play_count"),
             func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "skip").label("skip_count"),
         ).select_from(
             ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True)
@@ -431,8 +418,10 @@ async def get_completion_rate(user_id: str, period: str, limit: int = 50) -> lis
             Song.album.label("song_album"),
             Song.duration_ms.label("song_duration_ms"),
             Song.colors.label("song_colors"),
-            func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "play").label("play_count"),
-            func.avg(ListeningEvent.completion_percentage).label("avg_completion"),
+            func.count(ListeningEvent.id).filter(ListeningEvent.event_type.in_(PLAY_TYPES)).label("play_count"),
+            # Average over terminal rows only: legacy play/pause/seek rows all
+            # carry 0 and would dilute every real completion toward zero.
+            func.avg(ListeningEvent.completion_percentage).filter(ListeningEvent.event_type.in_(["complete", "skip"])).label("avg_completion"),
         ).select_from(
             ListeningEvent.__table__.join(Song, ListeningEvent.song_id == Song.id, isouter=True)
         ).where(
@@ -441,7 +430,7 @@ async def get_completion_rate(user_id: str, period: str, limit: int = 50) -> lis
         ).group_by(
             ListeningEvent.song_id, Song.title, Song.artist, Song.artist_id,
             Song.album, Song.duration_ms, Song.colors,
-        ).order_by(func.avg(ListeningEvent.completion_percentage).desc()).limit(limit)
+        ).order_by(func.avg(ListeningEvent.completion_percentage).filter(ListeningEvent.event_type.in_(["complete", "skip"])).desc()).limit(limit)
 
         result = await session.execute(stmt)
         rows = result.all()
@@ -479,7 +468,7 @@ async def get_discovery_metrics(user_id: str, period: str) -> dict:
             )
             .where(
                 ListeningEvent.user_id == user_id,
-                ListeningEvent.event_type == "play",
+                ListeningEvent.event_type.in_(PLAY_TYPES),
             )
             .group_by(ListeningEvent.song_id)
             .subquery()
@@ -498,7 +487,7 @@ async def get_discovery_metrics(user_id: str, period: str) -> dict:
             )
         ).where(
             ListeningEvent.user_id == user_id,
-            ListeningEvent.event_type == "play",
+            ListeningEvent.event_type.in_(PLAY_TYPES),
             ListeningEvent.started_at >= since,
         )
 
@@ -530,7 +519,7 @@ async def get_artist_affinity(user_id: str, period: str, limit: int = 50) -> lis
         stmt = select(
             Song.artist.label("artist"),
             Song.artist_id.label("artist_id"),
-            func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "play").label("plays"),
+            func.count(ListeningEvent.id).filter(ListeningEvent.event_type.in_(PLAY_TYPES)).label("plays"),
             func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "complete").label("completions"),
             func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "skip").label("skips"),
             func.count(func.distinct(ListeningEvent.song_id)).label("unique_songs"),
@@ -573,7 +562,7 @@ async def get_listening_patterns(user_id: str, period: str) -> dict:
             func.count(ListeningEvent.id).label("plays"),
         ).where(
             ListeningEvent.user_id == user_id,
-            ListeningEvent.event_type == "play",
+            ListeningEvent.event_type.in_(PLAY_TYPES),
             ListeningEvent.started_at >= since,
         ).group_by(ListeningEvent.hour_of_day).order_by(ListeningEvent.hour_of_day)
 
@@ -589,7 +578,7 @@ async def get_listening_patterns(user_id: str, period: str) -> dict:
             func.count(ListeningEvent.id).label("plays"),
         ).where(
             ListeningEvent.user_id == user_id,
-            ListeningEvent.event_type == "play",
+            ListeningEvent.event_type.in_(PLAY_TYPES),
             ListeningEvent.started_at >= since,
         ).group_by(ListeningEvent.day_of_week).order_by(ListeningEvent.day_of_week)
 
@@ -650,8 +639,8 @@ async def get_catalog_exploration(user_id: str, period: str) -> dict:
     async with SessionLocal() as session:
         stats = await session.execute(
             select(
-                func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "play").label("total_plays"),
-                func.count(func.distinct(ListeningEvent.song_id)).label("unique_songs"),
+                func.count(ListeningEvent.id).filter(ListeningEvent.event_type.in_(PLAY_TYPES)).label("total_plays"),
+                func.count(func.distinct(ListeningEvent.song_id)).filter(ListeningEvent.event_type.in_(PLAY_TYPES)).label("unique_songs"),
             ).where(
                 ListeningEvent.user_id == user_id,
                 ListeningEvent.started_at >= since,
@@ -723,9 +712,9 @@ async def get_source_effectiveness(user_id: str, period: str) -> dict:
     async with SessionLocal() as session:
         stmt = select(
             ListeningEvent.source,
-            func.count(ListeningEvent.id).label("plays"),
-            func.avg(ListeningEvent.completion_percentage).label("avg_completion"),
-            func.avg(ListeningEvent.duration_played_ms).label("avg_duration_ms"),
+            func.count(ListeningEvent.id).filter(ListeningEvent.event_type.in_(PLAY_TYPES)).label("plays"),
+            func.avg(ListeningEvent.completion_percentage).filter(ListeningEvent.event_type.in_(["complete", "skip"])).label("avg_completion"),
+            func.avg(ListeningEvent.duration_played_ms).filter(ListeningEvent.event_type.in_(["complete", "skip"])).label("avg_duration_ms"),
         ).where(
             ListeningEvent.user_id == user_id,
             ListeningEvent.started_at >= since,
@@ -761,7 +750,7 @@ async def get_binge_index(user_id: str, period: str) -> dict:
     async with SessionLocal() as session:
         stats = await session.execute(
             select(
-                func.count(ListeningEvent.id).filter(ListeningEvent.event_type == "play").label("total_plays"),
+                func.count(ListeningEvent.id).filter(ListeningEvent.event_type.in_(PLAY_TYPES)).label("total_plays"),
                 func.count(func.distinct(ListeningEvent.session_id)).label("total_sessions"),
             ).where(
                 ListeningEvent.user_id == user_id,
