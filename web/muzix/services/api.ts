@@ -478,13 +478,6 @@ export const api = {
    bingeIndex: (period: string, token: string) =>
      requestAuthed<BingeIndex>(`/analytics/user/binge-index?period=${period}`, token),
 
-  recordDuration: (songId: string, durationMs: number, token: string) =>
-    requestAuthed<{ recorded_ms: number }>('/telemetry/duration', token, {
-      method: 'POST',
-      body: JSON.stringify({ song_id: songId, duration_ms: durationMs }),
-      skipRetry: true,
-    }),
-
   logError(error: Error, context: string) {
     Sentry.withScope((scope) => {
       scope.setTag('api_context', context);
