@@ -269,8 +269,9 @@ export default function ProfileScreen() {
     const token = useAuthStore.getState().token;
     if (!token) { setLoading(false); return; }
     try {
-      const [topRes, likesRes, playlistsRes] = await Promise.all([
+      const [topRes, statsRes, likesRes, playlistsRes] = await Promise.all([
         api.topSongs('month', 50, token).catch(() => null),
+        api.userStats('month', token).catch(() => null),
         api.getLikes(token).catch(() => null),
         api.playlists(token).catch(() => null),
       ]);
@@ -285,8 +286,12 @@ export default function ProfileScreen() {
       const likedSongIds = likesRes?.songIds ?? [];
       const likedSongsMapped = likedSongIds.map((id: string) => songMap.get(id)).filter(Boolean) as Song[];
 
-      const totalPlays = topItems.reduce((sum, item) => sum + Number(item.play_count ?? item.playCount ?? 0), 0);
-      const totalListeningMs = topItems.reduce((sum, item) => sum + Number(item.total_listening_ms ?? 0), 0);
+      // Server-computed month stats (uncapped, period-correct). Fall back to
+      // the top-50 derivation only if the stats call fails.
+      const totalPlays = statsRes?.totalPlays
+        ?? topItems.reduce((sum, item) => sum + Number(item.play_count ?? item.playCount ?? 0), 0);
+      const totalListeningMs = statsRes?.totalListeningMs
+        ?? topItems.reduce((sum, item) => sum + Number(item.total_listening_ms ?? 0), 0);
 
       setStats({
         totalPlays, totalListeningMs,
