@@ -16,10 +16,12 @@ Advances to the next track. Handles three repeat modes:
 |-----------|----------|
 | `ni >= queue.length` + `repeat === 'all'` | Wrap to `queue[0]` |
 | `ni >= queue.length` + `repeat === 'one'` | Replay current (push current index to history) |
-| `ni >= queue.length` + `repeat === 'off'` | Stop playing (`isPlaying: false`) |
+| `ni >= queue.length` + `repeat === 'off'` | Queue dry → `extendQueueFromAutoplay` fetches a YouTube Mix batch seeded on the current track; on success playback resumes with the first appended track, otherwise it stops (`isPlaying: false`) |
 | `ni < queue.length` | Play `queue[ni]` |
 
 Every transition pushes `currentIndex` to the `history` array (stack).
+
+**Queue-dry autoplay** (`extendQueueFromAutoplay`): `fetchUpNext(seed)` pulls up to 25 tracks from the seed video's Mix (`list=RD{id}`), stamps them `surface: 'autoplay'`, and appends them. One attempt per seed track (a seed with no mix is never re-fetched). Late results are discarded when the user switched tracks mid-fetch (`get().current?.id !== seedId`) — otherwise the old seed's recommendations would land in the new track's queue. YouTube search taps seed a single-track queue for exactly this reason: search hits are text matches, so walking them genre-flips; the Mix is the genre-correct continuation.
 
 ### 2. Previous Track (lines 197–215)
 
