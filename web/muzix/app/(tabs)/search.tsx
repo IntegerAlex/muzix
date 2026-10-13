@@ -217,48 +217,51 @@ function YouTubeResults({
   query: string;
   standalone?: boolean;
 }) {
-  const { playSong, setLoading } = usePlayerStore.getState();
+  const { playSong } = usePlayerStore.getState();
   const [loadingId, setBusyId] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<string, number>>({});
 
   const play = useCallback(async (hit: YouTubeSearchHit) => {
     setBusyId(hit.id);
     setProgress((p) => ({ ...p, [hit.id]: 0 }));
+    const toSong = (h: YouTubeSearchHit): Song => ({
+      id: h.id,
+      title: h.title,
+      artist: 'YouTube',
+      artistId: 'youtube',
+      album: 'YouTube',
+      albumId: 'youtube',
+      genre: '',
+      duration: h.durationSec ? formatTime(h.durationSec * 1000) : '',
+      durationMs: h.durationSec * 1000,
+      colors: ['#6d28d9', '#db2777'],
+      imageUrl: `https://i.ytimg.com/vi/${h.id}/mqdefault.jpg`,
+    });
+    const seed = toSong(hit);
     try {
-      setLoading(hit.id);
-      // Resolve first so the user sees a real error if extraction fails,
-      // rather than a spinner that never resolves. Progress streams in
-      // while the bytes download.
-      await resolveAudio(hit.id, null, (f) => {
+      // Kick the resolve off first: audioSource dedupes per song and wires up
+      // the FIRST caller's onProgress, which is this row's download bar.
+      const resolving = resolveAudio(hit.id, null, (f) => {
         setProgress((p) => ({ ...p, [hit.id]: f }));
       });
-      const toSong = (h: YouTubeSearchHit): Song => ({
-        id: h.id,
-        title: h.title,
-        artist: 'YouTube',
-        artistId: 'youtube',
-        album: 'YouTube',
-        albumId: 'youtube',
-        genre: '',
-        duration: h.durationSec ? formatTime(h.durationSec * 1000) : '',
-        durationMs: h.durationSec * 1000,
-        colors: ['#6d28d9', '#db2777'],
-        imageUrl: `https://i.ytimg.com/vi/${h.id}/mqdefault.jpg`,
-      });
-      const seed = toSong(hit);
       // Seed the queue with ONLY this hit. The rest of the results are
       // relevance matches on the query text (search "boyfriend" → Karan Aujla
       // → Bieber → Dino James), so walking them genre-flips. With a
       // single-track queue, YouTube's Mix (RD) on this exact video takes over
       // at track end — the genre-correct "recommended plays" continuation.
+      //
+      // Show the player NOW: extraction takes seconds, and deferring playSong
+      // until it finished left no player UI at all until the download landed
+      // (looked like the tap did nothing until a screen switch). PlayerBridge
+      // joins this same in-flight resolve, so audio is fetched exactly once.
       playSong(seed, [seed], 0, 'search');
+      await resolving;
     } catch (e: any) {
       usePlayerStore.setState({
         error: e?.message?.slice?.(0, 160) || 'Could not get that track from YouTube',
       });
     } finally {
       setBusyId(null);
-      setLoading(null);
       setProgress((p) => {
         if (!(hit.id in p)) return p;
         const next = { ...p };
@@ -266,7 +269,7 @@ function YouTubeResults({
         return next;
       });
     }
-  }, [playSong, setLoading]);
+  }, [playSong]);
 
   return (
     <View style={{ marginTop: SPACING.xxl }}>

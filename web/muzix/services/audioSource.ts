@@ -92,8 +92,31 @@ async function normalizeToCachePath(src: string, dest: string): Promise<string> 
  *
  * Rejects if none work. Note that extraction failures (bot check, age gate,
  * removed video) are not retryable by us — surface them to the user.
+ *
+ * Concurrent calls for the same song share one in-flight resolution: the
+ * search-screen prefetch and PlayerBridge's load both ask for the same track
+ * and would otherwise run two extractions/downloads in parallel. The first
+ * caller's `onProgress` is the one wired up.
  */
-export async function resolveAudio(
+const _inFlightResolves = new Map<string, Promise<AudioResolution>>();
+
+export function resolveAudio(
+  songId: string,
+  song?: Song | null,
+  onProgress?: (fraction: number) => void,
+): Promise<AudioResolution> {
+  const existing = _inFlightResolves.get(songId);
+  if (existing) return existing;
+  const task = _resolveInner(songId, song, onProgress);
+  _inFlightResolves.set(songId, task);
+  task.then(
+    () => { if (_inFlightResolves.get(songId) === task) _inFlightResolves.delete(songId); },
+    () => { if (_inFlightResolves.get(songId) === task) _inFlightResolves.delete(songId); },
+  );
+  return task;
+}
+
+async function _resolveInner(
   songId: string,
   _song?: Song | null,
   onProgress?: (fraction: number) => void,
