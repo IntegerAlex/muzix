@@ -1,7 +1,13 @@
 package com.muzix.app
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
+import android.media.AudioManager
+import android.os.Build
 
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
@@ -27,6 +33,23 @@ class MainApplication : Application(), ReactApplication {
     )
   }
 
+  /**
+   * Android sends ACTION_AUDIO_BECOMING_NOISY when wired headphones are
+   * unplugged or a Bluetooth audio device disconnects (audio is about to
+   * reroute to the built-in speaker). expo-audio ignores this broadcast on
+   * Android (expo/expo#48138, fixed upstream only in expo-audio 58), so
+   * forward it to JS, which pauses playback like other music apps.
+   *
+   * Application-scoped on purpose: registered for the process lifetime so it
+   * still fires while playback continues in the background.
+   */
+  private val becomingNoisyReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      if (intent.action != AudioManager.ACTION_AUDIO_BECOMING_NOISY) return
+      reactHost.currentReactContext?.emitDeviceEvent("muzix.becomingNoisy", null)
+    }
+  }
+
   override fun onCreate() {
     super.onCreate()
     DefaultNewArchitectureEntryPoint.releaseLevel = try {
@@ -36,6 +59,15 @@ class MainApplication : Application(), ReactApplication {
     }
     loadReactNative(this)
     ApplicationLifecycleDispatcher.onApplicationCreate(this)
+
+    // Becoming-noisy is a system broadcast: it is delivered to
+    // non-exported receivers, and the flags are only required on API 33+.
+    val noisyFilter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      registerReceiver(becomingNoisyReceiver, noisyFilter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+      registerReceiver(becomingNoisyReceiver, noisyFilter)
+    }
   }
 
   override fun onConfigurationChanged(newConfig: Configuration) {

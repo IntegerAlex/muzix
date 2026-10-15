@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { DeviceEventEmitter, Platform } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus, type AudioPlayer } from 'expo-audio';
 import { router } from 'expo-router';
 import { ApiError } from '@/services/api';
@@ -320,6 +320,21 @@ export function PlayerBridge() {
       setActivePlayer(null);
     };
   }, [player]);
+
+  // Headphones unplugged / Bluetooth disconnected. MainApplication.kt forwards
+  // Android's ACTION_AUDIO_BECOMING_NOISY here because expo-audio ignores it
+  // (expo/expo#48138, fixed upstream only in expo-audio 58). Pausing through
+  // the store reuses the normal external-pause path: the effect below pauses
+  // the native player, and the listen tracker banks heard time without
+  // emitting a row — the same as tapping pause.
+  useEffect(() => {
+    if (IS_WEB) return;
+    const sub = DeviceEventEmitter.addListener('muzix.becomingNoisy', () => {
+      const st = usePlayerStore.getState();
+      if (st.isPlaying) st.setPlaying(false);
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (!current) return;
